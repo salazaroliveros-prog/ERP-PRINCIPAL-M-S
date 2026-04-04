@@ -1,0 +1,439 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "Construction project details and progress",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Project name" },
+        "location": { "type": "string", "description": "Site location" },
+        "typology": { "type": "string", "enum": ["RESIDENCIAL", "COMERCIAL", "INDUSTRIAL", "CIVIL", "PUBLICA", "SALUD", "EDUCACION", "DEPORTIVA", "INFRAESTRUCTURA", "TURISMO"], "description": "Construction typology" },
+        "status": { "type": "string", "enum": ["Planning", "In Progress", "Completed", "On Hold"], "description": "Current status" },
+        "startDate": { "type": "string", "format": "date", "description": "Project start date" },
+        "endDate": { "type": "string", "format": "date", "description": "Project estimated end date" },
+        "budget": { "type": "number", "description": "Total estimated budget in Quetzales" },
+        "spent": { "type": "number", "description": "Total amount spent to date" },
+        "physicalProgress": { "type": "number", "description": "Percentage of physical completion" },
+        "financialProgress": { "type": "number", "description": "Percentage of budget consumed" },
+        "clientUid": { "type": "string", "description": "Reference to the client user ID" },
+        "responsible": { "type": "string", "description": "Nombre del ingeniero o encargado responsable de la obra" },
+        "areaM2": { "type": "number", "description": "Área total de construcción en metros cuadrados" },
+        "estimatedDurationDays": { "type": "number", "description": "Calculated duration based on APUs" },
+        "coordinates": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        },
+        "pois": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "lat": { "type": "number" },
+              "lng": { "type": "number" },
+              "name": { "type": "string" },
+              "comment": { "type": "string" }
+            }
+          }
+        }
+      },
+      "required": ["name", "status", "budget", "typology"]
+    },
+    "BudgetItem": {
+      "title": "Budget Item",
+      "description": "A single line item (renglón) in the project budget",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "typology": { "type": "string" },
+        "order": { "type": "number", "description": "Chronological order" },
+        "description": { "type": "string" },
+        "unit": { "type": "string" },
+        "quantity": { "type": "number" },
+        "materialCost": { "type": "number" },
+        "laborCost": { "type": "number" },
+        "indirectCost": { "type": "number", "description": "Admin + Contingencies" },
+        "totalUnitPrice": { "type": "number" },
+        "totalItemPrice": { "type": "number" },
+        "materials": { 
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "unit": { "type": "string" },
+              "quantity": { "type": "number", "description": "Quantity per unit of budget item" },
+              "unitPrice": { "type": "number" },
+              "purchasedQuantity": { "type": "number", "description": "Total quantity purchased for this project item" }
+            }
+          }
+        },
+        "labor": { "type": "array" }
+      },
+      "required": ["projectId", "description", "unit", "quantity"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Client or Lead information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "company": { "type": "string" },
+        "contactPerson": { "type": "string", "description": "Primary contact person at the company" },
+        "status": { "type": "string", "enum": ["Lead", "Active", "Inactive"] },
+        "notes": { "type": "string" }
+      },
+      "required": ["name", "email"]
+    },
+    "Material": {
+      "title": "Material",
+      "description": "Inventory item for construction",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "unit": { "type": "string", "description": "Unit of measurement (e.g., bags, m3, linear meters)" },
+        "stock": { "type": "number" },
+        "minStock": { "type": "number", "description": "Minimum stock level for alerts" },
+        "unitPrice": { "type": "number" },
+        "priceHistory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "supplier": { "type": "string" },
+              "price": { "type": "number" },
+              "date": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      },
+      "required": ["name", "unit", "stock"]
+    },
+    "Subcontract": {
+      "title": "Subcontract",
+      "description": "External services or labor subcontracts",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "contractor": { "type": "string" },
+        "service": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "total": { "type": "number" },
+        "paid": { "type": "number", "description": "Amount paid to date" },
+        "status": { "type": "string", "enum": ["Active", "Finished", "Pending"] }
+      },
+      "required": ["projectId", "contractor", "total"]
+    },
+    "Equipment": {
+      "title": "Equipment",
+      "description": "Machinery and tools management",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["Owned", "Rented"] },
+        "projectId": { "type": "string", "description": "Current project assignment" },
+        "dailyRate": { "type": "number" },
+        "status": { "type": "string", "enum": ["Available", "In Use", "Maintenance"] }
+      },
+      "required": ["name", "type", "status"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial record of income or expense",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "budgetItemId": { "type": "string", "description": "Optional reference to a specific budget line item" },
+        "type": { "type": "string", "enum": ["Income", "Expense"] },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date" },
+        "description": { "type": "string" }
+      },
+      "required": ["projectId", "type", "amount", "date"]
+    },
+    "PurchaseOrder": {
+      "title": "Purchase Order",
+      "description": "Material purchase request for suppliers",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "description": "Reference to the project" },
+        "budgetItemId": { "type": "string", "description": "Reference to the specific budget item" },
+        "materialId": { "type": "string" },
+        "materialName": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "estimatedCost": { "type": "number" },
+        "supplier": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Completed", "Cancelled"] },
+        "date": { "type": "string", "format": "date" }
+      },
+      "required": ["materialId", "materialName", "quantity", "status", "date"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System alerts and notifications",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "type": { "type": "string", "enum": ["inventory", "subcontract", "project"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["title", "body", "type", "createdAt", "read"]
+    },
+    "ClientChat": {
+      "title": "Client Chat",
+      "description": "Messaging history with clients",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "text": { "type": "string" },
+        "sender": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "text", "sender", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "Audit Log",
+      "description": "System-wide action history",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "module": { "type": "string" },
+        "details": { "type": "string" },
+        "type": { "type": "string", "enum": ["create", "update", "delete", "auth", "system"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userAgent": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" }
+      },
+      "required": ["userId", "action", "module", "timestamp"]
+    },
+    "Risk": {
+      "title": "Risk",
+      "description": "Project risk identification and mitigation",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string", "enum": ["Technical", "Financial", "Operational", "External", "Legal"] },
+        "impact": { "type": "string", "enum": ["Low", "Medium", "High", "Critical"] },
+        "probability": { "type": "string", "enum": ["Low", "Medium", "High", "Certain"] },
+        "status": { "type": "string", "enum": ["Identified", "Active", "Mitigated", "Occurred", "Closed"] },
+        "mitigationPlan": { "type": "string" },
+        "contingencyPlan": { "type": "string" },
+        "owner": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["projectId", "title", "impact", "probability", "status"]
+    },
+    "Workflow": {
+      "title": "Workflow Task",
+      "description": "Approval tasks and operational processes",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["quote", "purchase_order", "subcontract"] },
+        "referenceId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "requestedBy": { "type": "string" },
+        "requestedAt": { "type": "string", "format": "date-time" },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "resolvedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "type", "referenceId", "status", "requestedBy", "requestedAt", "priority"]
+    },
+    "Quote": {
+      "title": "Quote",
+      "description": "Project price quotes for clients",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "description": { "type": "string" },
+              "quantity": { "type": "number" },
+              "unitPrice": { "type": "number" }
+            }
+          }
+        },
+        "status": { "type": "string", "enum": ["Pending", "Accepted", "Rejected"] },
+        "total": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "date", "status", "total"]
+    },
+    "InventoryTransaction": {
+      "title": "Inventory Transaction",
+      "description": "Material stock movements",
+      "type": "object",
+      "properties": {
+        "materialId": { "type": "string" },
+        "materialName": { "type": "string" },
+        "type": { "type": "string", "enum": ["In", "Out"] },
+        "quantity": { "type": "number" },
+        "previousStock": { "type": "number" },
+        "newStock": { "type": "number" },
+        "reason": { "type": "string" },
+        "projectId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["materialId", "type", "quantity", "createdAt"]
+    },
+    "LogbookEntry": {
+      "title": "Logbook Entry",
+      "description": "Daily site log entry",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "content": { "type": "string" },
+        "weather": { "type": "string" },
+        "workersCount": { "type": "number" },
+        "photos": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "authorEmail": { "type": "string", "format": "email" }
+      },
+      "required": ["date", "content", "weather", "workersCount"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Material and service providers",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "contact": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "rating": { "type": "number" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "balance": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "category", "contact"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Human Resources personnel records",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "department": { "type": "string", "enum": ["Operaciones", "Diseño", "Administración", "Ventas"] },
+        "salary": { "type": "number" },
+        "status": { "type": "string", "enum": ["Active", "On Leave", "Inactive"] },
+        "joinDate": { "type": "string", "format": "date" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "role", "department", "salary", "status", "joinDate"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "Project and administrative documents",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["PDF", "Excel", "Word", "Image", "Archive"] },
+        "size": { "type": "string" },
+        "folder": { "type": "string", "description": "Folder name" },
+        "author": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "type", "folder", "author"]
+    },
+    "Folder": {
+      "title": "Folder",
+      "description": "Document folder organization",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "color": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    },
+    "SafetyIncident": {
+      "title": "Safety Incident",
+      "description": "HSE incident reports",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["Accidente", "Casi Accidente", "Acto Inseguro", "Condición Insegura"] },
+        "severity": { "type": "string", "enum": ["Baja", "Media", "Alta", "Crítica"] },
+        "location": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "description": { "type": "string" },
+        "measures": { "type": "string" },
+        "status": { "type": "string", "enum": ["Open", "Under Investigation", "Closed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "authorEmail": { "type": "string", "format": "email" }
+      },
+      "required": ["title", "type", "severity", "location", "date", "status"]
+    },
+    "DeletedRecord": {
+      "title": "Deleted Record",
+      "description": "Trash bin for deleted items",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["material", "batch", "transaction"] },
+        "originalId": { "type": "string" },
+        "materialId": { "type": "string" },
+        "materialName": { "type": "string" },
+        "batchId": { "type": "string" },
+        "data": { "type": "object" },
+        "deletedAt": { "type": "string", "format": "date-time" },
+        "reason": { "type": "string" }
+      },
+      "required": ["type", "data", "deletedAt"]
+    }
+  },
+  "firestore": {
+    "/projects/{projectId}": { "schema": "Project", "description": "Active construction projects" },
+    "/projects/{projectId}/budgetItems/{itemId}": { "schema": "BudgetItem", "description": "Detailed budget items for a project" },
+    "/clients/{clientId}": { "schema": "Client", "description": "Client and lead records" },
+    "/inventory/{materialId}": { "schema": "Material", "description": "Material stock and pricing" },
+    "/suppliers/{supplierId}": { "schema": "Supplier", "description": "Material and service providers" },
+    "/subcontracts/{subcontractId}": { "schema": "Subcontract", "description": "External labor and services" },
+    "/equipment/{equipmentId}": { "schema": "Equipment", "description": "Machinery and tools" },
+    "/transactions/{transactionId}": { "schema": "Transaction", "description": "Financial ledger" },
+    "/purchaseOrders/{poId}": { "schema": "PurchaseOrder", "description": "Material purchase orders" },
+    "/notifications/{notificationId}": { "schema": "Notification", "description": "System notifications" },
+    "/clientChats/{chatId}": { "schema": "ClientChat", "description": "Client communication history" },
+    "/audit_logs/{logId}": { "schema": "AuditLog", "description": "System-wide action history" },
+    "/workflows/{taskId}": { "schema": "Workflow", "description": "Approval tasks and processes" },
+    "/quotes/{quoteId}": { "schema": "Quote", "description": "Project price quotes" },
+    "/inventoryTransactions/{transactionId}": { "schema": "InventoryTransaction", "description": "Material stock movements" },
+    "/projects/{projectId}/logbook/{entryId}": { "schema": "LogbookEntry", "description": "Daily site log entries for a project" },
+    "/risks/{riskId}": { "schema": "Risk", "description": "Project risk management records" },
+    "/employees/{employeeId}": { "schema": "Employee", "description": "Human Resources personnel records" },
+    "/documents/{documentId}": { "schema": "Document", "description": "Project and administrative documents" },
+    "/safety_incidents/{incidentId}": { "schema": "SafetyIncident", "description": "HSE incident reports" },
+    "/deletedRecords/{recordId}": { "schema": "DeletedRecord", "description": "Trash bin for deleted items" },
+    "/folders/{folderId}": { "schema": "Folder", "description": "Document folder organization" }
+  }
+}

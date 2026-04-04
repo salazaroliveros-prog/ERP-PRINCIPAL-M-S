@@ -1,0 +1,5 @@
+{
+  "name": "ERP CONSTRUCTORA WM_M&S",
+  "description": "ERP completo para control de obras, presupuestos, inventarios y subcontratos.",
+  "requestFramePermissions": ["geolocation"]
+}
