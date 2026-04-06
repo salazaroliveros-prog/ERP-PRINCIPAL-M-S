@@ -36,7 +36,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
-const NavItem = ({ to, icon: Icon, label, active, isCollapsed, onClick }: { to: string, icon: any, label: string, active: boolean, isCollapsed?: boolean, onClick?: () => void }) => (
+const NavItem = ({ to, icon: Icon, label, active, isCollapsed, onClick, onPrefetchRoute, onNavigateIntent }: { to: string, icon: any, label: string, active: boolean, isCollapsed?: boolean, onClick?: () => void, onPrefetchRoute?: (path: string) => void, onNavigateIntent?: (path: string) => void }) => (
   <motion.div
     whileTap={{ scale: 0.96 }}
     whileHover={{ x: 4 }}
@@ -44,7 +44,13 @@ const NavItem = ({ to, icon: Icon, label, active, isCollapsed, onClick }: { to: 
   >
     <Link
       to={to}
-      onClick={onClick}
+      onClick={() => {
+        onNavigateIntent?.(to);
+        onClick?.();
+      }}
+      onMouseEnter={() => onPrefetchRoute?.(to)}
+      onFocus={() => onPrefetchRoute?.(to)}
+      onTouchStart={() => onPrefetchRoute?.(to)}
       title={isCollapsed ? label : undefined}
       className={cn(
         "flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl transition-all duration-300 group relative overflow-hidden",
@@ -125,6 +131,8 @@ export const Sidebar = ({
   isOpen, 
   isCollapsed, 
   onToggleCollapse, 
+  onPrefetchRoute,
+  onNavigateIntent,
   onClose,
   initialNotificationsOpen = false,
   deferredPrompt,
@@ -134,6 +142,8 @@ export const Sidebar = ({
   isOpen: boolean, 
   isCollapsed: boolean, 
   onToggleCollapse: () => void, 
+  onPrefetchRoute?: (path: string) => void,
+  onNavigateIntent?: (path: string) => void,
   onClose: () => void,
   initialNotificationsOpen?: boolean,
   deferredPrompt: any,
@@ -345,6 +355,8 @@ export const Sidebar = ({
               label="Panel de Control" 
               active={location.pathname === "/"} 
               isCollapsed={isCollapsed}
+              onPrefetchRoute={onPrefetchRoute}
+              onNavigateIntent={onNavigateIntent}
               onClick={onClose}
             />
 
@@ -355,6 +367,8 @@ export const Sidebar = ({
                 label="Proyectos" 
                 active={location.pathname === "/projects"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
               <NavItem 
@@ -363,6 +377,8 @@ export const Sidebar = ({
                 label="Cotizaciones" 
                 active={location.pathname === "/quotes"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
               <NavItem 
@@ -371,6 +387,8 @@ export const Sidebar = ({
                 label="Clientes" 
                 active={location.pathname === "/clients"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
               <NavItem 
@@ -379,6 +397,8 @@ export const Sidebar = ({
                 label="Seguridad (HSE)" 
                 active={location.pathname === "/safety"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
               <NavItem 
@@ -387,6 +407,8 @@ export const Sidebar = ({
                 label="Gestión de Riesgos" 
                 active={location.pathname === "/risks"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
               <NavItem 
@@ -395,6 +417,8 @@ export const Sidebar = ({
                 label="Aprobaciones" 
                 active={location.pathname === "/workflows"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
             </NavGroup>
@@ -406,6 +430,8 @@ export const Sidebar = ({
                 label="Almacén" 
                 active={location.pathname === "/inventory"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
               <NavItem 
@@ -414,6 +440,8 @@ export const Sidebar = ({
                 label="Equipo" 
                 active={location.pathname === "/equipment"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
               <NavItem 
@@ -422,6 +450,8 @@ export const Sidebar = ({
                 label="Órdenes de Compra" 
                 active={location.pathname === "/purchase-orders"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
               <NavItem 
@@ -430,6 +460,8 @@ export const Sidebar = ({
                 label="Proveedores" 
                 active={location.pathname === "/suppliers"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
             </NavGroup>
@@ -441,6 +473,8 @@ export const Sidebar = ({
                 label="Finanzas" 
                 active={location.pathname === "/financials"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
               <NavItem 
@@ -449,6 +483,8 @@ export const Sidebar = ({
                 label="Subcontratos" 
                 active={location.pathname === "/subcontracts"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
               <NavItem 
@@ -457,6 +493,8 @@ export const Sidebar = ({
                 label="RRHH" 
                 active={location.pathname === "/hr"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
               <NavItem 
@@ -465,6 +503,8 @@ export const Sidebar = ({
                 label="Documentos" 
                 active={location.pathname === "/documents"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
               <NavItem 
@@ -473,6 +513,8 @@ export const Sidebar = ({
                 label="Registro de Auditoría" 
                 active={location.pathname === "/audit-logs"} 
                 isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
                 onClick={onClose}
               />
             </NavGroup>
@@ -483,6 +525,8 @@ export const Sidebar = ({
               label="Inteligencia" 
               active={location.pathname === "/analytics"} 
               isCollapsed={isCollapsed}
+              onPrefetchRoute={onPrefetchRoute}
+              onNavigateIntent={onNavigateIntent}
               onClick={onClose}
             />
 
@@ -492,6 +536,8 @@ export const Sidebar = ({
               label="Configuración" 
               active={location.pathname === "/settings"} 
               isCollapsed={isCollapsed}
+              onPrefetchRoute={onPrefetchRoute}
+              onNavigateIntent={onNavigateIntent}
               onClick={onClose}
             />
 

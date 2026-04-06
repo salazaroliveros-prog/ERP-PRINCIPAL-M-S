@@ -1,18 +1,4588 @@
+import 'dotenv/config';
 import express from "express";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
+import { Pool } from "pg";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const PORT = Number(process.env.PORT || 3000);
+const DATABASE_URL = process.env.DATABASE_URL;
+
+const pool = DATABASE_URL
+  ? new Pool({
+      connectionString: DATABASE_URL,
+      ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false },
+    })
+  : null;
+
+type TransactionType = "Income" | "Expense";
+
+interface TransactionRow {
+  id: string;
+  project_id: string;
+  budget_item_id: string | null;
+  subcontract_id: string | null;
+  type: TransactionType;
+  category: string;
+  amount: string;
+  date: string;
+  description: string | null;
+  created_at: string;
+}
+
+interface ProjectRow {
+  id: string;
+  name: string;
+  location: string | null;
+  project_manager: string | null;
+  area: string | null;
+  status: string | null;
+  budget: string | null;
+  spent: string | null;
+  physical_progress: string | null;
+  financial_progress: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  client_uid: string | null;
+  typology: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  created_at: string;
+}
+
+interface BudgetItemRow {
+  id: string;
+  project_id: string;
+  description: string;
+  category: string | null;
+  unit: string | null;
+  quantity: string | null;
+  material_cost: string | null;
+  labor_cost: string | null;
+  indirect_cost: string | null;
+  total_unit_price: string | null;
+  total_item_price: string | null;
+  estimated_days: string | null;
+  notes: string | null;
+  material_details: string | null;
+  indirect_factor: string | null;
+  materials: any[] | null;
+  labor: any[] | null;
+  subtasks: any[] | null;
+  sort_order: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+interface InventoryRow {
+  id: string;
+  project_id: string;
+  name: string;
+  unit: string | null;
+  stock: string | null;
+  min_stock: string | null;
+  unit_price: string | null;
+  category: string | null;
+  suppliers: any[] | null;
+  batches: any[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface QuoteRow {
+  id: string;
+  client_id: string;
+  project_id: string;
+  quote_date: string;
+  status: string;
+  total: string;
+  items: any[];
+  notes: string | null;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface InventoryTransactionRow {
+  id: string;
+  material_id: string;
+  material_name: string;
+  type: string;
+  quantity: string | null;
+  batch_number: string | null;
+  previous_stock: string | null;
+  new_stock: string | null;
+  reason: string | null;
+  project_id: string | null;
+  created_at: string;
+}
+
+interface DeletedRecordRow {
+  id: string;
+  type: string;
+  original_id: string | null;
+  material_id: string | null;
+  material_name: string | null;
+  batch_id: string | null;
+  data: any;
+  reason: string | null;
+  deleted_at: string;
+}
+
+interface PurchaseOrderRow {
+  id: string;
+  project_id: string | null;
+  budget_item_id: string | null;
+  material_id: string | null;
+  material_name: string;
+  quantity: string | null;
+  unit: string | null;
+  estimated_cost: string | null;
+  supplier: string | null;
+  supplier_id: string | null;
+  notes: string | null;
+  status: string;
+  order_date: string;
+  date_received: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ClientRow {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  contact_person: string | null;
+  contacto: string | null;
+  status: string;
+  notes: string | null;
+  location: any;
+  attachments: any[] | null;
+  last_interaction: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ClientChatRow {
+  id: string;
+  client_id: string;
+  text: string;
+  sender: string;
+  created_at: string;
+}
+
+interface ClientInteractionRow {
+  id: string;
+  client_id: string;
+  type: string;
+  notes: string;
+  date: string;
+  created_at: string;
+}
+
+interface SupplierRow {
+  id: string;
+  name: string;
+  category: string | null;
+  contact: string | null;
+  email: string | null;
+  phone: string | null;
+  rating: string | null;
+  status: string;
+  balance: string | null;
+  last_order: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface DocumentRow {
+  id: string;
+  name: string;
+  type: string;
+  size: string | null;
+  folder: string;
+  author: string | null;
+  date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FolderRow {
+  id: string;
+  name: string;
+  color: string | null;
+  created_at: string;
+}
+
+interface EquipmentRow {
+  id: string;
+  name: string;
+  type: string;
+  project_id: string | null;
+  daily_rate: string | null;
+  estimated_days: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface EmployeeRow {
+  id: string;
+  name: string;
+  role: string;
+  department: string;
+  salary: string | null;
+  status: string;
+  join_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface AttendanceRow {
+  id: string;
+  employee_id: string;
+  employee_name: string | null;
+  type: string;
+  timestamp: string;
+  created_at: string;
+}
+
+interface RiskRow {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  impact: string;
+  probability: string;
+  status: string;
+  mitigation_plan: string | null;
+  contingency_plan: string | null;
+  owner: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface SafetyIncidentRow {
+  id: string;
+  title: string;
+  type: string;
+  severity: string;
+  location: string;
+  incident_date: string;
+  description: string | null;
+  measures: string | null;
+  status: string;
+  author_email: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface SubcontractRow {
+  id: string;
+  project_id: string;
+  budget_item_id: string | null;
+  budget_item_name: string | null;
+  contractor: string;
+  service: string;
+  start_date: string | null;
+  end_date: string | null;
+  total: string | null;
+  paid: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface WorkflowRow {
+  id: string;
+  title: string;
+  type: 'quote' | 'purchase_order' | 'subcontract' | 'other';
+  reference_id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requested_by: string;
+  requested_at: string;
+  priority: 'low' | 'medium' | 'high';
+  description: string;
+  amount: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ProjectPoiRow {
+  id: string;
+  project_id: string;
+  name: string;
+  comment: string | null;
+  latitude: string;
+  longitude: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ProjectLogbookEntryRow {
+  id: string;
+  project_id: string;
+  entry_date: string;
+  content: string;
+  weather: string;
+  workers_count: number;
+  photos: any[] | null;
+  author_email: string | null;
+  created_at: string;
+}
+
+interface AuditLogRow {
+  id: string;
+  project_id: string | null;
+  user_id: string | null;
+  user_name: string;
+  user_email: string | null;
+  action: string;
+  module: string;
+  details: string;
+  type: 'create' | 'update' | 'delete' | 'auth' | 'system' | 'read';
+  metadata: any;
+  user_agent: string | null;
+  ip_address: string | null;
+  created_at: string;
+}
+
+interface NotificationRow {
+  id: string;
+  title: string;
+  body: string;
+  type: 'inventory' | 'subcontract' | 'project' | 'system';
+  read: boolean;
+  created_at: string;
+}
+
+function mapTransaction(row: TransactionRow) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    budgetItemId: row.budget_item_id,
+    subcontractId: row.subcontract_id,
+    type: row.type,
+    category: row.category,
+    amount: Number(row.amount),
+    date: row.date,
+    description: row.description || "",
+    createdAt: row.created_at,
+  };
+}
+
+function mapSubcontract(row: SubcontractRow) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    budgetItemId: row.budget_item_id || '',
+    budgetItemName: row.budget_item_name || '',
+    contractor: row.contractor,
+    service: row.service,
+    startDate: row.start_date || '',
+    endDate: row.end_date || '',
+    total: Number(row.total || 0),
+    paid: Number(row.paid || 0),
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapWorkflow(row: WorkflowRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    referenceId: row.reference_id,
+    status: row.status,
+    requestedBy: row.requested_by,
+    requestedAt: row.requested_at,
+    priority: row.priority,
+    description: row.description,
+    amount: row.amount !== null ? Number(row.amount) : undefined,
+    resolvedAt: row.resolved_at || undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapProjectPoi(row: ProjectPoiRow) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    name: row.name,
+    comment: row.comment || '',
+    lat: Number(row.latitude),
+    lng: Number(row.longitude),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapProjectLogbookEntry(row: ProjectLogbookEntryRow) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    date: row.entry_date,
+    content: row.content,
+    weather: row.weather,
+    workersCount: Number(row.workers_count || 0),
+    photos: Array.isArray(row.photos) ? row.photos : [],
+    authorEmail: row.author_email || '',
+    createdAt: row.created_at,
+  };
+}
+
+function mapAuditLog(row: AuditLogRow) {
+  const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+  return {
+    id: row.id,
+    projectId: row.project_id || metadata.projectId || null,
+    userId: row.user_id || '',
+    userName: row.user_name || 'Usuario',
+    userEmail: row.user_email || '',
+    action: row.action,
+    module: row.module,
+    details: row.details,
+    type: row.type,
+    metadata,
+    field: metadata.field || metadata.fieldLabel || '',
+    oldValue: metadata.oldValue,
+    newValue: metadata.newValue,
+    userAgent: row.user_agent || '',
+    ipAddress: row.ip_address || '',
+    timestamp: row.created_at,
+    createdAt: row.created_at,
+  };
+}
+
+function mapNotification(row: NotificationRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    type: row.type,
+    read: Boolean(row.read),
+    createdAt: row.created_at,
+  };
+}
+
+function mapProject(row: ProjectRow) {
+  const latitude = row.latitude ? Number(row.latitude) : null;
+  const longitude = row.longitude ? Number(row.longitude) : null;
+
+  return {
+    id: row.id,
+    name: row.name,
+    location: row.location || '',
+    projectManager: row.project_manager || '',
+    area: Number(row.area || 0),
+    status: row.status || "Planning",
+    budget: Number(row.budget || 0),
+    spent: Number(row.spent || 0),
+    physicalProgress: Number(row.physical_progress || 0),
+    financialProgress: Number(row.financial_progress || 0),
+    startDate: row.start_date || '',
+    endDate: row.end_date || '',
+    clientUid: row.client_uid || '',
+    typology: row.typology || 'RESIDENCIAL',
+    coordinates: latitude !== null && longitude !== null ? { lat: latitude, lng: longitude } : null,
+    latitude: latitude !== null ? String(latitude) : '',
+    longitude: longitude !== null ? String(longitude) : '',
+    createdAt: row.created_at,
+  };
+}
+
+function mapBudgetItem(row: BudgetItemRow) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    description: row.description,
+    category: row.category || "General",
+    unit: row.unit || "",
+    quantity: Number(row.quantity || 0),
+    materialCost: Number(row.material_cost || 0),
+    laborCost: Number(row.labor_cost || 0),
+    indirectCost: Number(row.indirect_cost || 0),
+    totalUnitPrice: Number(row.total_unit_price || 0),
+    totalItemPrice: Number(row.total_item_price || 0),
+    estimatedDays: Number(row.estimated_days || 0),
+    notes: row.notes || "",
+    materialDetails: row.material_details || "",
+    indirectFactor: Number(row.indirect_factor || 0.2),
+    materials: Array.isArray(row.materials) ? row.materials : [],
+    labor: Array.isArray(row.labor) ? row.labor : [],
+    subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
+    total: Number(row.total_item_price || 0),
+    order: row.sort_order || 0,
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || "",
+  };
+}
+
+function mapInventoryItem(row: InventoryRow) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    name: row.name,
+    unit: row.unit || '',
+    stock: Number(row.stock || 0),
+    minStock: Number(row.min_stock || 0),
+    unitPrice: Number(row.unit_price || 0),
+    category: row.category || 'Material de Obra',
+    suppliers: Array.isArray(row.suppliers) ? row.suppliers : [],
+    batches: Array.isArray(row.batches) ? row.batches : [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapInventoryTransaction(row: InventoryTransactionRow) {
+  return {
+    id: row.id,
+    materialId: row.material_id,
+    materialName: row.material_name,
+    type: row.type,
+    quantity: Number(row.quantity || 0),
+    batchNumber: row.batch_number || null,
+    previousStock: row.previous_stock !== null ? Number(row.previous_stock) : null,
+    newStock: row.new_stock !== null ? Number(row.new_stock) : null,
+    reason: row.reason || '',
+    projectId: row.project_id || null,
+    createdAt: row.created_at,
+  };
+}
+
+function mapDeletedRecord(row: DeletedRecordRow) {
+  return {
+    id: row.id,
+    type: row.type,
+    originalId: row.original_id || null,
+    materialId: row.material_id || null,
+    materialName: row.material_name || null,
+    batchId: row.batch_id || null,
+    data: row.data ?? null,
+    reason: row.reason || '',
+    deletedAt: row.deleted_at,
+  };
+}
+
+function mapPurchaseOrder(row: PurchaseOrderRow) {
+  return {
+    id: row.id,
+    projectId: row.project_id || '',
+    budgetItemId: row.budget_item_id || '',
+    materialId: row.material_id || '',
+    materialName: row.material_name,
+    quantity: Number(row.quantity || 0),
+    unit: row.unit || '',
+    estimatedCost: Number(row.estimated_cost || 0),
+    supplier: row.supplier || '',
+    supplierId: row.supplier_id || '',
+    notes: row.notes || '',
+    status: row.status,
+    date: row.order_date,
+    dateReceived: row.date_received || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapQuote(row: QuoteRow) {
+  return {
+    id: row.id,
+    clientId: row.client_id,
+    projectId: row.project_id,
+    date: row.quote_date,
+    status: row.status,
+    total: Number(row.total || 0),
+    items: Array.isArray(row.items) ? row.items : [],
+    notes: row.notes || '',
+    sentAt: row.sent_at || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapClient(row: ClientRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email || '',
+    phone: row.phone || '',
+    company: row.company || '',
+    contactPerson: row.contact_person || '',
+    contacto: row.contacto || '',
+    status: row.status || 'Lead',
+    notes: row.notes || '',
+    location: row.location || null,
+    attachments: Array.isArray(row.attachments) ? row.attachments : [],
+    lastInteraction: row.last_interaction,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapClientChat(row: ClientChatRow) {
+  return {
+    id: row.id,
+    clientId: row.client_id,
+    text: row.text,
+    sender: row.sender,
+    createdAt: row.created_at,
+  };
+}
+
+function mapClientInteraction(row: ClientInteractionRow) {
+  return {
+    id: row.id,
+    clientId: row.client_id,
+    type: row.type,
+    notes: row.notes,
+    date: row.date,
+    createdAt: row.created_at,
+  };
+}
+
+function mapSupplier(row: SupplierRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category || 'Materiales',
+    contact: row.contact || '',
+    email: row.email || '',
+    phone: row.phone || '',
+    rating: Number(row.rating || 0),
+    status: row.status || 'Verified',
+    balance: Number(row.balance || 0),
+    lastOrder: row.last_order || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapDocument(row: DocumentRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    size: row.size || '',
+    folder: row.folder,
+    author: row.author || 'Usuario',
+    date: row.date,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapFolder(row: FolderRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    color: row.color || 'text-slate-500',
+    createdAt: row.created_at,
+  };
+}
+
+function mapEquipment(row: EquipmentRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    projectId: row.project_id || '',
+    dailyRate: Number(row.daily_rate || 0),
+    estimatedDays: Number(row.estimated_days || 0),
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapEmployee(row: EmployeeRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    role: row.role,
+    department: row.department,
+    salary: Number(row.salary || 0),
+    status: row.status,
+    joinDate: row.join_date,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapAttendance(row: AttendanceRow) {
+  return {
+    id: row.id,
+    employeeId: row.employee_id,
+    employeeName: row.employee_name || '',
+    type: row.type,
+    timestamp: row.timestamp,
+    createdAt: row.created_at,
+  };
+}
+
+function mapRisk(row: RiskRow) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    title: row.title,
+    description: row.description || '',
+    category: row.category,
+    impact: row.impact,
+    probability: row.probability,
+    status: row.status,
+    mitigationPlan: row.mitigation_plan || '',
+    contingencyPlan: row.contingency_plan || '',
+    owner: row.owner || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapSafetyIncident(row: SafetyIncidentRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    severity: row.severity,
+    location: row.location,
+    date: row.incident_date,
+    description: row.description || '',
+    measures: row.measures || '',
+    status: row.status,
+    authorEmail: row.author_email || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function requireDatabase() {
+  if (!pool) {
+    throw new Error("DATABASE_URL no esta configurado");
+  }
+  return pool;
+}
+
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+
+  const corsOrigins = (process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  app.use(
+    cors({
+      origin: corsOrigins.length > 0 ? corsOrigins : true,
+      credentials: true,
+    })
+  );
+  app.use(express.json());
 
   // API routes
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+  app.get("/api/health", async (req, res) => {
+    try {
+      if (!pool) {
+        return res.json({ status: "ok", db: "not-configured" });
+      }
+      await pool.query("select 1");
+      return res.json({ status: "ok", db: "connected" });
+    } catch (error) {
+      return res.status(500).json({ status: "error", db: "unavailable" });
+    }
+  });
+
+  app.get("/api/transactions", async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
+      const offset = Math.max(Number(req.query.offset || 0), 0);
+      const projectId = String(req.query.projectId || "").trim();
+      const subcontractId = String(req.query.subcontractId || "").trim();
+      const from = String(req.query.from || "").trim();
+      const to = String(req.query.to || "").trim();
+
+      const where: string[] = [];
+      const values: Array<string | number> = [];
+
+      if (projectId) {
+        values.push(projectId);
+        where.push(`project_id = $${values.length}`);
+      }
+      if (subcontractId) {
+        values.push(subcontractId);
+        where.push(`subcontract_id = $${values.length}`);
+      }
+      if (from) {
+        values.push(from);
+        where.push(`date >= $${values.length}`);
+      }
+      if (to) {
+        values.push(to);
+        where.push(`date <= $${values.length}`);
+      }
+
+      const whereClause = where.length > 0 ? `where ${where.join(" and ")}` : "";
+
+      values.push(limit);
+      const limitParam = `$${values.length}`;
+      values.push(offset);
+      const offsetParam = `$${values.length}`;
+
+      const result = await db.query<TransactionRow>(
+        `
+          select id, project_id, budget_item_id, subcontract_id, type, category, amount, date::text, description, created_at
+          from financial_transactions
+          ${whereClause}
+          order by date desc, created_at desc
+          limit ${limitParam} offset ${offsetParam}
+        `,
+        values
+      );
+
+      res.json({
+        items: result.rows.map(mapTransaction),
+        hasMore: result.rows.length === limit,
+        offset,
+        limit,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || "No se pudieron obtener transacciones" });
+    }
+  });
+
+  app.get("/api/projects", async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const result = await db.query<ProjectRow>(
+        `
+          select
+            id,
+            name,
+            location,
+            project_manager,
+            area,
+            status,
+            budget,
+            spent,
+            physical_progress,
+            financial_progress,
+            start_date::text,
+            end_date::text,
+            client_uid,
+            typology,
+            latitude,
+            longitude,
+            created_at
+          from projects
+          order by created_at desc
+        `
+      );
+
+      return res.json({ items: result.rows.map(mapProject) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || "No se pudieron obtener proyectos" });
+    }
+  });
+
+  app.post('/api/projects', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const body = req.body || {};
+
+      const name = String(body.name || '').trim();
+      const location = String(body.location || '').trim();
+      const projectManager = String(body.projectManager || '').trim();
+      const status = String(body.status || 'Planning').trim();
+      const budget = Number(body.budget || 0);
+      const spent = Number(body.spent || 0);
+      const physicalProgress = Number(body.physicalProgress || 0);
+      const financialProgress = Number(body.financialProgress || 0);
+      const area = Number(body.area || 0);
+      const startDate = String(body.startDate || '').trim();
+      const endDate = String(body.endDate || '').trim();
+      const clientUid = String(body.clientUid || '').trim();
+      const typology = String(body.typology || 'RESIDENCIAL').trim();
+      const latitude = body.latitude !== undefined && body.latitude !== '' ? Number(body.latitude) : null;
+      const longitude = body.longitude !== undefined && body.longitude !== '' ? Number(body.longitude) : null;
+
+      if (!name || !location) {
+        return res.status(400).json({ error: 'name y location son obligatorios' });
+      }
+
+      const result = await db.query<ProjectRow>(
+        `
+          insert into projects (
+            name,
+            location,
+            project_manager,
+            area,
+            status,
+            budget,
+            spent,
+            physical_progress,
+            financial_progress,
+            start_date,
+            end_date,
+            client_uid,
+            typology,
+            latitude,
+            longitude
+          )
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::date,$11::date,$12,$13,$14,$15)
+          returning
+            id,
+            name,
+            location,
+            project_manager,
+            area,
+            status,
+            budget,
+            spent,
+            physical_progress,
+            financial_progress,
+            start_date::text,
+            end_date::text,
+            client_uid,
+            typology,
+            latitude,
+            longitude,
+            created_at
+        `,
+        [
+          name,
+          location,
+          projectManager || null,
+          area,
+          status,
+          budget,
+          spent,
+          physicalProgress,
+          financialProgress,
+          startDate || null,
+          endDate || null,
+          clientUid || null,
+          typology,
+          latitude,
+          longitude,
+        ]
+      );
+
+      return res.status(201).json(mapProject(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear el proyecto' });
+    }
+  });
+
+  app.put('/api/projects/:projectId', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      const body = req.body || {};
+
+      if (!projectId) {
+        return res.status(400).json({ error: 'projectId requerido' });
+      }
+
+      const name = String(body.name || '').trim();
+      const location = String(body.location || '').trim();
+      const projectManager = String(body.projectManager || '').trim();
+      const status = String(body.status || 'Planning').trim();
+      const budget = Number(body.budget || 0);
+      const spent = Number(body.spent || 0);
+      const physicalProgress = Number(body.physicalProgress || 0);
+      const financialProgress = Number(body.financialProgress || 0);
+      const area = Number(body.area || 0);
+      const startDate = String(body.startDate || '').trim();
+      const endDate = String(body.endDate || '').trim();
+      const clientUid = String(body.clientUid || '').trim();
+      const typology = String(body.typology || 'RESIDENCIAL').trim();
+      const latitude = body.latitude !== undefined && body.latitude !== '' ? Number(body.latitude) : null;
+      const longitude = body.longitude !== undefined && body.longitude !== '' ? Number(body.longitude) : null;
+
+      if (!name || !location) {
+        return res.status(400).json({ error: 'name y location son obligatorios' });
+      }
+
+      const result = await db.query<ProjectRow>(
+        `
+          update projects
+          set
+            name = $2,
+            location = $3,
+            project_manager = $4,
+            area = $5,
+            status = $6,
+            budget = $7,
+            spent = $8,
+            physical_progress = $9,
+            financial_progress = $10,
+            start_date = $11::date,
+            end_date = $12::date,
+            client_uid = $13,
+            typology = $14,
+            latitude = $15,
+            longitude = $16
+          where id = $1
+          returning
+            id,
+            name,
+            location,
+            project_manager,
+            area,
+            status,
+            budget,
+            spent,
+            physical_progress,
+            financial_progress,
+            start_date::text,
+            end_date::text,
+            client_uid,
+            typology,
+            latitude,
+            longitude,
+            created_at
+        `,
+        [
+          projectId,
+          name,
+          location,
+          projectManager || null,
+          area,
+          status,
+          budget,
+          spent,
+          physicalProgress,
+          financialProgress,
+          startDate || null,
+          endDate || null,
+          clientUid || null,
+          typology,
+          latitude,
+          longitude,
+        ]
+      );
+
+      if (!result.rows[0]) {
+        return res.status(404).json({ error: 'Proyecto no encontrado' });
+      }
+
+      return res.json(mapProject(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar el proyecto' });
+    }
+  });
+
+  app.delete('/api/projects/:projectId', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      if (!projectId) {
+        return res.status(400).json({ error: 'projectId requerido' });
+      }
+
+      const deleted = await db.query('delete from projects where id = $1', [projectId]);
+      if (deleted.rowCount === 0) {
+        return res.status(404).json({ error: 'Proyecto no encontrado' });
+      }
+
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar el proyecto' });
+    }
+  });
+
+  app.get("/api/projects/:projectId/budget-items", async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || "").trim();
+      if (!projectId) {
+        return res.status(400).json({ error: "projectId requerido" });
+      }
+
+      const result = await db.query<BudgetItemRow>(
+        `
+          select
+            id,
+            project_id,
+            description,
+            category,
+            unit,
+            quantity,
+            material_cost,
+            labor_cost,
+            indirect_cost,
+            total_unit_price,
+            total_item_price,
+            estimated_days,
+            notes,
+            material_details,
+            indirect_factor,
+            materials,
+            labor,
+            subtasks,
+            sort_order,
+            created_at,
+            updated_at
+          from project_budget_items
+          where project_id = $1
+          order by sort_order asc, description asc
+        `,
+        [projectId]
+      );
+
+      return res.json({ items: result.rows.map(mapBudgetItem) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || "No se pudieron obtener partidas" });
+    }
+  });
+
+  app.post('/api/projects/:projectId/budget-items', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      const body = req.body || {};
+      const description = String(body.description || '').trim();
+      const category = String(body.category || '').trim();
+      const unit = String(body.unit || '').trim();
+      const quantity = Number(body.quantity || 0);
+      const materialCost = Number(body.materialCost || 0);
+      const laborCost = Number(body.laborCost || 0);
+      const indirectCost = Number(body.indirectCost || 0);
+      const totalUnitPrice = Number(body.totalUnitPrice || 0);
+      const totalItemPrice = Number(body.totalItemPrice || body.total || 0);
+      const estimatedDays = Number(body.estimatedDays || 0);
+      const notes = String(body.notes || '').trim();
+      const materialDetails = String(body.materialDetails || '').trim();
+      const indirectFactor = Number(body.indirectFactor ?? 0.2);
+      const materials = Array.isArray(body.materials) ? body.materials : [];
+      const labor = Array.isArray(body.labor) ? body.labor : [];
+      const subtasks = Array.isArray(body.subtasks) ? body.subtasks : [];
+      const order = Number(body.order || 0);
+
+      if (!projectId || !description) {
+        return res.status(400).json({ error: 'projectId y description son obligatorios' });
+      }
+
+      const result = await db.query<BudgetItemRow>(
+        `
+          insert into project_budget_items (
+            project_id,
+            description,
+            category,
+            unit,
+            quantity,
+            material_cost,
+            labor_cost,
+            indirect_cost,
+            total_unit_price,
+            total_item_price,
+            estimated_days,
+            notes,
+            material_details,
+            indirect_factor,
+            materials,
+            labor,
+            subtasks,
+            sort_order
+          )
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16::jsonb,$17::jsonb,$18)
+          returning
+            id,
+            project_id,
+            description,
+            category,
+            unit,
+            quantity,
+            material_cost,
+            labor_cost,
+            indirect_cost,
+            total_unit_price,
+            total_item_price,
+            estimated_days,
+            notes,
+            material_details,
+            indirect_factor,
+            materials,
+            labor,
+            subtasks,
+            sort_order,
+            created_at,
+            updated_at
+        `,
+        [
+          projectId,
+          description,
+          category || null,
+          unit || null,
+          quantity,
+          materialCost,
+          laborCost,
+          indirectCost,
+          totalUnitPrice,
+          totalItemPrice,
+          estimatedDays,
+          notes || null,
+          materialDetails || null,
+          indirectFactor,
+          JSON.stringify(materials),
+          JSON.stringify(labor),
+          JSON.stringify(subtasks),
+          order,
+        ]
+      );
+
+      return res.status(201).json(mapBudgetItem(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear partida' });
+    }
+  });
+
+  app.patch('/api/projects/:projectId/budget-items/:itemId', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      const itemId = String(req.params.itemId || '').trim();
+      const body = req.body || {};
+
+      if (!projectId || !itemId) {
+        return res.status(400).json({ error: 'projectId e itemId son obligatorios' });
+      }
+
+      const sets: string[] = [];
+      const values: any[] = [];
+
+      const addSet = (sqlName: string, value: any, json = false) => {
+        values.push(json ? JSON.stringify(value) : value);
+        const param = `$${values.length}`;
+        sets.push(json ? `${sqlName} = ${param}::jsonb` : `${sqlName} = ${param}`);
+      };
+
+      if (body.description !== undefined) addSet('description', String(body.description || '').trim());
+      if (body.category !== undefined) addSet('category', String(body.category || '').trim() || null);
+      if (body.unit !== undefined) addSet('unit', String(body.unit || '').trim() || null);
+      if (body.quantity !== undefined) addSet('quantity', Number(body.quantity || 0));
+      if (body.materialCost !== undefined) addSet('material_cost', Number(body.materialCost || 0));
+      if (body.laborCost !== undefined) addSet('labor_cost', Number(body.laborCost || 0));
+      if (body.indirectCost !== undefined) addSet('indirect_cost', Number(body.indirectCost || 0));
+      if (body.totalUnitPrice !== undefined) addSet('total_unit_price', Number(body.totalUnitPrice || 0));
+      if (body.totalItemPrice !== undefined || body.total !== undefined) {
+        addSet('total_item_price', Number(body.totalItemPrice || body.total || 0));
+      }
+      if (body.estimatedDays !== undefined) addSet('estimated_days', Number(body.estimatedDays || 0));
+      if (body.notes !== undefined) addSet('notes', String(body.notes || '').trim() || null);
+      if (body.materialDetails !== undefined) addSet('material_details', String(body.materialDetails || '').trim() || null);
+      if (body.indirectFactor !== undefined) addSet('indirect_factor', Number(body.indirectFactor ?? 0.2));
+      if (body.materials !== undefined) addSet('materials', Array.isArray(body.materials) ? body.materials : [], true);
+      if (body.labor !== undefined) addSet('labor', Array.isArray(body.labor) ? body.labor : [], true);
+      if (body.subtasks !== undefined) addSet('subtasks', Array.isArray(body.subtasks) ? body.subtasks : [], true);
+      if (body.order !== undefined) addSet('sort_order', Number(body.order || 0));
+
+      if (sets.length === 0) {
+        return res.status(400).json({ error: 'No hay campos para actualizar' });
+      }
+
+      sets.push('updated_at = now()');
+      values.push(projectId);
+      values.push(itemId);
+
+      const result = await db.query<BudgetItemRow>(
+        `
+          update project_budget_items
+          set ${sets.join(', ')}
+          where project_id = $${values.length - 1} and id = $${values.length}
+          returning
+            id,
+            project_id,
+            description,
+            category,
+            unit,
+            quantity,
+            material_cost,
+            labor_cost,
+            indirect_cost,
+            total_unit_price,
+            total_item_price,
+            estimated_days,
+            notes,
+            material_details,
+            indirect_factor,
+            materials,
+            labor,
+            subtasks,
+            sort_order,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!result.rows[0]) {
+        return res.status(404).json({ error: 'Partida no encontrada' });
+      }
+
+      return res.json(mapBudgetItem(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar la partida' });
+    }
+  });
+
+  app.delete('/api/projects/:projectId/budget-items/:itemId', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      const itemId = String(req.params.itemId || '').trim();
+
+      if (!projectId || !itemId) {
+        return res.status(400).json({ error: 'projectId e itemId son obligatorios' });
+      }
+
+      const deleted = await db.query(
+        'delete from project_budget_items where project_id = $1 and id = $2',
+        [projectId, itemId]
+      );
+
+      if (deleted.rowCount === 0) {
+        return res.status(404).json({ error: 'Partida no encontrada' });
+      }
+
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar la partida' });
+    }
+  });
+
+  app.post('/api/projects/:projectId/budget-items/reorder', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      const orderedIds = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds : [];
+
+      if (!projectId || orderedIds.length === 0) {
+        return res.status(400).json({ error: 'projectId y orderedIds son obligatorios' });
+      }
+
+      await db.query('begin');
+      try {
+        for (let index = 0; index < orderedIds.length; index += 1) {
+          await db.query(
+            `
+              update project_budget_items
+              set sort_order = $3, updated_at = now()
+              where project_id = $1 and id = $2
+            `,
+            [projectId, String(orderedIds[index]), index + 1]
+          );
+        }
+        await db.query('commit');
+      } catch (error) {
+        await db.query('rollback');
+        throw error;
+      }
+
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo reordenar partidas' });
+    }
+  });
+
+  app.patch('/api/projects/:projectId/budget-summary', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      const body = req.body || {};
+      if (!projectId) {
+        return res.status(400).json({ error: 'projectId requerido' });
+      }
+
+      const sets: string[] = ['updated_at = now()'];
+      const values: any[] = [projectId];
+
+      const addSet = (sqlName: string, value: any, cast = '') => {
+        values.push(value);
+        const idx = values.length;
+        sets.push(`${sqlName} = $${idx}${cast}`);
+      };
+
+      if (body.budget !== undefined) addSet('budget', Number(body.budget || 0));
+      if (body.typology !== undefined) addSet('typology', String(body.typology || '').trim() || null);
+      if (body.budgetStatus !== undefined) addSet('budget_status', String(body.budgetStatus || '').trim() || null);
+      if (body.budgetValidationMessage !== undefined) {
+        addSet('budget_validation_message', String(body.budgetValidationMessage || '').trim() || null);
+      }
+      if (body.budgetValidationType !== undefined) {
+        addSet('budget_validation_type', String(body.budgetValidationType || '').trim() || null);
+      }
+      if (body.budgetValidatedAt !== undefined) {
+        addSet('budget_validated_at', body.budgetValidatedAt ? String(body.budgetValidatedAt) : null, '::timestamptz');
+      }
+
+      if (sets.length === 1) {
+        return res.status(400).json({ error: 'No hay campos para actualizar' });
+      }
+
+      await db.query(
+        `
+          update projects
+          set ${sets.join(', ')}
+          where id = $1
+        `,
+        values
+      );
+
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar el resumen de presupuesto' });
+    }
+  });
+
+  app.get('/api/projects/:projectId/pois', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      if (!projectId) {
+        return res.status(400).json({ error: 'projectId requerido' });
+      }
+
+      const result = await db.query<ProjectPoiRow>(
+        `
+          select id, project_id, name, comment, latitude, longitude, created_at, updated_at
+          from project_pois
+          where project_id = $1
+          order by created_at asc
+        `,
+        [projectId]
+      );
+
+      return res.json({ items: result.rows.map(mapProjectPoi) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener puntos de interes' });
+    }
+  });
+
+  app.post('/api/projects/:projectId/pois', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      const name = String(req.body?.name || '').trim();
+      const comment = String(req.body?.comment || '').trim();
+      const lat = Number(req.body?.lat);
+      const lng = Number(req.body?.lng);
+
+      if (!projectId || !name || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return res.status(400).json({ error: 'projectId, name, lat y lng son obligatorios' });
+      }
+
+      const result = await db.query<ProjectPoiRow>(
+        `
+          insert into project_pois (project_id, name, comment, latitude, longitude)
+          values ($1,$2,$3,$4,$5)
+          returning id, project_id, name, comment, latitude, longitude, created_at, updated_at
+        `,
+        [projectId, name, comment || null, lat, lng]
+      );
+
+      return res.status(201).json(mapProjectPoi(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear punto de interes' });
+    }
+  });
+
+  app.patch('/api/projects/:projectId/pois/:poiId', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      const poiId = String(req.params.poiId || '').trim();
+
+      if (!projectId || !poiId) {
+        return res.status(400).json({ error: 'projectId y poiId son obligatorios' });
+      }
+
+      const sets: string[] = [];
+      const values: any[] = [];
+
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.name !== undefined) addSet('name', String(req.body.name || '').trim());
+      if (req.body?.comment !== undefined) addSet('comment', String(req.body.comment || '').trim() || null);
+      if (req.body?.lat !== undefined) addSet('latitude', Number(req.body.lat));
+      if (req.body?.lng !== undefined) addSet('longitude', Number(req.body.lng));
+
+      if (sets.length === 0) {
+        return res.status(400).json({ error: 'No hay campos para actualizar' });
+      }
+
+      sets.push('updated_at = now()');
+      values.push(projectId, poiId);
+
+      const result = await db.query<ProjectPoiRow>(
+        `
+          update project_pois
+          set ${sets.join(', ')}
+          where project_id = $${values.length - 1} and id = $${values.length}
+          returning id, project_id, name, comment, latitude, longitude, created_at, updated_at
+        `,
+        values
+      );
+
+      if (!result.rows[0]) {
+        return res.status(404).json({ error: 'Punto de interes no encontrado' });
+      }
+
+      return res.json(mapProjectPoi(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar punto de interes' });
+    }
+  });
+
+  app.delete('/api/projects/:projectId/pois/:poiId', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      const poiId = String(req.params.poiId || '').trim();
+
+      if (!projectId || !poiId) {
+        return res.status(400).json({ error: 'projectId y poiId son obligatorios' });
+      }
+
+      const deleted = await db.query('delete from project_pois where project_id = $1 and id = $2', [projectId, poiId]);
+      if (deleted.rowCount === 0) {
+        return res.status(404).json({ error: 'Punto de interes no encontrado' });
+      }
+
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar punto de interes' });
+    }
+  });
+
+  app.get('/api/projects/:projectId/logbook', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      if (!projectId) {
+        return res.status(400).json({ error: 'projectId requerido' });
+      }
+
+      const result = await db.query<ProjectLogbookEntryRow>(
+        `
+          select
+            id,
+            project_id,
+            entry_date::text,
+            content,
+            weather,
+            workers_count,
+            photos,
+            author_email,
+            created_at
+          from project_logbook_entries
+          where project_id = $1
+          order by entry_date desc, created_at desc
+        `,
+        [projectId]
+      );
+
+      return res.json({ items: result.rows.map(mapProjectLogbookEntry) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo obtener bitacora' });
+    }
+  });
+
+  app.post('/api/projects/:projectId/logbook', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      const date = String(req.body?.date || '').trim();
+      const content = String(req.body?.content || '').trim();
+      const weather = String(req.body?.weather || 'Soleado').trim() || 'Soleado';
+      const workersCount = Number(req.body?.workersCount || 0);
+      const photos = Array.isArray(req.body?.photos) ? req.body.photos : [];
+      const authorEmail = String(req.body?.authorEmail || '').trim() || null;
+
+      if (!projectId || !date || !content) {
+        return res.status(400).json({ error: 'projectId, date y content son obligatorios' });
+      }
+
+      const result = await db.query<ProjectLogbookEntryRow>(
+        `
+          insert into project_logbook_entries (
+            project_id,
+            entry_date,
+            content,
+            weather,
+            workers_count,
+            photos,
+            author_email
+          )
+          values ($1,$2::date,$3,$4,$5,$6::jsonb,$7)
+          returning
+            id,
+            project_id,
+            entry_date::text,
+            content,
+            weather,
+            workers_count,
+            photos,
+            author_email,
+            created_at
+        `,
+        [projectId, date, content, weather, workersCount, JSON.stringify(photos), authorEmail]
+      );
+
+      return res.status(201).json(mapProjectLogbookEntry(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear entrada de bitacora' });
+    }
+  });
+
+  app.delete('/api/projects/:projectId/logbook/:entryId', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.params.projectId || '').trim();
+      const entryId = String(req.params.entryId || '').trim();
+
+      if (!projectId || !entryId) {
+        return res.status(400).json({ error: 'projectId y entryId son obligatorios' });
+      }
+
+      const deleted = await db.query(
+        'delete from project_logbook_entries where project_id = $1 and id = $2',
+        [projectId, entryId]
+      );
+
+      if (deleted.rowCount === 0) {
+        return res.status(404).json({ error: 'Entrada de bitacora no encontrada' });
+      }
+
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar entrada de bitacora' });
+    }
+  });
+
+  app.get('/api/audit-logs', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.query.projectId || '').trim();
+      const moduleName = String(req.query.module || '').trim();
+      const type = String(req.query.type || '').trim();
+      const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
+      const offset = Math.max(Number(req.query.offset || 0), 0);
+
+      const where: string[] = [];
+      const values: Array<string | number> = [];
+
+      if (projectId) {
+        values.push(projectId);
+        where.push(`project_id = $${values.length}`);
+      }
+      if (moduleName) {
+        values.push(moduleName);
+        where.push(`module = $${values.length}`);
+      }
+      if (type) {
+        values.push(type);
+        where.push(`type = $${values.length}`);
+      }
+
+      const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : '';
+      values.push(limit);
+      const limitParam = `$${values.length}`;
+      values.push(offset);
+      const offsetParam = `$${values.length}`;
+
+      const result = await db.query<AuditLogRow>(
+        `
+          select
+            id,
+            project_id,
+            user_id,
+            user_name,
+            user_email,
+            action,
+            module,
+            details,
+            type,
+            metadata,
+            user_agent,
+            ip_address,
+            created_at
+          from audit_logs
+          ${whereClause}
+          order by created_at desc
+          limit ${limitParam} offset ${offsetParam}
+        `,
+        values
+      );
+
+      return res.json({ items: result.rows.map(mapAuditLog), hasMore: result.rows.length === limit });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener logs de auditoria' });
+    }
+  });
+
+  app.post('/api/audit-logs', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const metadata = req.body?.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {};
+      const projectId = String(req.body?.projectId || metadata.projectId || '').trim() || null;
+      const userId = String(req.body?.userId || '').trim() || null;
+      const userName = String(req.body?.userName || 'Usuario').trim() || 'Usuario';
+      const userEmail = String(req.body?.userEmail || '').trim() || null;
+      const action = String(req.body?.action || '').trim();
+      const moduleName = String(req.body?.module || '').trim();
+      const details = String(req.body?.details || '').trim();
+      const type = String(req.body?.type || 'system').trim() || 'system';
+      const userAgent = String(req.body?.userAgent || '').trim() || null;
+      const ipAddress = String(req.body?.ipAddress || '').trim() || null;
+
+      if (!action || !moduleName || !details) {
+        return res.status(400).json({ error: 'action, module y details son obligatorios' });
+      }
+
+      const allowedTypes = new Set(['create', 'update', 'delete', 'auth', 'system', 'read']);
+      const normalizedType = allowedTypes.has(type) ? type : 'system';
+
+      const result = await db.query<AuditLogRow>(
+        `
+          insert into audit_logs (
+            project_id,
+            user_id,
+            user_name,
+            user_email,
+            action,
+            module,
+            details,
+            type,
+            metadata,
+            user_agent,
+            ip_address
+          )
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)
+          returning
+            id,
+            project_id,
+            user_id,
+            user_name,
+            user_email,
+            action,
+            module,
+            details,
+            type,
+            metadata,
+            user_agent,
+            ip_address,
+            created_at
+        `,
+        [
+          projectId,
+          userId,
+          userName,
+          userEmail,
+          action,
+          moduleName,
+          details,
+          normalizedType,
+          JSON.stringify(metadata),
+          userAgent,
+          ipAddress,
+        ]
+      );
+
+      return res.status(201).json(mapAuditLog(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo registrar log de auditoria' });
+    }
+  });
+
+  app.get('/api/notifications', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const unreadOnly = String(req.query.unreadOnly || '').trim() === 'true';
+      const limit = Math.min(Math.max(Number(req.query.limit || 100), 1), 300);
+      const offset = Math.max(Number(req.query.offset || 0), 0);
+
+      const whereClause = unreadOnly ? 'where read = false' : '';
+      const result = await db.query<NotificationRow>(
+        `
+          select id, title, body, type, read, created_at
+          from notifications
+          ${whereClause}
+          order by created_at desc
+          limit $1 offset $2
+        `,
+        [limit, offset]
+      );
+
+      return res.json({ items: result.rows.map(mapNotification), hasMore: result.rows.length === limit });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener notificaciones' });
+    }
+  });
+
+  app.post('/api/notifications', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const title = String(req.body?.title || '').trim();
+      const body = String(req.body?.body || '').trim();
+      const type = String(req.body?.type || 'project').trim() || 'project';
+
+      if (!title || !body) {
+        return res.status(400).json({ error: 'title y body son obligatorios' });
+      }
+
+      const allowedTypes = new Set(['inventory', 'subcontract', 'project', 'system']);
+      const normalizedType = allowedTypes.has(type) ? type : 'project';
+
+      const result = await db.query<NotificationRow>(
+        `
+          insert into notifications (title, body, type)
+          values ($1,$2,$3)
+          returning id, title, body, type, read, created_at
+        `,
+        [title, body, normalizedType]
+      );
+
+      return res.status(201).json(mapNotification(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear notificacion' });
+    }
+  });
+
+  app.patch('/api/notifications/:id/read', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) {
+        return res.status(400).json({ error: 'id requerido' });
+      }
+
+      const updated = await db.query<NotificationRow>(
+        `
+          update notifications
+          set read = true
+          where id = $1
+          returning id, title, body, type, read, created_at
+        `,
+        [id]
+      );
+
+      if (!updated.rows[0]) {
+        return res.status(404).json({ error: 'Notificacion no encontrada' });
+      }
+
+      return res.json(mapNotification(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo marcar la notificacion como leida' });
+    }
+  });
+
+  app.get("/api/budget-items", async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.query.projectId || "").trim();
+
+      if (projectId) {
+        const result = await db.query<BudgetItemRow>(
+          `
+            select
+              id,
+              project_id,
+              description,
+              category,
+              unit,
+              quantity,
+              material_cost,
+              labor_cost,
+              indirect_cost,
+              total_unit_price,
+              total_item_price,
+              estimated_days,
+              notes,
+              material_details,
+              indirect_factor,
+              materials,
+              labor,
+              subtasks,
+              sort_order,
+              created_at,
+              updated_at
+            from project_budget_items
+            where project_id = $1
+            order by sort_order asc, description asc
+          `,
+          [projectId]
+        );
+        return res.json({ items: result.rows.map(mapBudgetItem) });
+      }
+
+      const result = await db.query<BudgetItemRow>(
+        `
+          select
+            id,
+            project_id,
+            description,
+            category,
+            unit,
+            quantity,
+            material_cost,
+            labor_cost,
+            indirect_cost,
+            total_unit_price,
+            total_item_price,
+            estimated_days,
+            notes,
+            material_details,
+            indirect_factor,
+            materials,
+            labor,
+            subtasks,
+            sort_order,
+            created_at,
+            updated_at
+          from project_budget_items
+          order by project_id asc, sort_order asc, description asc
+        `
+      );
+      return res.json({ items: result.rows.map(mapBudgetItem) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || "No se pudieron obtener partidas" });
+    }
+  });
+
+  app.get('/api/inventory', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.query.projectId || '').trim();
+      const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
+      const offset = Math.max(Number(req.query.offset || 0), 0);
+
+      const where: string[] = [];
+      const values: Array<string | number> = [];
+      if (projectId) {
+        values.push(projectId);
+        where.push(`project_id = $${values.length}`);
+      }
+      const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : '';
+      values.push(limit);
+      const limitParam = `$${values.length}`;
+      values.push(offset);
+      const offsetParam = `$${values.length}`;
+
+      const result = await db.query<InventoryRow>(
+        `
+          select
+            id,
+            project_id,
+            name,
+            unit,
+            stock,
+            min_stock,
+            unit_price,
+            category,
+            suppliers,
+            batches,
+            created_at,
+            updated_at
+          from inventory_items
+          ${whereClause}
+          order by name asc
+          limit ${limitParam} offset ${offsetParam}
+        `,
+        values
+      );
+
+      return res.json({ items: result.rows.map(mapInventoryItem), hasMore: result.rows.length === limit });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo obtener inventario' });
+    }
+  });
+
+  app.post('/api/inventory', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.body?.projectId || '').trim();
+      const name = String(req.body?.name || '').trim();
+      const category = String(req.body?.category || 'Material de Obra').trim() || 'Material de Obra';
+      const unit = String(req.body?.unit || '').trim();
+      const unitPrice = Number(req.body?.unitPrice || 0);
+      const stock = Number(req.body?.stock || 0);
+      const minStock = Number(req.body?.minStock || 0);
+      const suppliers = Array.isArray(req.body?.suppliers) ? req.body.suppliers : [];
+      const batches = Array.isArray(req.body?.batches) ? req.body.batches : [];
+
+      if (!projectId || !name) {
+        return res.status(400).json({ error: 'projectId y name son obligatorios' });
+      }
+
+      const upsert = await db.query<InventoryRow>(
+        `
+          insert into inventory_items (
+            project_id,
+            name,
+            unit,
+            stock,
+            min_stock,
+            unit_price,
+            category,
+            suppliers,
+            batches
+          )
+          values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb)
+          on conflict (project_id, name)
+          do update set
+            unit = excluded.unit,
+            stock = inventory_items.stock + excluded.stock,
+            min_stock = excluded.min_stock,
+            unit_price = excluded.unit_price,
+            category = excluded.category,
+            suppliers = excluded.suppliers,
+            batches = excluded.batches,
+            updated_at = now()
+          returning
+            id,
+            project_id,
+            name,
+            unit,
+            stock,
+            min_stock,
+            unit_price,
+            category,
+            suppliers,
+            batches,
+            created_at,
+            updated_at
+        `,
+        [projectId, name, unit || null, stock, minStock, unitPrice, category, JSON.stringify(suppliers), JSON.stringify(batches)]
+      );
+
+      return res.status(201).json(mapInventoryItem(upsert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo guardar material de inventario' });
+    }
+  });
+
+  app.patch('/api/inventory/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any, json = false) => {
+        values.push(json ? JSON.stringify(value) : value);
+        const p = `$${values.length}`;
+        sets.push(json ? `${name} = ${p}::jsonb` : `${name} = ${p}`);
+      };
+
+      if (req.body?.name !== undefined) addSet('name', String(req.body.name || '').trim());
+      if (req.body?.category !== undefined) addSet('category', String(req.body.category || '').trim() || 'Material de Obra');
+      if (req.body?.unit !== undefined) addSet('unit', String(req.body.unit || '').trim() || null);
+      if (req.body?.unitPrice !== undefined) addSet('unit_price', Number(req.body.unitPrice || 0));
+      if (req.body?.stock !== undefined) addSet('stock', Number(req.body.stock || 0));
+      if (req.body?.minStock !== undefined) addSet('min_stock', Number(req.body.minStock || 0));
+      if (req.body?.suppliers !== undefined) addSet('suppliers', Array.isArray(req.body.suppliers) ? req.body.suppliers : [], true);
+      if (req.body?.batches !== undefined) addSet('batches', Array.isArray(req.body.batches) ? req.body.batches : [], true);
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<InventoryRow>(
+        `
+          update inventory_items
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            project_id,
+            name,
+            unit,
+            stock,
+            min_stock,
+            unit_price,
+            category,
+            suppliers,
+            batches,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Material no encontrado' });
+      return res.json(mapInventoryItem(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar inventario' });
+    }
+  });
+
+  app.patch('/api/inventory/:id/stock', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      const delta = Number(req.body?.delta || 0);
+      if (!id || !Number.isFinite(delta)) {
+        return res.status(400).json({ error: 'id y delta validos son obligatorios' });
+      }
+
+      const updated = await db.query<InventoryRow>(
+        `
+          update inventory_items
+          set
+            stock = greatest(0, stock + $2),
+            updated_at = now()
+          where id = $1
+          returning
+            id,
+            project_id,
+            name,
+            unit,
+            stock,
+            min_stock,
+            unit_price,
+            category,
+            suppliers,
+            batches,
+            created_at,
+            updated_at
+        `,
+        [id, delta]
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Material no encontrado' });
+      return res.json(mapInventoryItem(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo ajustar stock' });
+    }
+  });
+
+  app.delete('/api/inventory/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from inventory_items where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Material no encontrado' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar material' });
+    }
+  });
+
+  app.post('/api/inventory/sync', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.body?.projectId || '').trim();
+      const items = Array.isArray(req.body?.items) ? req.body.items : [];
+
+      if (!projectId || items.length === 0) {
+        return res.status(400).json({ error: 'projectId e items son obligatorios' });
+      }
+
+      await db.query('begin');
+      try {
+        for (const raw of items) {
+          const name = String(raw?.name || '').trim();
+          if (!name) continue;
+
+          const unit = String(raw?.unit || '').trim() || null;
+          const stock = Number(raw?.totalQuantity || 0);
+          const minStock = stock * 0.1;
+          const unitPrice = Number(raw?.unitPrice || 0);
+          const category = String(raw?.category || 'Material de Obra').trim() || 'Material de Obra';
+
+          await db.query(
+            `
+              insert into inventory_items (
+                project_id,
+                name,
+                unit,
+                stock,
+                min_stock,
+                unit_price,
+                category
+              )
+              values ($1,$2,$3,$4,$5,$6,$7)
+              on conflict (project_id, name)
+              do update set
+                unit = excluded.unit,
+                stock = excluded.stock,
+                min_stock = excluded.min_stock,
+                unit_price = excluded.unit_price,
+                category = excluded.category,
+                updated_at = now()
+            `,
+            [projectId, name, unit, stock, minStock, unitPrice, category]
+          );
+        }
+        await db.query('commit');
+      } catch (error) {
+        await db.query('rollback');
+        throw error;
+      }
+
+      return res.json({ synced: items.length });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo sincronizar inventario' });
+    }
+  });
+
+  app.get('/api/quotes', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const clientId = String(req.query.clientId || '').trim();
+      const projectId = String(req.query.projectId || '').trim();
+      const status = String(req.query.status || '').trim();
+
+      const where: string[] = [];
+      const values: any[] = [];
+      if (clientId) {
+        values.push(clientId);
+        where.push(`client_id = $${values.length}`);
+      }
+      if (projectId) {
+        values.push(projectId);
+        where.push(`project_id = $${values.length}`);
+      }
+      if (status) {
+        values.push(status);
+        where.push(`status = $${values.length}`);
+      }
+
+      const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : '';
+      const rows = await db.query<QuoteRow>(
+        `
+          select
+            id,
+            client_id,
+            project_id,
+            quote_date::text,
+            status,
+            total,
+            items,
+            notes,
+            sent_at::text,
+            created_at,
+            updated_at
+          from quotes
+          ${whereClause}
+          order by created_at desc
+        `,
+        values
+      );
+
+      return res.json({ items: rows.rows.map(mapQuote) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener cotizaciones' });
+    }
+  });
+
+  app.post('/api/quotes', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const clientId = String(req.body?.clientId || '').trim();
+      const projectId = String(req.body?.projectId || '').trim();
+      const date = String(req.body?.date || '').trim();
+      const status = String(req.body?.status || 'Pending').trim();
+      const total = Number(req.body?.total || 0);
+      const items = Array.isArray(req.body?.items) ? req.body.items : [];
+      const notes = String(req.body?.notes || '').trim();
+      const sentAt = req.body?.sentAt ? String(req.body.sentAt) : null;
+
+      if (!clientId || !projectId || items.length === 0) {
+        return res.status(400).json({ error: 'clientId, projectId e items son obligatorios' });
+      }
+
+      const insert = await db.query<QuoteRow>(
+        `
+          insert into quotes (
+            client_id,
+            project_id,
+            quote_date,
+            status,
+            total,
+            items,
+            notes,
+            sent_at
+          ) values ($1,$2,$3::timestamptz,$4,$5,$6::jsonb,$7,$8::timestamptz)
+          returning
+            id,
+            client_id,
+            project_id,
+            quote_date::text,
+            status,
+            total,
+            items,
+            notes,
+            sent_at::text,
+            created_at,
+            updated_at
+        `,
+        [
+          clientId,
+          projectId,
+          date || new Date().toISOString(),
+          status,
+          total,
+          JSON.stringify(items),
+          notes || null,
+          sentAt,
+        ]
+      );
+
+      return res.status(201).json(mapQuote(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear cotizacion' });
+    }
+  });
+
+  app.patch('/api/quotes/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.clientId !== undefined) addSet('client_id', String(req.body.clientId || '').trim());
+      if (req.body?.projectId !== undefined) addSet('project_id', String(req.body.projectId || '').trim());
+      if (req.body?.status !== undefined) addSet('status', String(req.body.status || '').trim() || 'Pending');
+      if (req.body?.total !== undefined) addSet('total', Number(req.body.total || 0));
+      if (req.body?.notes !== undefined) addSet('notes', String(req.body.notes || '').trim() || null);
+      if (req.body?.items !== undefined) {
+        values.push(JSON.stringify(Array.isArray(req.body.items) ? req.body.items : []));
+        sets.push(`items = $${values.length}::jsonb`);
+      }
+      if (req.body?.date !== undefined) {
+        values.push(req.body.date ? String(req.body.date) : null);
+        sets.push(`quote_date = $${values.length}::timestamptz`);
+      }
+      if (req.body?.sentAt !== undefined) {
+        values.push(req.body.sentAt ? String(req.body.sentAt) : null);
+        sets.push(`sent_at = $${values.length}::timestamptz`);
+      }
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<QuoteRow>(
+        `
+          update quotes
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            client_id,
+            project_id,
+            quote_date::text,
+            status,
+            total,
+            items,
+            notes,
+            sent_at::text,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Cotizacion no encontrada' });
+      return res.json(mapQuote(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar cotizacion' });
+    }
+  });
+
+  app.delete('/api/quotes/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from quotes where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Cotizacion no encontrada' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar cotizacion' });
+    }
+  });
+
+  app.get('/api/inventory-transactions', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const materialId = String(req.query.materialId || '').trim();
+      const type = String(req.query.type || '').trim();
+      const limit = Math.min(Math.max(Number(req.query.limit || 100), 1), 500);
+
+      const where: string[] = [];
+      const values: any[] = [];
+      if (materialId) {
+        values.push(materialId);
+        where.push(`material_id = $${values.length}`);
+      }
+      if (type) {
+        values.push(type);
+        where.push(`type = $${values.length}`);
+      }
+      values.push(limit);
+      const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : '';
+
+      const rows = await db.query<InventoryTransactionRow>(
+        `
+          select
+            id,
+            material_id,
+            material_name,
+            type,
+            quantity,
+            batch_number,
+            previous_stock,
+            new_stock,
+            reason,
+            project_id,
+            created_at
+          from inventory_transactions
+          ${whereClause}
+          order by created_at desc
+          limit $${values.length}
+        `,
+        values
+      );
+
+      return res.json({ items: rows.rows.map(mapInventoryTransaction) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener transacciones de inventario' });
+    }
+  });
+
+  app.post('/api/inventory-transactions', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const materialId = String(req.body?.materialId || '').trim();
+      const materialName = String(req.body?.materialName || '').trim();
+      const type = String(req.body?.type || '').trim();
+      const quantity = Number(req.body?.quantity || 0);
+      const batchNumber = req.body?.batchNumber ? String(req.body.batchNumber).trim() : null;
+      const previousStock = req.body?.previousStock !== undefined ? Number(req.body.previousStock) : null;
+      const newStock = req.body?.newStock !== undefined ? Number(req.body.newStock) : null;
+      const reason = req.body?.reason ? String(req.body.reason).trim() : null;
+      const projectId = req.body?.projectId ? String(req.body.projectId).trim() : null;
+
+      if (!materialId || !materialName || !type || !Number.isFinite(quantity) || quantity < 0) {
+        return res.status(400).json({ error: 'materialId, materialName, type y quantity son obligatorios' });
+      }
+
+      const insert = await db.query<InventoryTransactionRow>(
+        `
+          insert into inventory_transactions (
+            material_id,
+            material_name,
+            type,
+            quantity,
+            batch_number,
+            previous_stock,
+            new_stock,
+            reason,
+            project_id
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+          returning
+            id,
+            material_id,
+            material_name,
+            type,
+            quantity,
+            batch_number,
+            previous_stock,
+            new_stock,
+            reason,
+            project_id,
+            created_at
+        `,
+        [materialId, materialName, type, quantity, batchNumber, previousStock, newStock, reason, projectId]
+      );
+
+      return res.status(201).json(mapInventoryTransaction(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear transaccion de inventario' });
+    }
+  });
+
+  app.delete('/api/inventory-transactions/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from inventory_transactions where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Transaccion no encontrada' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar transaccion de inventario' });
+    }
+  });
+
+  app.get('/api/deleted-records', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const rows = await db.query<DeletedRecordRow>(
+        `
+          select
+            id,
+            type,
+            original_id,
+            material_id,
+            material_name,
+            batch_id,
+            data,
+            reason,
+            deleted_at
+          from deleted_records
+          order by deleted_at desc
+        `
+      );
+
+      return res.json({ items: rows.rows.map(mapDeletedRecord) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener registros eliminados' });
+    }
+  });
+
+  app.post('/api/deleted-records', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const type = String(req.body?.type || '').trim();
+      const originalId = req.body?.originalId ? String(req.body.originalId).trim() : null;
+      const materialId = req.body?.materialId ? String(req.body.materialId).trim() : null;
+      const materialName = req.body?.materialName ? String(req.body.materialName).trim() : null;
+      const batchId = req.body?.batchId ? String(req.body.batchId).trim() : null;
+      const reason = req.body?.reason ? String(req.body.reason).trim() : null;
+      const data = req.body?.data ?? null;
+
+      if (!type || data === null) {
+        return res.status(400).json({ error: 'type y data son obligatorios' });
+      }
+
+      const insert = await db.query<DeletedRecordRow>(
+        `
+          insert into deleted_records (
+            type,
+            original_id,
+            material_id,
+            material_name,
+            batch_id,
+            data,
+            reason
+          ) values ($1,$2,$3,$4,$5,$6::jsonb,$7)
+          returning
+            id,
+            type,
+            original_id,
+            material_id,
+            material_name,
+            batch_id,
+            data,
+            reason,
+            deleted_at
+        `,
+        [type, originalId, materialId, materialName, batchId, JSON.stringify(data), reason]
+      );
+
+      return res.status(201).json(mapDeletedRecord(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo guardar registro eliminado' });
+    }
+  });
+
+  app.delete('/api/deleted-records/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from deleted_records where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Registro no encontrado' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar registro de papelera' });
+    }
+  });
+
+  app.get('/api/purchase-orders', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.query.projectId || '').trim();
+      const supplierId = String(req.query.supplierId || '').trim();
+      const status = String(req.query.status || '').trim();
+
+      const where: string[] = [];
+      const values: any[] = [];
+      if (projectId) {
+        values.push(projectId);
+        where.push(`project_id = $${values.length}`);
+      }
+      if (supplierId) {
+        values.push(supplierId);
+        where.push(`supplier_id = $${values.length}`);
+      }
+      if (status) {
+        values.push(status);
+        where.push(`status = $${values.length}`);
+      }
+      const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : '';
+
+      const rows = await db.query<PurchaseOrderRow>(
+        `
+          select
+            id,
+            project_id,
+            budget_item_id,
+            material_id,
+            material_name,
+            quantity,
+            unit,
+            estimated_cost,
+            supplier,
+            supplier_id,
+            notes,
+            status,
+            order_date::text,
+            date_received::text,
+            created_at,
+            updated_at
+          from purchase_orders
+          ${whereClause}
+          order by created_at desc
+        `,
+        values
+      );
+
+      return res.json({ items: rows.rows.map(mapPurchaseOrder) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener ordenes de compra' });
+    }
+  });
+
+  app.post('/api/purchase-orders', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = req.body?.projectId ? String(req.body.projectId).trim() : null;
+      const budgetItemId = req.body?.budgetItemId ? String(req.body.budgetItemId).trim() : null;
+      const materialId = req.body?.materialId ? String(req.body.materialId).trim() : null;
+      const materialName = String(req.body?.materialName || '').trim();
+      const quantity = Number(req.body?.quantity || 0);
+      const unit = req.body?.unit ? String(req.body.unit).trim() : null;
+      const estimatedCost = Number(req.body?.estimatedCost || 0);
+      const supplier = req.body?.supplier ? String(req.body.supplier).trim() : null;
+      const supplierId = req.body?.supplierId ? String(req.body.supplierId).trim() : null;
+      const notes = req.body?.notes ? String(req.body.notes).trim() : null;
+      const status = String(req.body?.status || 'Pending').trim() || 'Pending';
+      const date = String(req.body?.date || '').trim();
+
+      if (!materialName || !Number.isFinite(quantity) || quantity <= 0) {
+        return res.status(400).json({ error: 'materialName y quantity validos son obligatorios' });
+      }
+
+      const insert = await db.query<PurchaseOrderRow>(
+        `
+          insert into purchase_orders (
+            project_id,
+            budget_item_id,
+            material_id,
+            material_name,
+            quantity,
+            unit,
+            estimated_cost,
+            supplier,
+            supplier_id,
+            notes,
+            status,
+            order_date,
+            date_received
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::date,$13::date)
+          returning
+            id,
+            project_id,
+            budget_item_id,
+            material_id,
+            material_name,
+            quantity,
+            unit,
+            estimated_cost,
+            supplier,
+            supplier_id,
+            notes,
+            status,
+            order_date::text,
+            date_received::text,
+            created_at,
+            updated_at
+        `,
+        [
+          projectId,
+          budgetItemId,
+          materialId,
+          materialName,
+          quantity,
+          unit,
+          estimatedCost,
+          supplier,
+          supplierId,
+          notes,
+          status,
+          date || new Date().toISOString().slice(0, 10),
+          status === 'Completed' ? new Date().toISOString().slice(0, 10) : null,
+        ]
+      );
+
+      return res.status(201).json(mapPurchaseOrder(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear orden de compra' });
+    }
+  });
+
+  app.patch('/api/purchase-orders/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.projectId !== undefined) addSet('project_id', String(req.body.projectId || '').trim() || null);
+      if (req.body?.budgetItemId !== undefined) addSet('budget_item_id', String(req.body.budgetItemId || '').trim() || null);
+      if (req.body?.materialId !== undefined) addSet('material_id', String(req.body.materialId || '').trim() || null);
+      if (req.body?.materialName !== undefined) addSet('material_name', String(req.body.materialName || '').trim());
+      if (req.body?.quantity !== undefined) addSet('quantity', Number(req.body.quantity || 0));
+      if (req.body?.unit !== undefined) addSet('unit', String(req.body.unit || '').trim() || null);
+      if (req.body?.estimatedCost !== undefined) addSet('estimated_cost', Number(req.body.estimatedCost || 0));
+      if (req.body?.supplier !== undefined) addSet('supplier', String(req.body.supplier || '').trim() || null);
+      if (req.body?.supplierId !== undefined) addSet('supplier_id', String(req.body.supplierId || '').trim() || null);
+      if (req.body?.notes !== undefined) addSet('notes', String(req.body.notes || '').trim() || null);
+      if (req.body?.status !== undefined) addSet('status', String(req.body.status || '').trim() || 'Pending');
+      if (req.body?.date !== undefined) {
+        values.push(req.body.date ? String(req.body.date) : null);
+        sets.push(`order_date = $${values.length}::date`);
+      }
+      if (req.body?.dateReceived !== undefined) {
+        values.push(req.body.dateReceived ? String(req.body.dateReceived) : null);
+        sets.push(`date_received = $${values.length}::date`);
+      }
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<PurchaseOrderRow>(
+        `
+          update purchase_orders
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            project_id,
+            budget_item_id,
+            material_id,
+            material_name,
+            quantity,
+            unit,
+            estimated_cost,
+            supplier,
+            supplier_id,
+            notes,
+            status,
+            order_date::text,
+            date_received::text,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Orden de compra no encontrada' });
+      return res.json(mapPurchaseOrder(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar orden de compra' });
+    }
+  });
+
+  app.delete('/api/purchase-orders/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from purchase_orders where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Orden de compra no encontrada' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar orden de compra' });
+    }
+  });
+
+  app.get('/api/clients', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const result = await db.query<ClientRow>(
+        `
+          select
+            id,
+            name,
+            email,
+            phone,
+            company,
+            contact_person,
+            contacto,
+            status,
+            notes,
+            location,
+            attachments,
+            last_interaction,
+            created_at,
+            updated_at
+          from clients
+          order by created_at desc
+        `
+      );
+
+      return res.json({ items: result.rows.map(mapClient) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener clientes' });
+    }
+  });
+
+  app.post('/api/clients', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const name = String(req.body?.name || '').trim();
+      const email = String(req.body?.email || '').trim();
+      const phone = String(req.body?.phone || '').trim();
+      const company = String(req.body?.company || '').trim();
+      const contactPerson = String(req.body?.contactPerson || '').trim();
+      const contacto = String(req.body?.contacto || '').trim();
+      const status = String(req.body?.status || 'Lead').trim() || 'Lead';
+      const notes = String(req.body?.notes || '').trim();
+      const location = req.body?.location ?? null;
+
+      if (!name) {
+        return res.status(400).json({ error: 'name es obligatorio' });
+      }
+
+      const insert = await db.query<ClientRow>(
+        `
+          insert into clients (
+            name,
+            email,
+            phone,
+            company,
+            contact_person,
+            contacto,
+            status,
+            notes,
+            location,
+            last_interaction
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb, now())
+          returning
+            id,
+            name,
+            email,
+            phone,
+            company,
+            contact_person,
+            contacto,
+            status,
+            notes,
+            location,
+            attachments,
+            last_interaction,
+            created_at,
+            updated_at
+        `,
+        [name, email || null, phone || null, company || null, contactPerson || null, contacto || null, status, notes || null, location ? JSON.stringify(location) : null]
+      );
+
+      return res.status(201).json(mapClient(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear cliente' });
+    }
+  });
+
+  app.patch('/api/clients/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any, json = false) => {
+        values.push(json ? JSON.stringify(value) : value);
+        const p = `$${values.length}`;
+        sets.push(json ? `${name} = ${p}::jsonb` : `${name} = ${p}`);
+      };
+
+      if (req.body?.name !== undefined) addSet('name', String(req.body.name || '').trim());
+      if (req.body?.email !== undefined) addSet('email', String(req.body.email || '').trim() || null);
+      if (req.body?.phone !== undefined) addSet('phone', String(req.body.phone || '').trim() || null);
+      if (req.body?.company !== undefined) addSet('company', String(req.body.company || '').trim() || null);
+      if (req.body?.contactPerson !== undefined) addSet('contact_person', String(req.body.contactPerson || '').trim() || null);
+      if (req.body?.contacto !== undefined) addSet('contacto', String(req.body.contacto || '').trim() || null);
+      if (req.body?.status !== undefined) addSet('status', String(req.body.status || '').trim() || 'Lead');
+      if (req.body?.notes !== undefined) addSet('notes', String(req.body.notes || '').trim() || null);
+      if (req.body?.location !== undefined) addSet('location', req.body.location, true);
+      if (req.body?.attachments !== undefined) addSet('attachments', Array.isArray(req.body.attachments) ? req.body.attachments : [], true);
+      if (req.body?.lastInteraction !== undefined) {
+        values.push(req.body.lastInteraction ? String(req.body.lastInteraction) : null);
+        sets.push(`last_interaction = $${values.length}::timestamptz`);
+      }
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<ClientRow>(
+        `
+          update clients
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            name,
+            email,
+            phone,
+            company,
+            contact_person,
+            contacto,
+            status,
+            notes,
+            location,
+            attachments,
+            last_interaction,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Cliente no encontrado' });
+      return res.json(mapClient(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar cliente' });
+    }
+  });
+
+  app.post('/api/clients/:id/attachments', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      const attachment = req.body?.attachment;
+      if (!id || !attachment) {
+        return res.status(400).json({ error: 'id y attachment son obligatorios' });
+      }
+
+      const existing = await db.query<ClientRow>(
+        `
+          select
+            id,
+            name,
+            email,
+            phone,
+            company,
+            contact_person,
+            contacto,
+            status,
+            notes,
+            location,
+            attachments,
+            last_interaction,
+            created_at,
+            updated_at
+          from clients
+          where id = $1
+        `,
+        [id]
+      );
+
+      if (!existing.rows[0]) return res.status(404).json({ error: 'Cliente no encontrado' });
+      const mergedAttachments = [...(Array.isArray(existing.rows[0].attachments) ? existing.rows[0].attachments : []), attachment];
+
+      const updated = await db.query<ClientRow>(
+        `
+          update clients
+          set attachments = $2::jsonb, updated_at = now()
+          where id = $1
+          returning
+            id,
+            name,
+            email,
+            phone,
+            company,
+            contact_person,
+            contacto,
+            status,
+            notes,
+            location,
+            attachments,
+            last_interaction,
+            created_at,
+            updated_at
+        `,
+        [id, JSON.stringify(mergedAttachments)]
+      );
+
+      return res.json(mapClient(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo adjuntar archivo al cliente' });
+    }
+  });
+
+  app.delete('/api/clients/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from clients where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar cliente' });
+    }
+  });
+
+  app.get('/api/clients/:id/chats', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const rows = await db.query<ClientChatRow>(
+        `
+          select id, client_id, text, sender, created_at
+          from client_chats
+          where client_id = $1
+          order by created_at asc
+          limit 200
+        `,
+        [id]
+      );
+
+      return res.json({ items: rows.rows.map(mapClientChat) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener mensajes del cliente' });
+    }
+  });
+
+  app.post('/api/clients/:id/chats', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      const text = String(req.body?.text || '').trim();
+      const sender = String(req.body?.sender || 'Admin').trim() || 'Admin';
+
+      if (!id || !text) return res.status(400).json({ error: 'id y text son obligatorios' });
+
+      const insert = await db.query<ClientChatRow>(
+        `
+          insert into client_chats (client_id, text, sender)
+          values ($1,$2,$3)
+          returning id, client_id, text, sender, created_at
+        `,
+        [id, text, sender]
+      );
+
+      await db.query('update clients set last_interaction = now(), updated_at = now() where id = $1', [id]);
+      return res.status(201).json(mapClientChat(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo enviar mensaje al cliente' });
+    }
+  });
+
+  app.get('/api/clients/:id/interactions', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const rows = await db.query<ClientInteractionRow>(
+        `
+          select id, client_id, type, notes, date::text, created_at
+          from client_interactions
+          where client_id = $1
+          order by date desc, created_at desc
+          limit 200
+        `,
+        [id]
+      );
+
+      return res.json({ items: rows.rows.map(mapClientInteraction) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener interacciones del cliente' });
+    }
+  });
+
+  app.post('/api/clients/:id/interactions', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      const type = String(req.body?.type || '').trim();
+      const notes = String(req.body?.notes || '').trim();
+      const date = String(req.body?.date || '').trim();
+
+      if (!id || !type || !notes || !date) {
+        return res.status(400).json({ error: 'id, type, notes y date son obligatorios' });
+      }
+
+      const insert = await db.query<ClientInteractionRow>(
+        `
+          insert into client_interactions (client_id, type, notes, date)
+          values ($1,$2,$3,$4::date)
+          returning id, client_id, type, notes, date::text, created_at
+        `,
+        [id, type, notes, date]
+      );
+
+      await db.query('update clients set last_interaction = now(), updated_at = now() where id = $1', [id]);
+      return res.status(201).json(mapClientInteraction(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo registrar interaccion del cliente' });
+    }
+  });
+
+  app.get('/api/suppliers', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const result = await db.query<SupplierRow>(
+        `
+          select
+            id,
+            name,
+            category,
+            contact,
+            email,
+            phone,
+            rating,
+            status,
+            balance,
+            last_order,
+            created_at,
+            updated_at
+          from suppliers
+          order by created_at desc
+        `
+      );
+
+      return res.json({ items: result.rows.map(mapSupplier) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener proveedores' });
+    }
+  });
+
+  app.post('/api/suppliers', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const name = String(req.body?.name || '').trim();
+      const category = String(req.body?.category || 'Materiales').trim() || 'Materiales';
+      const contact = String(req.body?.contact || '').trim();
+      const email = String(req.body?.email || '').trim();
+      const phone = String(req.body?.phone || '').trim();
+      const rating = Number(req.body?.rating || 5);
+      const status = String(req.body?.status || 'Verified').trim() || 'Verified';
+      const balance = Number(req.body?.balance || 0);
+      const lastOrder = String(req.body?.lastOrder || '').trim();
+
+      if (!name) return res.status(400).json({ error: 'name es obligatorio' });
+
+      const insert = await db.query<SupplierRow>(
+        `
+          insert into suppliers (
+            name,
+            category,
+            contact,
+            email,
+            phone,
+            rating,
+            status,
+            balance,
+            last_order
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+          returning
+            id,
+            name,
+            category,
+            contact,
+            email,
+            phone,
+            rating,
+            status,
+            balance,
+            last_order,
+            created_at,
+            updated_at
+        `,
+        [name, category, contact || null, email || null, phone || null, rating, status, balance, lastOrder || null]
+      );
+
+      return res.status(201).json(mapSupplier(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear proveedor' });
+    }
+  });
+
+  app.patch('/api/suppliers/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.name !== undefined) addSet('name', String(req.body.name || '').trim());
+      if (req.body?.category !== undefined) addSet('category', String(req.body.category || '').trim() || 'Materiales');
+      if (req.body?.contact !== undefined) addSet('contact', String(req.body.contact || '').trim() || null);
+      if (req.body?.email !== undefined) addSet('email', String(req.body.email || '').trim() || null);
+      if (req.body?.phone !== undefined) addSet('phone', String(req.body.phone || '').trim() || null);
+      if (req.body?.rating !== undefined) addSet('rating', Number(req.body.rating || 0));
+      if (req.body?.status !== undefined) addSet('status', String(req.body.status || '').trim() || 'Verified');
+      if (req.body?.balance !== undefined) addSet('balance', Number(req.body.balance || 0));
+      if (req.body?.lastOrder !== undefined) addSet('last_order', String(req.body.lastOrder || '').trim() || null);
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<SupplierRow>(
+        `
+          update suppliers
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            name,
+            category,
+            contact,
+            email,
+            phone,
+            rating,
+            status,
+            balance,
+            last_order,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Proveedor no encontrado' });
+      return res.json(mapSupplier(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar proveedor' });
+    }
+  });
+
+  app.delete('/api/suppliers/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from suppliers where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Proveedor no encontrado' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar proveedor' });
+    }
+  });
+
+  app.get('/api/documents', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const result = await db.query<DocumentRow>(
+        `
+          select
+            id,
+            name,
+            type,
+            size,
+            folder,
+            author,
+            date::text,
+            created_at,
+            updated_at
+          from documents
+          order by created_at desc
+        `
+      );
+
+      return res.json({ items: result.rows.map(mapDocument) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener documentos' });
+    }
+  });
+
+  app.post('/api/documents', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const name = String(req.body?.name || '').trim();
+      const type = String(req.body?.type || '').trim();
+      const size = String(req.body?.size || '').trim();
+      const folder = String(req.body?.folder || 'General').trim() || 'General';
+      const author = String(req.body?.author || 'Usuario').trim() || 'Usuario';
+      const date = String(req.body?.date || '').trim();
+
+      if (!name || !type) {
+        return res.status(400).json({ error: 'name y type son obligatorios' });
+      }
+
+      const insert = await db.query<DocumentRow>(
+        `
+          insert into documents (
+            name,
+            type,
+            size,
+            folder,
+            author,
+            date
+          ) values ($1,$2,$3,$4,$5,$6::date)
+          returning
+            id,
+            name,
+            type,
+            size,
+            folder,
+            author,
+            date::text,
+            created_at,
+            updated_at
+        `,
+        [name, type, size || null, folder, author || null, date || new Date().toISOString().slice(0, 10)]
+      );
+
+      return res.status(201).json(mapDocument(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear documento' });
+    }
+  });
+
+  app.patch('/api/documents/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.name !== undefined) addSet('name', String(req.body.name || '').trim());
+      if (req.body?.type !== undefined) addSet('type', String(req.body.type || '').trim());
+      if (req.body?.size !== undefined) addSet('size', String(req.body.size || '').trim() || null);
+      if (req.body?.folder !== undefined) addSet('folder', String(req.body.folder || '').trim() || 'General');
+      if (req.body?.author !== undefined) addSet('author', String(req.body.author || '').trim() || null);
+      if (req.body?.date !== undefined) {
+        values.push(req.body.date ? String(req.body.date) : null);
+        sets.push(`date = $${values.length}::date`);
+      }
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<DocumentRow>(
+        `
+          update documents
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            name,
+            type,
+            size,
+            folder,
+            author,
+            date::text,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Documento no encontrado' });
+      return res.json(mapDocument(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar documento' });
+    }
+  });
+
+  app.delete('/api/documents/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from documents where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Documento no encontrado' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar documento' });
+    }
+  });
+
+  app.get('/api/folders', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const result = await db.query<FolderRow>(
+        `
+          select id, name, color, created_at
+          from document_folders
+          order by name asc
+        `
+      );
+
+      return res.json({ items: result.rows.map(mapFolder) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener carpetas' });
+    }
+  });
+
+  app.post('/api/folders', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const name = String(req.body?.name || '').trim();
+      const color = String(req.body?.color || 'text-slate-500').trim() || 'text-slate-500';
+      if (!name) return res.status(400).json({ error: 'name es obligatorio' });
+
+      const insert = await db.query<FolderRow>(
+        `
+          insert into document_folders (name, color)
+          values ($1,$2)
+          on conflict (name)
+          do update set color = excluded.color
+          returning id, name, color, created_at
+        `,
+        [name, color]
+      );
+
+      return res.status(201).json(mapFolder(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear carpeta' });
+    }
+  });
+
+  app.get('/api/equipment', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const rows = await db.query<EquipmentRow>(
+        `
+          select
+            id,
+            name,
+            type,
+            project_id,
+            daily_rate,
+            estimated_days,
+            status,
+            created_at,
+            updated_at
+          from equipment
+          order by created_at desc
+        `
+      );
+
+      return res.json({ items: rows.rows.map(mapEquipment) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo obtener equipo' });
+    }
+  });
+
+  app.post('/api/equipment', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const name = String(req.body?.name || '').trim();
+      const type = String(req.body?.type || 'Owned').trim() || 'Owned';
+      const projectId = String(req.body?.projectId || '').trim();
+      const dailyRate = Number(req.body?.dailyRate || 0);
+      const estimatedDays = Number(req.body?.estimatedDays || 0);
+      const status = String(req.body?.status || 'Available').trim() || 'Available';
+
+      if (!name) return res.status(400).json({ error: 'name es obligatorio' });
+
+      const insert = await db.query<EquipmentRow>(
+        `
+          insert into equipment (
+            name,
+            type,
+            project_id,
+            daily_rate,
+            estimated_days,
+            status
+          ) values ($1,$2,$3,$4,$5,$6)
+          returning
+            id,
+            name,
+            type,
+            project_id,
+            daily_rate,
+            estimated_days,
+            status,
+            created_at,
+            updated_at
+        `,
+        [name, type, projectId || null, dailyRate, estimatedDays, status]
+      );
+
+      return res.status(201).json(mapEquipment(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear equipo' });
+    }
+  });
+
+  app.patch('/api/equipment/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.name !== undefined) addSet('name', String(req.body.name || '').trim());
+      if (req.body?.type !== undefined) addSet('type', String(req.body.type || 'Owned').trim() || 'Owned');
+      if (req.body?.projectId !== undefined) addSet('project_id', String(req.body.projectId || '').trim() || null);
+      if (req.body?.dailyRate !== undefined) addSet('daily_rate', Number(req.body.dailyRate || 0));
+      if (req.body?.estimatedDays !== undefined) addSet('estimated_days', Number(req.body.estimatedDays || 0));
+      if (req.body?.status !== undefined) addSet('status', String(req.body.status || 'Available').trim() || 'Available');
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<EquipmentRow>(
+        `
+          update equipment
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            name,
+            type,
+            project_id,
+            daily_rate,
+            estimated_days,
+            status,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Equipo no encontrado' });
+      return res.json(mapEquipment(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar equipo' });
+    }
+  });
+
+  app.delete('/api/equipment/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from equipment where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Equipo no encontrado' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar equipo' });
+    }
+  });
+
+  app.get('/api/employees', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const rows = await db.query<EmployeeRow>(
+        `
+          select
+            id,
+            name,
+            role,
+            department,
+            salary,
+            status,
+            join_date::text,
+            created_at,
+            updated_at
+          from employees
+          order by created_at desc
+        `
+      );
+
+      return res.json({ items: rows.rows.map(mapEmployee) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener empleados' });
+    }
+  });
+
+  app.post('/api/employees', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const name = String(req.body?.name || '').trim();
+      const role = String(req.body?.role || '').trim();
+      const department = String(req.body?.department || 'Operaciones').trim() || 'Operaciones';
+      const salary = Number(req.body?.salary || 0);
+      const status = String(req.body?.status || 'Active').trim() || 'Active';
+      const joinDate = String(req.body?.joinDate || '').trim() || new Date().toISOString().slice(0, 10);
+
+      if (!name || !role) return res.status(400).json({ error: 'name y role son obligatorios' });
+
+      const insert = await db.query<EmployeeRow>(
+        `
+          insert into employees (name, role, department, salary, status, join_date)
+          values ($1,$2,$3,$4,$5,$6::date)
+          returning
+            id,
+            name,
+            role,
+            department,
+            salary,
+            status,
+            join_date::text,
+            created_at,
+            updated_at
+        `,
+        [name, role, department, salary, status, joinDate]
+      );
+
+      return res.status(201).json(mapEmployee(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear empleado' });
+    }
+  });
+
+  app.patch('/api/employees/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.name !== undefined) addSet('name', String(req.body.name || '').trim());
+      if (req.body?.role !== undefined) addSet('role', String(req.body.role || '').trim());
+      if (req.body?.department !== undefined) addSet('department', String(req.body.department || 'Operaciones').trim() || 'Operaciones');
+      if (req.body?.salary !== undefined) addSet('salary', Number(req.body.salary || 0));
+      if (req.body?.status !== undefined) addSet('status', String(req.body.status || 'Active').trim() || 'Active');
+      if (req.body?.joinDate !== undefined) {
+        values.push(req.body.joinDate ? String(req.body.joinDate) : null);
+        sets.push(`join_date = $${values.length}::date`);
+      }
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<EmployeeRow>(
+        `
+          update employees
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            name,
+            role,
+            department,
+            salary,
+            status,
+            join_date::text,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Empleado no encontrado' });
+      return res.json(mapEmployee(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar empleado' });
+    }
+  });
+
+  app.delete('/api/employees/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from employees where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Empleado no encontrado' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar empleado' });
+    }
+  });
+
+  app.post('/api/attendance', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const employeeId = String(req.body?.employeeId || '').trim();
+      const employeeName = String(req.body?.employeeName || '').trim();
+      const type = String(req.body?.type || '').trim();
+      const timestamp = String(req.body?.timestamp || '').trim();
+
+      if (!employeeId || !type || !timestamp) {
+        return res.status(400).json({ error: 'employeeId, type y timestamp son obligatorios' });
+      }
+
+      const insert = await db.query<AttendanceRow>(
+        `
+          insert into attendance (employee_id, employee_name, type, timestamp)
+          values ($1,$2,$3,$4::timestamptz)
+          returning
+            id,
+            employee_id,
+            employee_name,
+            type,
+            timestamp::text,
+            created_at
+        `,
+        [employeeId, employeeName || null, type, timestamp]
+      );
+
+      return res.status(201).json(mapAttendance(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo registrar asistencia' });
+    }
+  });
+
+  app.get('/api/risks', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const rows = await db.query<RiskRow>(
+        `
+          select
+            id,
+            project_id,
+            title,
+            description,
+            category,
+            impact,
+            probability,
+            status,
+            mitigation_plan,
+            contingency_plan,
+            owner,
+            created_at,
+            updated_at
+          from risks
+          order by created_at desc
+        `
+      );
+
+      return res.json({ items: rows.rows.map(mapRisk) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener riesgos' });
+    }
+  });
+
+  app.post('/api/risks', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.body?.projectId || '').trim();
+      const title = String(req.body?.title || '').trim();
+      const description = String(req.body?.description || '').trim();
+      const category = String(req.body?.category || 'Technical').trim() || 'Technical';
+      const impact = String(req.body?.impact || 'Medium').trim() || 'Medium';
+      const probability = String(req.body?.probability || 'Medium').trim() || 'Medium';
+      const status = String(req.body?.status || 'Identified').trim() || 'Identified';
+      const mitigationPlan = String(req.body?.mitigationPlan || '').trim();
+      const contingencyPlan = String(req.body?.contingencyPlan || '').trim();
+      const owner = String(req.body?.owner || '').trim();
+
+      if (!projectId || !title) return res.status(400).json({ error: 'projectId y title son obligatorios' });
+
+      const insert = await db.query<RiskRow>(
+        `
+          insert into risks (
+            project_id,
+            title,
+            description,
+            category,
+            impact,
+            probability,
+            status,
+            mitigation_plan,
+            contingency_plan,
+            owner
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          returning
+            id,
+            project_id,
+            title,
+            description,
+            category,
+            impact,
+            probability,
+            status,
+            mitigation_plan,
+            contingency_plan,
+            owner,
+            created_at,
+            updated_at
+        `,
+        [projectId, title, description, category, impact, probability, status, mitigationPlan, contingencyPlan, owner]
+      );
+
+      return res.status(201).json(mapRisk(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear riesgo' });
+    }
+  });
+
+  app.patch('/api/risks/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.projectId !== undefined) addSet('project_id', String(req.body.projectId || '').trim());
+      if (req.body?.title !== undefined) addSet('title', String(req.body.title || '').trim());
+      if (req.body?.description !== undefined) addSet('description', String(req.body.description || '').trim());
+      if (req.body?.category !== undefined) addSet('category', String(req.body.category || 'Technical').trim() || 'Technical');
+      if (req.body?.impact !== undefined) addSet('impact', String(req.body.impact || 'Medium').trim() || 'Medium');
+      if (req.body?.probability !== undefined) addSet('probability', String(req.body.probability || 'Medium').trim() || 'Medium');
+      if (req.body?.status !== undefined) addSet('status', String(req.body.status || 'Identified').trim() || 'Identified');
+      if (req.body?.mitigationPlan !== undefined) addSet('mitigation_plan', String(req.body.mitigationPlan || '').trim());
+      if (req.body?.contingencyPlan !== undefined) addSet('contingency_plan', String(req.body.contingencyPlan || '').trim());
+      if (req.body?.owner !== undefined) addSet('owner', String(req.body.owner || '').trim());
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<RiskRow>(
+        `
+          update risks
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            project_id,
+            title,
+            description,
+            category,
+            impact,
+            probability,
+            status,
+            mitigation_plan,
+            contingency_plan,
+            owner,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Riesgo no encontrado' });
+      return res.json(mapRisk(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar riesgo' });
+    }
+  });
+
+  app.delete('/api/risks/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from risks where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Riesgo no encontrado' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar riesgo' });
+    }
+  });
+
+  app.get('/api/safety-incidents', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const rows = await db.query<SafetyIncidentRow>(
+        `
+          select
+            id,
+            title,
+            type,
+            severity,
+            location,
+            incident_date::text,
+            description,
+            measures,
+            status,
+            author_email,
+            created_at,
+            updated_at
+          from safety_incidents
+          order by incident_date desc, created_at desc
+        `
+      );
+
+      return res.json({ items: rows.rows.map(mapSafetyIncident) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener incidentes' });
+    }
+  });
+
+  app.post('/api/safety-incidents', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const title = String(req.body?.title || '').trim();
+      const type = String(req.body?.type || 'Accidente').trim() || 'Accidente';
+      const severity = String(req.body?.severity || 'Baja').trim() || 'Baja';
+      const location = String(req.body?.location || '').trim();
+      const date = String(req.body?.date || '').trim() || new Date().toISOString().slice(0, 10);
+      const description = String(req.body?.description || '').trim();
+      const measures = String(req.body?.measures || '').trim();
+      const status = String(req.body?.status || 'Open').trim() || 'Open';
+      const authorEmail = String(req.body?.authorEmail || '').trim();
+
+      if (!title || !location || !description) {
+        return res.status(400).json({ error: 'title, location y description son obligatorios' });
+      }
+
+      const insert = await db.query<SafetyIncidentRow>(
+        `
+          insert into safety_incidents (
+            title,
+            type,
+            severity,
+            location,
+            incident_date,
+            description,
+            measures,
+            status,
+            author_email
+          ) values ($1,$2,$3,$4,$5::date,$6,$7,$8,$9)
+          returning
+            id,
+            title,
+            type,
+            severity,
+            location,
+            incident_date::text,
+            description,
+            measures,
+            status,
+            author_email,
+            created_at,
+            updated_at
+        `,
+        [title, type, severity, location, date, description, measures, status, authorEmail || null]
+      );
+
+      return res.status(201).json(mapSafetyIncident(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear incidente' });
+    }
+  });
+
+  app.patch('/api/safety-incidents/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.title !== undefined) addSet('title', String(req.body.title || '').trim());
+      if (req.body?.type !== undefined) addSet('type', String(req.body.type || 'Accidente').trim() || 'Accidente');
+      if (req.body?.severity !== undefined) addSet('severity', String(req.body.severity || 'Baja').trim() || 'Baja');
+      if (req.body?.location !== undefined) addSet('location', String(req.body.location || '').trim());
+      if (req.body?.date !== undefined) {
+        values.push(req.body.date ? String(req.body.date) : null);
+        sets.push(`incident_date = $${values.length}::date`);
+      }
+      if (req.body?.description !== undefined) addSet('description', String(req.body.description || '').trim());
+      if (req.body?.measures !== undefined) addSet('measures', String(req.body.measures || '').trim());
+      if (req.body?.status !== undefined) addSet('status', String(req.body.status || 'Open').trim() || 'Open');
+      if (req.body?.authorEmail !== undefined) addSet('author_email', String(req.body.authorEmail || '').trim() || null);
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<SafetyIncidentRow>(
+        `
+          update safety_incidents
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            title,
+            type,
+            severity,
+            location,
+            incident_date::text,
+            description,
+            measures,
+            status,
+            author_email,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Incidente no encontrado' });
+      return res.json(mapSafetyIncident(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar incidente' });
+    }
+  });
+
+  app.delete('/api/safety-incidents/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from safety_incidents where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Incidente no encontrado' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar incidente' });
+    }
+  });
+
+  app.get('/api/subcontracts', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.query.projectId || '').trim();
+      const status = String(req.query.status || '').trim();
+
+      const where: string[] = [];
+      const values: any[] = [];
+      if (projectId) {
+        values.push(projectId);
+        where.push(`project_id = $${values.length}`);
+      }
+      if (status) {
+        values.push(status);
+        where.push(`status = $${values.length}`);
+      }
+
+      const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : '';
+      const rows = await db.query<SubcontractRow>(
+        `
+          select
+            id,
+            project_id,
+            budget_item_id,
+            budget_item_name,
+            contractor,
+            service,
+            start_date::text,
+            end_date::text,
+            total,
+            paid,
+            status,
+            created_at,
+            updated_at
+          from subcontracts
+          ${whereClause}
+          order by created_at desc
+        `,
+        values
+      );
+
+      return res.json({ items: rows.rows.map(mapSubcontract) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener subcontratos' });
+    }
+  });
+
+  app.post('/api/subcontracts', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.body?.projectId || '').trim();
+      const budgetItemId = String(req.body?.budgetItemId || '').trim();
+      const budgetItemName = String(req.body?.budgetItemName || '').trim();
+      const contractor = String(req.body?.contractor || '').trim();
+      const service = String(req.body?.service || '').trim();
+      const startDate = String(req.body?.startDate || '').trim();
+      const endDate = String(req.body?.endDate || '').trim();
+      const total = Number(req.body?.total || 0);
+      const paid = Number(req.body?.paid || 0);
+      const status = String(req.body?.status || 'Active').trim() || 'Active';
+
+      if (!projectId || !contractor || !service || !Number.isFinite(total) || total <= 0) {
+        return res.status(400).json({ error: 'projectId, contractor, service y total valido son obligatorios' });
+      }
+
+      const insert = await db.query<SubcontractRow>(
+        `
+          insert into subcontracts (
+            project_id,
+            budget_item_id,
+            budget_item_name,
+            contractor,
+            service,
+            start_date,
+            end_date,
+            total,
+            paid,
+            status
+          ) values ($1,$2,$3,$4,$5,$6::date,$7::date,$8,$9,$10)
+          returning
+            id,
+            project_id,
+            budget_item_id,
+            budget_item_name,
+            contractor,
+            service,
+            start_date::text,
+            end_date::text,
+            total,
+            paid,
+            status,
+            created_at,
+            updated_at
+        `,
+        [
+          projectId,
+          budgetItemId || null,
+          budgetItemName,
+          contractor,
+          service,
+          startDate || null,
+          endDate || null,
+          total,
+          paid,
+          status,
+        ]
+      );
+
+      return res.status(201).json(mapSubcontract(insert.rows[0]));
+    } catch (error: any) {
+      if (String(error?.message || '').includes('uq_subcontracts_project_service')) {
+        return res.status(409).json({ error: 'Ya existe un subcontrato para ese servicio en el proyecto' });
+      }
+      return res.status(500).json({ error: error?.message || 'No se pudo crear subcontrato' });
+    }
+  });
+
+  app.patch('/api/subcontracts/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.projectId !== undefined) addSet('project_id', String(req.body.projectId || '').trim());
+      if (req.body?.budgetItemId !== undefined) addSet('budget_item_id', String(req.body.budgetItemId || '').trim() || null);
+      if (req.body?.budgetItemName !== undefined) addSet('budget_item_name', String(req.body.budgetItemName || '').trim());
+      if (req.body?.contractor !== undefined) addSet('contractor', String(req.body.contractor || '').trim());
+      if (req.body?.service !== undefined) addSet('service', String(req.body.service || '').trim());
+      if (req.body?.startDate !== undefined) {
+        values.push(req.body.startDate ? String(req.body.startDate) : null);
+        sets.push(`start_date = $${values.length}::date`);
+      }
+      if (req.body?.endDate !== undefined) {
+        values.push(req.body.endDate ? String(req.body.endDate) : null);
+        sets.push(`end_date = $${values.length}::date`);
+      }
+      if (req.body?.total !== undefined) addSet('total', Number(req.body.total || 0));
+      if (req.body?.paid !== undefined) addSet('paid', Number(req.body.paid || 0));
+      if (req.body?.status !== undefined) addSet('status', String(req.body.status || 'Active').trim() || 'Active');
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<SubcontractRow>(
+        `
+          update subcontracts
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            project_id,
+            budget_item_id,
+            budget_item_name,
+            contractor,
+            service,
+            start_date::text,
+            end_date::text,
+            total,
+            paid,
+            status,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Subcontrato no encontrado' });
+      return res.json(mapSubcontract(updated.rows[0]));
+    } catch (error: any) {
+      if (String(error?.message || '').includes('uq_subcontracts_project_service')) {
+        return res.status(409).json({ error: 'Ya existe un subcontrato para ese servicio en el proyecto' });
+      }
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar subcontrato' });
+    }
+  });
+
+  app.delete('/api/subcontracts/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from subcontracts where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Subcontrato no encontrado' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar subcontrato' });
+    }
+  });
+
+  app.get('/api/workflows', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const status = String(req.query.status || '').trim();
+      const where: string[] = [];
+      const values: any[] = [];
+
+      if (status) {
+        values.push(status);
+        where.push(`status = $${values.length}`);
+      }
+
+      const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : '';
+      const rows = await db.query<WorkflowRow>(
+        `
+          select
+            id,
+            title,
+            type,
+            reference_id,
+            status,
+            requested_by,
+            requested_at::text,
+            priority,
+            description,
+            amount,
+            resolved_at::text,
+            created_at,
+            updated_at
+          from workflows
+          ${whereClause}
+          order by requested_at desc
+        `,
+        values
+      );
+
+      return res.json({ items: rows.rows.map(mapWorkflow) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener workflows' });
+    }
+  });
+
+  app.post('/api/workflows', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const title = String(req.body?.title || '').trim();
+      const type = String(req.body?.type || 'other').trim() || 'other';
+      const referenceId = String(req.body?.referenceId || '').trim();
+      const requestedBy = String(req.body?.requestedBy || '').trim();
+      const priority = String(req.body?.priority || 'medium').trim() || 'medium';
+      const description = String(req.body?.description || '').trim();
+      const amount = req.body?.amount !== undefined && req.body?.amount !== null && req.body?.amount !== ''
+        ? Number(req.body.amount)
+        : null;
+
+      if (!title || !referenceId || !requestedBy || !description) {
+        return res.status(400).json({ error: 'title, referenceId, requestedBy y description son obligatorios' });
+      }
+
+      const insert = await db.query<WorkflowRow>(
+        `
+          insert into workflows (
+            title,
+            type,
+            reference_id,
+            status,
+            requested_by,
+            requested_at,
+            priority,
+            description,
+            amount
+          ) values ($1,$2,$3,$4,$5,now(),$6,$7,$8)
+          returning
+            id,
+            title,
+            type,
+            reference_id,
+            status,
+            requested_by,
+            requested_at::text,
+            priority,
+            description,
+            amount,
+            resolved_at::text,
+            created_at,
+            updated_at
+        `,
+        [title, type, referenceId, 'pending', requestedBy, priority, description, amount]
+      );
+
+      return res.status(201).json(mapWorkflow(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear workflow' });
+    }
+  });
+
+  app.patch('/api/workflows/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.title !== undefined) addSet('title', String(req.body.title || '').trim());
+      if (req.body?.type !== undefined) addSet('type', String(req.body.type || 'other').trim() || 'other');
+      if (req.body?.referenceId !== undefined) addSet('reference_id', String(req.body.referenceId || '').trim());
+      if (req.body?.requestedBy !== undefined) addSet('requested_by', String(req.body.requestedBy || '').trim());
+      if (req.body?.priority !== undefined) addSet('priority', String(req.body.priority || 'medium').trim() || 'medium');
+      if (req.body?.description !== undefined) addSet('description', String(req.body.description || '').trim());
+      if (req.body?.amount !== undefined) {
+        const amount = req.body.amount === null || req.body.amount === '' ? null : Number(req.body.amount);
+        addSet('amount', amount);
+      }
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<WorkflowRow>(
+        `
+          update workflows
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            title,
+            type,
+            reference_id,
+            status,
+            requested_by,
+            requested_at::text,
+            priority,
+            description,
+            amount,
+            resolved_at::text,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Workflow no encontrado' });
+      return res.json(mapWorkflow(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar workflow' });
+    }
+  });
+
+  app.patch('/api/workflows/:id/status', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      const status = String(req.body?.status || '').trim() as 'pending' | 'approved' | 'rejected';
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+      if (!['pending', 'approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ error: 'status invalido' });
+      }
+
+      const updated = await db.query<WorkflowRow>(
+        `
+          update workflows
+          set
+            status = $1,
+            resolved_at = case when $1 in ('approved', 'rejected') then now() else null end,
+            updated_at = now()
+          where id = $2
+          returning
+            id,
+            title,
+            type,
+            reference_id,
+            status,
+            requested_by,
+            requested_at::text,
+            priority,
+            description,
+            amount,
+            resolved_at::text,
+            created_at,
+            updated_at
+        `,
+        [status, id]
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Workflow no encontrado' });
+      return res.json(mapWorkflow(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar estado del workflow' });
+    }
+  });
+
+  app.delete('/api/workflows/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from workflows where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Workflow no encontrado' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar workflow' });
+    }
+  });
+
+  app.post("/api/transactions", async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.body?.projectId || "").trim();
+      const budgetItemId = String(req.body?.budgetItemId || "").trim();
+      const subcontractId = String(req.body?.subcontractId || "").trim();
+      const type = String(req.body?.type || "") as TransactionType;
+      const category = String(req.body?.category || "").trim();
+      const amount = Number(req.body?.amount);
+      const date = String(req.body?.date || "").trim();
+      const description = String(req.body?.description || "").trim();
+
+      if (!projectId || !category || !date || !Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ error: "Datos invalidos para crear transaccion" });
+      }
+      if (type !== "Income" && type !== "Expense") {
+        return res.status(400).json({ error: "El tipo debe ser Income o Expense" });
+      }
+
+      const insert = await db.query<TransactionRow>(
+        `
+          insert into financial_transactions (
+            project_id,
+            budget_item_id,
+            subcontract_id,
+            type,
+            category,
+            amount,
+            date,
+            description
+          ) values ($1, $2, $3, $4, $5, $6, $7::date, $8)
+          returning id, project_id, budget_item_id, subcontract_id, type, category, amount, date::text, description, created_at
+        `,
+        [projectId, budgetItemId || null, subcontractId || null, type, category, amount, date, description]
+      );
+
+      return res.status(201).json(mapTransaction(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || "No se pudo crear la transaccion" });
+    }
+  });
+
+  app.delete("/api/transactions/:id", async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || "").trim();
+      if (!id) {
+        return res.status(400).json({ error: "Id requerido" });
+      }
+
+      const deleted = await db.query("delete from financial_transactions where id = $1", [id]);
+      if (deleted.rowCount === 0) {
+        return res.status(404).json({ error: "Transaccion no encontrada" });
+      }
+
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || "No se pudo eliminar la transaccion" });
+    }
   });
 
   // Vite middleware for development

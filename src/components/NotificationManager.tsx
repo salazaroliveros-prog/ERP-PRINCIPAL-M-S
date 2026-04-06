@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { auth, db } from '../firebase';
 import { sendNotification } from '../lib/notifications';
 import { getMitigationSuggestions } from '../lib/utils';
+import { listProjects } from '../lib/projectsApi';
+import { listSubcontracts } from '../lib/subcontractsApi';
 
 export const NotificationManager: React.FC = () => {
   const [projects, setProjects] = useState<any[]>([]);
@@ -10,30 +10,30 @@ export const NotificationManager: React.FC = () => {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    if (!db || !auth.currentUser) return;
+    let cancelled = false;
 
-    // Listen only for relevant projects (In Progress)
-    const qProjects = query(collection(db, 'projects'), where('status', '==', 'In Progress'));
-    const unsubProjects = onSnapshot(qProjects, (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.error('Error listening for projects in NotificationManager:', error);
-    });
+    (async () => {
+      try {
+        const [projectsItems, subcontractsItems] = await Promise.all([
+          listProjects(),
+          listSubcontracts({ status: 'Active' }),
+        ]);
+        if (cancelled) return;
 
-    // Listen only for relevant subcontracts (Active)
-    const qSubs = query(collection(db, 'subcontracts'), where('status', '==', 'Active'));
-    const unsubSubs = onSnapshot(qSubs, (snapshot) => {
-      setSubcontracts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setIsReady(true);
-    }, (error) => {
-      console.error('Error listening for subcontracts in NotificationManager:', error);
-    });
+        setProjects(projectsItems.filter((p: any) => p.status === 'In Progress'));
+        setSubcontracts(subcontractsItems);
+        setIsReady(true);
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Error loading data in NotificationManager:', error);
+        }
+      }
+    })();
 
     return () => {
-      unsubProjects();
-      unsubSubs();
+      cancelled = true;
     };
-  }, [auth.currentUser]);
+  }, []);
 
   useEffect(() => {
     if (!isReady) return;

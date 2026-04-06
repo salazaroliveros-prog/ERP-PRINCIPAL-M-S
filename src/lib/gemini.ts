@@ -1,6 +1,9 @@
 import { GoogleGenAI, Type, FunctionDeclaration, Content } from "@google/genai";
-import { collection, getDocs, query, doc, getDoc, where } from "firebase/firestore";
-import { db } from "../firebase";
+import { listProjects, listProjectBudgetItemsDetailed } from './projectsApi';
+import { listTransactions } from './financialsApi';
+import { listInventory, updateInventoryItem } from './operationsApi';
+import { listClients } from './clientsApi';
+import { sendNotification } from './notifications';
 
 // Function Declarations for Tools
 const getProjectsTool: FunctionDeclaration = {
@@ -127,38 +130,32 @@ const calculateEstimatedBudgetTool: FunctionDeclaration = {
 // Tool Implementation Functions
 const tools = {
   get_projects: async () => {
-    const snapshot = await getDocs(collection(db, 'projects'));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return listProjects();
   },
   get_project_details: async ({ projectId }: { projectId: string }) => {
-    const projectDoc = await getDoc(doc(db, 'projects', projectId));
-    if (!projectDoc.exists()) return { error: "Proyecto no encontrado" };
-    
-    const budgetSnapshot = await getDocs(collection(db, `projects/${projectId}/budgetItems`));
-    const budgetItems = budgetSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const projects = await listProjects();
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return { error: "Proyecto no encontrado" };
+
+    const budgetItems = await listProjectBudgetItemsDetailed(projectId);
     
     return {
-      ...projectDoc.data(),
-      id: projectDoc.id,
+      ...project,
       budgetItems
     };
   },
   get_inventory: async ({ searchQuery }: { searchQuery?: string }) => {
-    const snapshot = await getDocs(collection(db, 'inventory'));
-    let materials = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const response = await listInventory({ limit: 2000, offset: 0 });
+    let materials = response.items;
     if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      materials = materials.filter((m: any) => m.name.toLowerCase().includes(query));
+      const searchValue = searchQuery.toLowerCase();
+      materials = materials.filter((m: any) => m.name.toLowerCase().includes(searchValue));
     }
     return materials;
   },
   get_financial_summary: async ({ projectId }: { projectId?: string }) => {
-    let q = query(collection(db, 'transactions'));
-    if (projectId) {
-      q = query(collection(db, 'transactions'), where('projectId', '==', projectId));
-    }
-    const snapshot = await getDocs(q);
-    const transactions = snapshot.docs.map(doc => doc.data());
+    const response = await listTransactions({ projectId, limit: 2000, offset: 0 });
+    const transactions = response.items;
     
     const summary = transactions.reduce((acc: any, t: any) => {
       if (t.type === 'Income') acc.totalIncome += t.amount;
@@ -173,19 +170,11 @@ const tools = {
     };
   },
   get_clients: async () => {
-    const snapshot = await getDocs(collection(db, 'clients'));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return listClients();
   },
   create_notification: async ({ title, body, type }: { title: string, body: string, type: string }) => {
     try {
-      const { addDoc } = await import("firebase/firestore");
-      await addDoc(collection(db, 'notifications'), {
-        title,
-        body,
-        type,
-        createdAt: new Date().toISOString(),
-        read: false
-      });
+      await sendNotification(title, body, type as any);
       return { success: true, message: "Notificación enviada al sistema" };
     } catch (error: any) {
       console.error("Error in create_notification tool:", error);
@@ -193,27 +182,19 @@ const tools = {
     }
   },
   update_inventory_stock: async ({ materialId, newStock }: { materialId: string, newStock: number }) => {
-    const { updateDoc } = await import("firebase/firestore");
-    await updateDoc(doc(db, 'inventory', materialId), { stock: newStock });
+    await updateInventoryItem(materialId, { stock: newStock });
     return { success: true, message: "Stock actualizado correctamente" };
   },
   get_risk_analysis: async ({ projectId }: { projectId: string }) => {
-    const projectDoc = await getDoc(doc(db, 'projects', projectId));
-    if (!projectDoc.exists()) return { error: "Proyecto no encontrado" };
-    const project = projectDoc.data() as any;
-    
-    const budgetSnapshot = await getDocs(collection(db, `projects/${projectId}/budgetItems`));
-    const budgetItems = budgetSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    
-    const transactionsSnapshot = await getDocs(query(collection(db, 'transactions'), where('projectId', '==', projectId)));
-    const transactions = transactionsSnapshot.docs.map(doc => doc.data());
-    
-    const inventorySnapshot = await getDocs(collection(db, 'inventory'));
-    const inventory: any[] = [];
-    inventorySnapshot.docs.forEach((doc) => {
-      const data = doc.data() as any;
-      inventory.push({ id: doc.id, ...data });
-    });
+    const projects = await listProjects();
+    const project = projects.find((item) => item.id === projectId) as any;
+    if (!project) return { error: "Proyecto no encontrado" };
+
+    const budgetItems = await listProjectBudgetItemsDetailed(projectId);
+    const transactionsResponse = await listTransactions({ projectId, limit: 2000, offset: 0 });
+    const transactions = transactionsResponse.items;
+    const inventoryResponse = await listInventory({ limit: 2000, offset: 0 });
+    const inventory = inventoryResponse.items as any[];
 
     // Analysis Logic
     const risks = [];
@@ -228,7 +209,7 @@ const tools = {
     }
 
     // Check if budget is realistic based on M2
-    if (project.areaM2 && project.typology) {
+    if (project.area && project.typology) {
       const rates: Record<string, number> = {
         "RESIDENCIAL": 4500,
         "COMERCIAL": 5500,
@@ -236,7 +217,7 @@ const tools = {
         "CIVIL": 7500,
         "PUBLICA": 5000
       };
-      const estimated = project.areaM2 * (rates[project.typology] || 5000);
+      const estimated = Number(project.area || 0) * (rates[project.typology] || 5000);
       if (project.budget < estimated * 0.8) {
         risks.push({
           type: "budget_health",

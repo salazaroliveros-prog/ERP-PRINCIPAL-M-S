@@ -1,4 +1,4 @@
-import React, { useEffect, useState, Suspense, lazy } from 'react';
+import React, { useCallback, useEffect, useRef, useState, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from 'firebase/auth';
 import { auth } from './firebase';
@@ -24,18 +24,23 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
+import { exportNavMetricsSnapshot, markNavigationComplete, markNavigationStart } from './lib/navMetrics';
 
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { NotificationProvider } from './contexts/NotificationContext';
-import { NotificationManager } from './components/NotificationManager';
 import { Toaster, toast } from 'sonner';
 
 // Lazy Loaded Components for Performance
-const Dashboard = lazy(() => import('./components/Dashboard'));
-const Projects = lazy(() => import('./components/Projects'));
+const loadDashboard = () => import('./components/Dashboard');
+const loadProjects = () => import('./components/Projects');
+const loadInventory = () => import('./components/Inventory');
+const loadFinancials = () => import('./components/Financials');
+
+const Dashboard = lazy(loadDashboard);
+const Projects = lazy(loadProjects);
 const Clients = lazy(() => import('./components/Clients'));
-const Inventory = lazy(() => import('./components/Inventory'));
-const Financials = lazy(() => import('./components/Financials'));
+const Inventory = lazy(loadInventory);
+const Financials = lazy(loadFinancials);
 const Quotes = lazy(() => import('./components/Quotes'));
 const Equipment = lazy(() => import('./components/Equipment'));
 const Subcontracts = lazy(() => import('./components/Subcontracts'));
@@ -49,10 +54,25 @@ const Settings = lazy(() => import('./components/Settings'));
 const Workflows = lazy(() => import('./components/Workflows'));
 const AuditLogs = lazy(() => import('./components/AuditLogs'));
 const RiskManagement = lazy(() => import('./components/RiskManagement'));
+const AIChat = lazy(() => import('./components/AIChat'));
+const NotificationManager = lazy(() =>
+  import('./components/NotificationManager').then((module) => ({ default: module.NotificationManager }))
+);
+const Sidebar = lazy(() =>
+  import('./components/Sidebar').then((module) => ({ default: module.Sidebar }))
+);
+const BottomNav = lazy(() =>
+  import('./components/BottomNav').then((module) => ({ default: module.BottomNav }))
+);
+const SyncStatus = lazy(() =>
+  import('./components/SyncStatus').then((module) => ({ default: module.SyncStatus }))
+);
+const NavMetricsPanel = lazy(() => import('./components/NavMetricsPanel'));
 
-import AIChat from './components/AIChat';
 import ErrorBoundary from './components/ErrorBoundary';
-import { Sidebar } from './components/Sidebar';
+
+const PREFETCH_ENABLED = (import.meta.env.VITE_PREFETCH_ENABLED ?? 'true') !== 'false';
+const NAV_METRICS_ENABLED = import.meta.env.DEV && import.meta.env.VITE_NAV_METRICS === 'true';
 
 const LoadingFallback = () => (
   <div className="flex-1 flex items-center justify-center min-h-[60vh]">
@@ -137,6 +157,11 @@ const Login = () => {
 
 const PageTransition = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
+
+  useEffect(() => {
+    markNavigationComplete(location.pathname);
+  }, [location.pathname]);
+
   return (
     <motion.div
       key={location.pathname}
@@ -154,8 +179,16 @@ const PageTransition = ({ children }: { children: React.ReactNode }) => {
 import { Bell } from 'lucide-react';
 import { useNotifications } from './contexts/NotificationContext';
 import { Logo } from './components/Logo';
-import { BottomNav } from './components/BottomNav';
-import { SyncStatus } from './components/SyncStatus';
+
+type NetworkConnection = {
+  saveData?: boolean;
+  effectiveType?: string;
+};
+
+function getBrowserConnection() {
+  if (typeof navigator === 'undefined') return undefined;
+  return (navigator as Navigator & { connection?: NetworkConnection }).connection;
+}
 
 function AppContent({ 
   user, 
@@ -169,8 +202,159 @@ function AppContent({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [enhancementsReady, setEnhancementsReady] = useState(false);
+  const prefetchedRoutesRef = useRef<Set<string>>(new Set());
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { unreadCount } = useNotifications();
+
+  const canPrefetch = useCallback(() => {
+    if (!PREFETCH_ENABLED) {
+      return false;
+    }
+
+    if (typeof navigator === 'undefined') {
+      return false;
+    }
+
+    const connection = getBrowserConnection();
+    const effectiveType = connection?.effectiveType || '';
+    const hasSlowConnection = effectiveType === 'slow-2g' || effectiveType === '2g';
+    const saveDataEnabled = connection?.saveData === true;
+    const lowCpu = typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 2;
+
+    return !hasSlowConnection && !saveDataEnabled && !lowCpu;
+  }, []);
+
+  const prefetchRouteComponent = useCallback((path: string) => {
+    if (!canPrefetch()) {
+      return;
+    }
+
+    if (prefetchedRoutesRef.current.has(path)) {
+      return;
+    }
+
+    let preload: Promise<unknown> | undefined;
+
+    switch (path) {
+      case '/':
+        preload = loadDashboard();
+        break;
+      case '/projects':
+        preload = loadProjects();
+        break;
+      case '/clients':
+        preload = import('./components/Clients');
+        break;
+      case '/inventory':
+        preload = loadInventory();
+        break;
+      case '/purchase-orders':
+        preload = import('./components/PurchaseOrders');
+        break;
+      case '/financials':
+        preload = loadFinancials();
+        break;
+      case '/subcontracts':
+        preload = import('./components/Subcontracts');
+        break;
+      case '/equipment':
+        preload = import('./components/Equipment');
+        break;
+      case '/quotes':
+        preload = import('./components/Quotes');
+        break;
+      case '/hr':
+        preload = import('./components/HR');
+        break;
+      case '/analytics':
+        preload = import('./components/Analytics');
+        break;
+      case '/suppliers':
+        preload = import('./components/Suppliers');
+        break;
+      case '/safety':
+        preload = import('./components/Safety');
+        break;
+      case '/documents':
+        preload = import('./components/Documents');
+        break;
+      case '/workflows':
+        preload = import('./components/Workflows');
+        break;
+      case '/audit-logs':
+        preload = import('./components/AuditLogs');
+        break;
+      case '/risks':
+        preload = import('./components/RiskManagement');
+        break;
+      case '/settings':
+        preload = import('./components/Settings');
+        break;
+      default:
+        break;
+    }
+
+    if (!preload) {
+      return;
+    }
+
+    prefetchedRoutesRef.current.add(path);
+
+    if (NAV_METRICS_ENABLED && typeof performance !== 'undefined') {
+      const startedAt = performance.now();
+      void preload.finally(() => {
+        const elapsed = Math.round(performance.now() - startedAt);
+        console.debug(`[nav-prefetch] ${path} in ${elapsed}ms`);
+      });
+    }
+  }, [canPrefetch]);
+
+  const markRouteIntent = useCallback((path: string) => {
+    markNavigationStart(path);
+  }, []);
+
+  useEffect(() => {
+    const runDeferredLoad = () => {
+      setEnhancementsReady(true);
+
+      if (!canPrefetch()) {
+        return;
+      }
+
+      void Promise.allSettled([loadProjects(), loadInventory(), loadFinancials()]);
+    };
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const idleId = (window as any).requestIdleCallback(runDeferredLoad, { timeout: 1200 });
+      return () => (window as any).cancelIdleCallback?.(idleId);
+    }
+
+    const timeoutId = window.setTimeout(runDeferredLoad, 1200);
+    return () => window.clearTimeout(timeoutId);
+  }, [canPrefetch]);
+
+  useEffect(() => {
+    if (!NAV_METRICS_ENABLED || typeof window === 'undefined') {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey) {
+        return;
+      }
+
+      if (event.key.toLowerCase() !== 'm') {
+        return;
+      }
+
+      event.preventDefault();
+      void exportNavMetricsSnapshot();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   if (!user) {
     return <Login />;
@@ -210,19 +394,23 @@ function AppContent({
           </div>
         </header>
 
-        <Sidebar 
-          user={user} 
-          isOpen={isSidebarOpen} 
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          onClose={() => {
-            setIsSidebarOpen(false);
-            setIsNotificationsOpen(false);
-          }} 
-          initialNotificationsOpen={isNotificationsOpen}
-          deferredPrompt={deferredPrompt}
-          onInstall={onInstall}
-        />
+        <Suspense fallback={null}>
+          <Sidebar 
+            user={user} 
+            isOpen={isSidebarOpen} 
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            onPrefetchRoute={prefetchRouteComponent}
+            onNavigateIntent={markRouteIntent}
+            onClose={() => {
+              setIsSidebarOpen(false);
+              setIsNotificationsOpen(false);
+            }} 
+            initialNotificationsOpen={isNotificationsOpen}
+            deferredPrompt={deferredPrompt}
+            onInstall={onInstall}
+          />
+        </Suspense>
         
         <main className={cn(
           "flex-1 p-4 lg:p-8 pb-24 lg:pb-8 overflow-x-hidden transition-all duration-300",
@@ -253,15 +441,29 @@ function AppContent({
               </Routes>
             </AnimatePresence>
           </Suspense>
-          <AIChat />
-          <SyncStatus />
+          {enhancementsReady && (
+            <Suspense fallback={null}>
+              <AIChat />
+              <SyncStatus />
+            </Suspense>
+          )}
         </main>
 
-        <BottomNav 
-          onMenuClick={() => setIsSidebarOpen(true)} 
-          deferredPrompt={deferredPrompt}
-          onInstall={onInstall}
-        />
+        <Suspense fallback={null}>
+          <BottomNav 
+            onMenuClick={() => setIsSidebarOpen(true)} 
+            onPrefetchRoute={prefetchRouteComponent}
+            onNavigateIntent={markRouteIntent}
+            deferredPrompt={deferredPrompt}
+            onInstall={onInstall}
+          />
+        </Suspense>
+
+        {NAV_METRICS_ENABLED && (
+          <Suspense fallback={null}>
+            <NavMetricsPanel />
+          </Suspense>
+        )}
       </div>
     </Router>
   );
@@ -312,7 +514,9 @@ export default function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <NotificationProvider user={user}>
-          <NotificationManager />
+          <Suspense fallback={null}>
+            <NotificationManager />
+          </Suspense>
           <AppContent 
             user={user} 
             deferredPrompt={deferredPrompt}

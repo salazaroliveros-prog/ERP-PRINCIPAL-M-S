@@ -3,8 +3,10 @@ import { Bot, Send, X, Minimize2, Maximize2, MessageSquare, Sparkles, AlertTrian
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, handleFirestoreError, OperationType } from '../lib/utils';
 import { getAIResponse } from '../lib/gemini';
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
-import { db } from '../firebase';
+import { listProjects } from '../lib/projectsApi';
+import { listTransactions } from '../lib/financialsApi';
+import { listInventory } from '../lib/operationsApi';
+import { listRisks } from '../lib/risksApi';
 import { generateExecutiveReport } from '../lib/pdfUtils';
 import { toast } from 'sonner';
 
@@ -105,22 +107,20 @@ export default function AIChat() {
 
   const fetchReportData = async () => {
     try {
-      const projectsSnap = await getDocs(collection(db, 'projects'));
-      const projects = projectsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const [projects, transactionsResponse, inventoryResponse, risks] = await Promise.all([
+        listProjects(),
+        listTransactions({ limit: 2000, offset: 0 }),
+        listInventory({ limit: 2000, offset: 0 }),
+        listRisks(),
+      ]);
 
-      const transactionsSnap = await getDocs(collection(db, 'transactions'));
-      const transactions = transactionsSnap.docs.map(doc => doc.data());
+      const transactions = transactionsResponse.items;
       
       const totalIncome = transactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0);
       const totalExpense = transactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0);
 
-      const inventorySnap = await getDocs(collection(db, 'inventory'));
-      const inventoryAlerts = inventorySnap.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
+      const inventoryAlerts = inventoryResponse.items
         .filter((item: any) => item.stock <= (item.minStock || 0));
-
-      const risksSnap = await getDocs(collection(db, 'risks'));
-      const risks = risksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       return {
         projects,

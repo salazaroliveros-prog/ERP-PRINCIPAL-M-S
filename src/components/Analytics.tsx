@@ -1,6 +1,4 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
 import { 
   BarChart3, 
   PieChart as PieChartIcon, 
@@ -41,6 +39,9 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency, handleFirestoreError, OperationType } from '../lib/utils';
 import { toast } from 'sonner';
+import { listProjects } from '../lib/projectsApi';
+import { listTransactions } from '../lib/financialsApi';
+import { listRisks } from '../lib/risksApi';
 
 export default function Analytics() {
   const [timeRange, setTimeRange] = useState('6m');
@@ -52,23 +53,36 @@ export default function Analytics() {
   const [aiInsight, setAiInsight] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'projects'));
+    let cancelled = false;
 
-    const unsubTransactions = onSnapshot(collection(db, 'transactions'), (snapshot) => {
-      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'transactions'));
+    const loadAnalyticsData = async () => {
+      try {
+        const [projectsData, transactionsData, risksData] = await Promise.all([
+          listProjects(),
+          listTransactions({ limit: 2000, offset: 0 }),
+          listRisks(),
+        ]);
 
-    const unsubRisks = onSnapshot(collection(db, 'risks'), (snapshot) => {
-      setRisks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'risks'));
+        if (cancelled) {
+          return;
+        }
+
+        setProjects(projectsData);
+        setTransactions(transactionsData.items);
+        setRisks(risksData);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, 'analytics');
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadAnalyticsData();
 
     return () => {
-      unsubProjects();
-      unsubTransactions();
-      unsubRisks();
+      cancelled = true;
     };
   }, []);
 

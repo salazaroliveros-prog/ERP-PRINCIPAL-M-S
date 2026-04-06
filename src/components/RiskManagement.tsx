@@ -1,6 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { collection, onSnapshot, query, where, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { 
   AlertTriangle, 
   ShieldAlert, 
@@ -35,6 +33,8 @@ import { toast } from 'sonner';
 import { FormModal } from './FormModal';
 import { logAction } from '../lib/audit';
 import ConfirmModal from './ConfirmModal';
+import { listProjects } from '../lib/projectsApi';
+import { createRisk, deleteRisk, listRisks, updateRisk } from '../lib/risksApi';
 
 interface Risk {
   id: string;
@@ -48,8 +48,8 @@ interface Risk {
   mitigationPlan: string;
   contingencyPlan: string;
   owner: string;
-  createdAt: any;
-  updatedAt: any;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export default function RiskManagement() {
@@ -80,31 +80,21 @@ export default function RiskManagement() {
     owner: ''
   });
 
-  useEffect(() => {
-    if (!auth.currentUser) return;
-
-    const unsubRisks = onSnapshot(
-      query(collection(db, 'risks'), orderBy('createdAt', 'desc')),
-      (snapshot) => {
-        setRisks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Risk)));
-        setLoading(false);
-      },
-      (error) => handleFirestoreError(error, OperationType.GET, 'risks')
-    );
-
-    const unsubProjects = onSnapshot(
-      collection(db, 'projects'),
-      (snapshot) => {
-        setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      },
-      (error) => handleFirestoreError(error, OperationType.GET, 'projects')
-    );
-
-    return () => {
-      unsubRisks();
-      unsubProjects();
-    };
+  const loadData = useCallback(async () => {
+    try {
+      const [riskItems, projectItems] = await Promise.all([listRisks(), listProjects()]);
+      setRisks(riskItems as Risk[]);
+      setProjects(projectItems);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'risks');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const [expandedRisk, setExpandedRisk] = useState<string | null>(null);
 
@@ -117,25 +107,19 @@ export default function RiskManagement() {
 
     try {
       if (editingRisk) {
-        await updateDoc(doc(db, 'risks', editingRisk.id), {
-          ...formData,
-          updatedAt: serverTimestamp()
-        });
+        await updateRisk(editingRisk.id, formData);
         await logAction('Actualización de Riesgo', 'Riesgos', `Riesgo actualizado: ${formData.title}`, 'update', { projectId: formData.projectId });
         toast.success('Riesgo actualizado con éxito');
       } else {
-        const docRef = await addDoc(collection(db, 'risks'), {
-          ...formData,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-        await logAction('Creación de Riesgo', 'Riesgos', `Nuevo riesgo identificado: ${formData.title}`, 'create', { projectId: formData.projectId, riskId: docRef.id });
+        const created = await createRisk(formData);
+        await logAction('Creación de Riesgo', 'Riesgos', `Nuevo riesgo identificado: ${formData.title}`, 'create', { projectId: formData.projectId, riskId: created.id });
         toast.success('Riesgo registrado con éxito');
       }
+      await loadData();
       setIsModalOpen(false);
       resetForm();
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, editingRisk ? `risks/${editingRisk.id}` : 'risks');
+      handleFirestoreError(error, editingRisk ? OperationType.UPDATE : OperationType.WRITE, editingRisk ? `risks/${editingRisk.id}` : 'risks');
     }
   };
 
@@ -180,9 +164,11 @@ export default function RiskManagement() {
   const confirmDelete = async () => {
     if (!riskToDelete) return;
     try {
-      await deleteDoc(doc(db, 'risks', riskToDelete));
-      await logAction('Eliminación de Riesgo', 'Riesgos', `Riesgo eliminado: ${riskToDelete}`, 'delete');
+      const risk = risks.find(item => item.id === riskToDelete);
+      await deleteRisk(riskToDelete);
+      await logAction('Eliminación de Riesgo', 'Riesgos', `Riesgo eliminado: ${risk?.title || riskToDelete}`, 'delete');
       toast.success('Riesgo eliminado');
+      await loadData();
       setIsDeleteConfirmOpen(false);
       setRiskToDelete(null);
     } catch (error) {
@@ -394,6 +380,8 @@ export default function RiskManagement() {
           />
         </div>
         <select
+          title="Filtrar por proyecto"
+          aria-label="Filtrar por proyecto"
           value={filterProject}
           onChange={(e) => setFilterProject(e.target.value)}
           className="px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
@@ -404,6 +392,8 @@ export default function RiskManagement() {
           ))}
         </select>
         <select
+          title="Filtrar por impacto"
+          aria-label="Filtrar por impacto"
           value={filterImpact}
           onChange={(e) => setFilterImpact(e.target.value)}
           className="px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
@@ -483,12 +473,16 @@ export default function RiskManagement() {
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
+                        title={`Editar riesgo ${risk.title}`}
+                        aria-label={`Editar riesgo ${risk.title}`}
                         onClick={() => handleEdit(risk)}
                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-all"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
+                        title={`Eliminar riesgo ${risk.title}`}
+                        aria-label={`Eliminar riesgo ${risk.title}`}
                         onClick={() => handleDelete(risk.id)}
                         className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all"
                       >
@@ -564,6 +558,8 @@ export default function RiskManagement() {
             </span>
             <div className="flex items-center gap-2">
               <button
+                title="Pagina anterior"
+                aria-label="Pagina anterior"
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
                 className="p-2 text-slate-500 hover:text-blue-600 disabled:opacity-50 transition-colors"
@@ -574,6 +570,8 @@ export default function RiskManagement() {
                 {currentPage} / {totalPages}
               </span>
               <button
+                title="Pagina siguiente"
+                aria-label="Pagina siguiente"
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
                 className="p-2 text-slate-500 hover:text-blue-600 disabled:opacity-50 transition-colors"
@@ -595,6 +593,8 @@ export default function RiskManagement() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Proyecto *</label>
               <select
+                title="Proyecto del riesgo"
+                aria-label="Proyecto del riesgo"
                 value={formData.projectId}
                 onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
                 className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
@@ -635,6 +635,8 @@ export default function RiskManagement() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Categoría</label>
               <select
+                title="Categoria del riesgo"
+                aria-label="Categoria del riesgo"
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
                 className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
@@ -659,6 +661,8 @@ export default function RiskManagement() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Impacto</label>
               <select
+                title="Impacto del riesgo"
+                aria-label="Impacto del riesgo"
                 value={formData.impact}
                 onChange={(e) => setFormData({ ...formData, impact: e.target.value as any })}
                 className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
@@ -672,6 +676,8 @@ export default function RiskManagement() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Probabilidad</label>
               <select
+                title="Probabilidad del riesgo"
+                aria-label="Probabilidad del riesgo"
                 value={formData.probability}
                 onChange={(e) => setFormData({ ...formData, probability: e.target.value as any })}
                 className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
@@ -718,6 +724,8 @@ export default function RiskManagement() {
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Estado</label>
             <select
+              title="Estado del riesgo"
+              aria-label="Estado del riesgo"
               value={formData.status}
               onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
               className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"

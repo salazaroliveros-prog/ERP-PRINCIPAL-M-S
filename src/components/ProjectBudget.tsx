@@ -1,6 +1,4 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, writeBatch, query, orderBy, getDocs, where } from 'firebase/firestore';
-import { db } from '../firebase';
 import { 
   X, 
   Plus, 
@@ -45,6 +43,16 @@ import autoTable from 'jspdf-autotable';
 import { FormModal } from './FormModal';
 import ConfirmModal from './ConfirmModal';
 import { CostCalculatorModal } from './CostCalculatorModal';
+import {
+  createProjectBudgetItem,
+  deleteProjectBudgetItem,
+  listProjectBudgetItemsDetailed,
+  reorderProjectBudgetItems,
+  updateProjectBudgetItem,
+  updateProjectBudgetSummary,
+} from '../lib/projectsApi';
+import { listTransactions } from '../lib/financialsApi';
+import { createQuote, listInventoryByProject, syncInventoryFromBudget } from '../lib/operationsApi';
 
 interface ProjectBudgetProps {
   project: any;
@@ -106,6 +114,89 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   const [isCostCalculatorOpen, setIsCostCalculatorOpen] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
 
+  const loadBudgetItems = useCallback(async () => {
+    if (!project.id) return;
+
+    setIsLoading(true);
+    try {
+      const items = await listProjectBudgetItemsDetailed(project.id);
+      setBudgetItems(items as any[]);
+    } catch (error) {
+      console.error('Error loading budget items from API:', error);
+      toast.error('No se pudieron cargar los renglones del presupuesto');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [project.id]);
+
+  const patchBudgetItem = useCallback(
+    async (itemId: string, payload: Record<string, any>) => {
+      await updateProjectBudgetItem(project.id, itemId, payload);
+    },
+    [project.id]
+  );
+
+  const patchProjectBudget = useCallback(
+    async (payload: {
+      budget?: number;
+      budgetStatus?: string;
+      budgetValidationMessage?: string;
+      budgetValidationType?: string;
+      budgetValidatedAt?: string | null;
+      typology?: string;
+    }) => {
+      await updateProjectBudgetSummary(project.id, payload);
+    },
+    [project.id]
+  );
+
+  const loadProjectTransactions = useCallback(async () => {
+    if (!project.id) {
+      setTransactions([]);
+      return;
+    }
+
+    try {
+      const pageSize = 200;
+      let nextOffset = 0;
+      let keepGoing = true;
+      const allItems: any[] = [];
+
+      while (keepGoing) {
+        const response = await listTransactions({
+          projectId: project.id,
+          limit: pageSize,
+          offset: nextOffset,
+        });
+
+        allItems.push(...response.items);
+        nextOffset += response.items.length;
+        keepGoing = response.hasMore;
+      }
+
+      setTransactions(allItems);
+    } catch (error) {
+      console.error('Error loading project transactions from API:', error);
+      toast.error('No se pudieron cargar las transacciones del proyecto');
+      setTransactions([]);
+    }
+  }, [project.id]);
+
+  const loadProjectInventory = useCallback(async () => {
+    if (!project.id) {
+      setInventory([]);
+      return;
+    }
+
+    try {
+      const items = await listInventoryByProject(project.id);
+      setInventory(items as any[]);
+    } catch (error) {
+      console.error('Error loading inventory from API:', error);
+      setInventory([]);
+    }
+  }, [project.id]);
+
   const handleAutoCalculateQuantities = async () => {
     if (!project.area || project.area <= 0) {
       toast.error('El proyecto debe tener un área (m2) definida para auto-calcular cantidades');
@@ -120,7 +211,6 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     setIsInitializing(true);
     try {
-      const batch = writeBatch(db);
       let newTotalBudget = 0;
 
       for (const item of budgetItems) {
@@ -128,11 +218,10 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         if (factor !== undefined) {
           const newQuantity = project.area * factor;
           const totalItemPrice = newQuantity * (item.totalUnitPrice || 0);
-          
-          batch.update(doc(db, `projects/${project.id}/budgetItems`, item.id), {
+
+            await patchBudgetItem(item.id, {
             quantity: newQuantity,
             totalItemPrice: totalItemPrice,
-            updatedAt: serverTimestamp()
           });
           
           newTotalBudget += totalItemPrice;
@@ -141,11 +230,10 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         }
       }
 
-      await batch.commit();
+        await loadBudgetItems();
       
-      await updateDoc(doc(db, 'projects', project.id), {
+      await patchProjectBudget({
         budget: newTotalBudget,
-        updatedAt: serverTimestamp()
       });
 
       toast.success('Cantidades calculadas automáticamente según el área del proyecto');
@@ -181,37 +269,18 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         }
       });
 
-      // Update or create in inventory
-      for (const key in materialSummary) {
-        const mat = materialSummary[key];
-        const q = query(
-          collection(db, 'inventory'),
-          where('projectId', '==', project.id),
-          where('name', '==', mat.name)
-        );
-        const invSnapshot = await getDocs(q);
-        
-        if (invSnapshot.empty) {
-          await addDoc(collection(db, 'inventory'), {
-            name: mat.name,
-            unit: mat.unit,
-            stock: mat.totalQuantity, // Stock is the total requirement
-            minStock: mat.totalQuantity * 0.1, // Default 10% min stock
-            unitPrice: mat.unitPrice,
-            category: mat.category,
-            projectId: project.id,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-        } else {
-          const invDoc = invSnapshot.docs[0];
-          await updateDoc(doc(db, 'inventory', invDoc.id), {
-            stock: mat.totalQuantity,
-            unitPrice: mat.unitPrice,
-            updatedAt: serverTimestamp()
-          });
-        }
-      }
+      await syncInventoryFromBudget(
+        project.id,
+        Object.values(materialSummary).map((mat: any) => ({
+          name: mat.name,
+          unit: mat.unit,
+          totalQuantity: mat.totalQuantity,
+          unitPrice: mat.unitPrice,
+          category: mat.category,
+        }))
+      );
+
+      await loadProjectInventory();
       
       toast.success('Materiales sincronizados con el inventario del proyecto');
       await logAction('Sincronización de Inventario', 'Presupuesto', `Se sincronizaron ${Object.keys(materialSummary).length} materiales con el inventario del proyecto ${project.name}`, 'update', { projectId: project.id, materialCount: Object.keys(materialSummary).length });
@@ -247,11 +316,11 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         }
       }
 
-      await updateDoc(doc(db, 'projects', project.id), {
+      await patchProjectBudget({
         budgetStatus: 'Validated',
         budgetValidationMessage: message,
         budgetValidationType: type,
-        budgetValidatedAt: serverTimestamp(),
+        budgetValidatedAt: new Date().toISOString(),
         budget: totalBudget
       });
 
@@ -271,9 +340,9 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
   const handleUnlockBudget = async () => {
     try {
-      await updateDoc(doc(db, 'projects', project.id), {
+      await patchProjectBudget({
         budgetStatus: 'Draft',
-        updatedAt: serverTimestamp()
+        budgetValidatedAt: null,
       });
       toast.success('Presupuesto desbloqueado para edición');
     } catch (error) {
@@ -313,15 +382,15 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         total: budgetItems.reduce((acc, item) => {
           const unitPrice = (item.materialCost + item.laborCost) * (1 + (item.indirectFactor || 0.2));
           return acc + (item.quantity * unitPrice);
-        }, 0),
-        createdAt: serverTimestamp()
+        }, 0)
       };
 
-      await addDoc(collection(db, 'quotes'), quoteData);
+      await createQuote(quoteData);
       toast.success('Cotización generada con éxito');
       setIsQuickActionsOpen(false);
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'quotes');
+      const message = error instanceof Error ? error.message : 'Error desconocido';
+      toast.error('No se pudo generar la cotización', { description: message });
     } finally {
       setIsGeneratingQuote(false);
     }
@@ -388,7 +457,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     }
 
     try {
-      await updateDoc(doc(db, `projects/${project.id}/budgetItems`, itemId), {
+      await patchBudgetItem(itemId, {
         subtasks: updatedSubtasks
       });
       toast.success('Subtarea agregada correctamente');
@@ -408,7 +477,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     }
 
     try {
-      await updateDoc(doc(db, `projects/${project.id}/budgetItems`, itemId), {
+      await patchBudgetItem(itemId, {
         subtasks: updatedSubtasks
       });
       toast.success('Subtarea eliminada correctamente');
@@ -429,7 +498,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     }
 
     try {
-      await updateDoc(doc(db, `projects/${project.id}/budgetItems`, itemId), {
+      await patchBudgetItem(itemId, {
         subtasks: updatedSubtasks
       });
     } catch (error) {
@@ -494,45 +563,13 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   useEffect(() => {
-    const q = query(
-      collection(db, `projects/${project.id}/budgetItems`),
-      orderBy('order', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setBudgetItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setIsLoading(false);
-    }, (error) => handleFirestoreError(error, OperationType.GET, `projects/${project.id}/budgetItems`));
-
-    const unsubscribeInventory = onSnapshot(
-      collection(db, 'inventory'),
-      (snapshot) => {
-        setInventory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      },
-      (error) => handleFirestoreError(error, OperationType.GET, 'inventory')
-    );
-
-    return () => {
-      unsubscribe();
-      unsubscribeInventory();
-    };
-  }, [project.id]);
+    loadBudgetItems();
+    loadProjectInventory();
+  }, [loadBudgetItems, loadProjectInventory]);
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'transactions'),
-      orderBy('date', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setTransactions(snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter((t: any) => t.projectId === project.id)
-      );
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'transactions'));
-
-    return unsubscribe;
-  }, [project.id]);
+    loadProjectTransactions();
+  }, [loadProjectTransactions]);
 
   const handleExportMaterialSummary = () => {
     if (budgetItems.length === 0) {
@@ -615,11 +652,9 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     setIsInitializing(true);
     try {
       const templates = APU_TEMPLATES[project.typology] || APU_TEMPLATES.RESIDENCIAL;
-      const batch = writeBatch(db);
+      for (let index = 0; index < templates.length; index += 1) {
+        const template = templates[index];
 
-      templates.forEach((template, index) => {
-        const itemRef = doc(collection(db, `projects/${project.id}/budgetItems`));
-        
         // Calculate unit costs
         const materialCost = template.materials.reduce((sum, m) => sum + (m.quantity * m.unitPrice), 0);
         const laborCost = template.labor.reduce((sum, l) => sum + (l.dailyRate / l.yield), 0);
@@ -627,9 +662,9 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         const indirectCost = directCost * template.indirectFactor;
         const totalUnitPrice = directCost + indirectCost;
 
-        batch.set(itemRef, {
-          projectId: project.id,
+        await createProjectBudgetItem(project.id, {
           description: template.description,
+          category: 'General',
           unit: template.unit,
           quantity: 0, // User will input this
           materialCost,
@@ -642,11 +677,11 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
           materials: template.materials,
           labor: template.labor,
           indirectFactor: template.indirectFactor,
-          createdAt: serverTimestamp()
+          subtasks: [],
         });
-      });
+      }
 
-      await batch.commit();
+      await loadBudgetItems();
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems`);
     } finally {
@@ -658,12 +693,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     setBudgetItems(newOrder);
     
     try {
-      const batch = writeBatch(db);
-      newOrder.forEach((item, index) => {
-        const itemRef = doc(db, `projects/${project.id}/budgetItems`, item.id);
-        batch.update(itemRef, { order: index + 1 });
-      });
-      await batch.commit();
+      await reorderProjectBudgetItems(project.id, newOrder.map(item => item.id));
+      await loadBudgetItems();
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/reorder`);
     }
@@ -698,11 +729,10 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     }
 
     try {
-      await updateDoc(doc(db, `projects/${project.id}/budgetItems`, itemId), {
+      await patchBudgetItem(itemId, {
         quantity,
         totalItemPrice,
         estimatedDays,
-        projectId: project.id
       });
 
       // Update project total budget
@@ -711,10 +741,9 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         return sum + (i.totalItemPrice || 0);
       }, 0);
 
-      await updateDoc(doc(db, 'projects', project.id), {
+      await patchProjectBudget({
         budget: newTotalBudget,
         typology: project.typology,
-        updatedAt: serverTimestamp()
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
@@ -729,7 +758,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   const confirmDeleteItem = async () => {
     if (!itemToDelete) return;
     try {
-      await deleteDoc(doc(db, `projects/${project.id}/budgetItems`, itemToDelete));
+      await deleteProjectBudgetItem(project.id, itemToDelete);
       
       const deletedItem = budgetItems.find(i => i.id === itemToDelete);
       await logAction(
@@ -741,6 +770,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       );
 
       toast.success('Renglón eliminado correctamente');
+      await loadBudgetItems();
       setItemToDelete(null);
       setIsDeleteConfirmOpen(false);
     } catch (error) {
@@ -750,14 +780,13 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
   const handleImportFromCalculator = async (items: any[]) => {
     try {
-      const batch = writeBatch(db);
       const currentCount = budgetItems.length;
 
-      items.forEach((item, index) => {
-        const itemRef = doc(collection(db, `projects/${project.id}/budgetItems`));
-        batch.set(itemRef, {
-          projectId: project.id,
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+        await createProjectBudgetItem(project.id, {
           description: item.description,
+          category: item.category || 'General',
           unit: item.unit,
           quantity: item.quantity,
           materialCost: item.materialCost,
@@ -770,11 +799,9 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
           materials: item.materials || [],
           labor: item.labor || [],
           indirectFactor: item.indirectFactor || 0.2,
-          createdAt: serverTimestamp()
+          subtasks: item.subtasks || [],
         });
-      });
-
-      await batch.commit();
+      }
       
       await logAction(
         'Importación de Calculadora',
@@ -788,10 +815,11 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       const newTotalBudget = budgetItems.reduce((sum, i) => sum + (i.totalItemPrice || 0), 0) + 
                              items.reduce((sum, i) => sum + i.totalItemPrice, 0);
 
-      await updateDoc(doc(db, 'projects', project.id), {
+      await patchProjectBudget({
         budget: newTotalBudget,
-        updatedAt: serverTimestamp()
       });
+
+      await loadBudgetItems();
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/import`);
     }
@@ -901,7 +929,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     }
 
     try {
-      await updateDoc(doc(db, `projects/${project.id}/budgetItems`, itemId), {
+      await patchBudgetItem(itemId, {
         materials: updatedMaterials,
         labor: updatedLabor,
         materialCost,
@@ -927,10 +955,10 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         return sum + (i.totalItemPrice || 0);
       }, 0);
 
-      await updateDoc(doc(db, 'projects', project.id), {
+      await patchProjectBudget({
         budget: newTotalBudget,
         typology: project.typology,
-        updatedAt: serverTimestamp()
+
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
@@ -939,7 +967,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
   const updateItemDetails = async (itemId: string, details: string) => {
     try {
-      await updateDoc(doc(db, `projects/${project.id}/budgetItems`, itemId), {
+      await patchBudgetItem(itemId, {
         materialDetails: details,
         projectId: project.id
       });
@@ -975,7 +1003,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     }
 
     try {
-      await updateDoc(doc(db, `projects/${project.id}/budgetItems`, itemId), {
+      await patchBudgetItem(itemId, {
         materials: updatedMaterials,
         materialCost,
         totalUnitPrice,
@@ -997,10 +1025,10 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         return sum + (i.totalItemPrice || 0);
       }, 0);
 
-      await updateDoc(doc(db, 'projects', project.id), {
+      await patchProjectBudget({
         budget: newTotalBudget,
         typology: project.typology,
-        updatedAt: serverTimestamp()
+
       });
 
       toast.success('Material agregado correctamente');
@@ -1036,7 +1064,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     }
 
     try {
-      await updateDoc(doc(db, `projects/${project.id}/budgetItems`, itemId), {
+      await patchBudgetItem(itemId, {
         materials: updatedMaterials,
         materialCost,
         totalUnitPrice,
@@ -1050,10 +1078,10 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         return sum + (i.totalItemPrice || 0);
       }, 0);
 
-      await updateDoc(doc(db, 'projects', project.id), {
+      await patchProjectBudget({
         budget: newTotalBudget,
         typology: project.typology,
-        updatedAt: serverTimestamp()
+
       });
 
       toast.success('Material eliminado correctamente');
@@ -1097,7 +1125,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     }
 
     try {
-      await updateDoc(doc(db, `projects/${project.id}/budgetItems`, itemId), {
+      await patchBudgetItem(itemId, {
         labor: updatedLabor,
         laborCost,
         totalUnitPrice,
@@ -1120,10 +1148,10 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         return sum + (i.totalItemPrice || 0);
       }, 0);
 
-      await updateDoc(doc(db, 'projects', project.id), {
+      await patchProjectBudget({
         budget: newTotalBudget,
         typology: project.typology,
-        updatedAt: serverTimestamp()
+
       });
 
       toast.success('Mano de obra agregada correctamente');
@@ -1167,7 +1195,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     }
 
     try {
-      await updateDoc(doc(db, `projects/${project.id}/budgetItems`, itemId), {
+      await patchBudgetItem(itemId, {
         labor: updatedLabor,
         laborCost,
         totalUnitPrice,
@@ -1182,10 +1210,10 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         return sum + (i.totalItemPrice || 0);
       }, 0);
 
-      await updateDoc(doc(db, 'projects', project.id), {
+      await patchProjectBudget({
         budget: newTotalBudget,
         typology: project.typology,
-        updatedAt: serverTimestamp()
+
       });
 
       toast.success('Mano de obra eliminada correctamente');
@@ -1240,9 +1268,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         estimatedDays = Math.max(...daysPerRole);
       }
 
-      const docRef = await addDoc(collection(db, `projects/${project.id}/budgetItems`), {
+      const createdItem = await createProjectBudgetItem(project.id, {
         ...newItem,
-        projectId: project.id,
         materialCost: matCost,
         laborCost: labCost,
         indirectCost,
@@ -1251,7 +1278,6 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         estimatedDays,
         order: budgetItems.length + 1,
         subtasks: newItem.subtasks || [],
-        createdAt: serverTimestamp()
       });
 
       await logAction(
@@ -1259,15 +1285,16 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         'Presupuesto',
         `Nuevo renglón "${newItem.description}" registrado en el proyecto "${project.name}"`,
         'create',
-        { projectId: project.id, itemId: docRef.id }
+        { projectId: project.id, itemId: createdItem.id }
       );
 
       // Update project total budget
       const newTotalBudget = budgetItems.reduce((sum, i) => sum + (i.totalItemPrice || 0), 0) + totalItemPrice;
-      await updateDoc(doc(db, 'projects', project.id), {
+      await patchProjectBudget({
         budget: newTotalBudget,
-        updatedAt: serverTimestamp()
       });
+
+      await loadBudgetItems();
 
       setIsAddItemModalOpen(false);
       setNewItem({
@@ -1399,9 +1426,9 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       const indirectCost = directCost * indirectFactor;
       const totalUnitPrice = directCost + indirectCost;
 
-      await addDoc(collection(db, `projects/${project.id}/budgetItems`), {
-        projectId: project.id,
+      await createProjectBudgetItem(project.id, {
         description: 'Instalación sanitaria',
+        category: 'Instalaciones',
         unit: 'ml',
         quantity: 0,
         materialCost: matCost,
@@ -1421,8 +1448,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
           { role: 'Ayudante', yield: 8, dailyRate: 110 }
         ],
         indirectFactor,
-        createdAt: serverTimestamp()
       });
+      await loadBudgetItems();
       toast.success('Instalación sanitaria agregada al presupuesto');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems`);
@@ -3679,7 +3706,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                       onChange={(e) => {
                         const updated = { ...editingItem, description: e.target.value };
                         setEditingItem(updated);
-                        updateDoc(doc(db, `projects/${project.id}/budgetItems`, editingItem.id), { description: e.target.value });
+                        patchBudgetItem(editingItem.id, { description: e.target.value });
                       }}
                     />
                   </div>
@@ -3698,7 +3725,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                       onChange={(e) => {
                         const updated = { ...editingItem, category: e.target.value };
                         setEditingItem(updated);
-                        updateDoc(doc(db, `projects/${project.id}/budgetItems`, editingItem.id), { category: e.target.value });
+                        patchBudgetItem(editingItem.id, { category: e.target.value });
                       }}
                     >
                       <option value="General">General</option>
@@ -3730,7 +3757,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                         onChange={(e) => {
                           const updated = { ...editingItem, unit: e.target.value };
                           setEditingItem(updated);
-                          updateDoc(doc(db, `projects/${project.id}/budgetItems`, editingItem.id), { unit: e.target.value });
+                          patchBudgetItem(editingItem.id, { unit: e.target.value });
                         }}
                       />
                     </div>

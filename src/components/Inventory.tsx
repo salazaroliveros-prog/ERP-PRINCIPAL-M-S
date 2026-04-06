@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, query, where, getDocs, limit, startAfter, orderBy, setDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
 import { 
   Plus, 
   Search, 
@@ -44,10 +42,26 @@ import { Info, Tag, DollarSign, AlertCircle, ShoppingCart, History, RotateCcw } 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { QRScanner } from './QRScanner';
+import {
+  adjustInventoryStock,
+  createDeletedRecord,
+  createInventoryTransaction,
+  createPurchaseOrder,
+  deleteDeletedRecord,
+  deleteInventoryItem,
+  deleteInventoryTransaction,
+  listDeletedRecords,
+  listInventory,
+  listInventoryTransactions,
+  syncInventoryFromBudget,
+  updateInventoryItem,
+  upsertInventoryItem,
+} from '../lib/operationsApi';
+import { listProjects, listProjectBudgetItemsDetailed, updateProjectBudgetItem } from '../lib/projectsApi';
 
 export default function Inventory() {
   const [inventory, setInventory] = useState<any[]>([]);
-  const [lastDoc, setLastDoc] = useState<any>(null);
+  const [inventoryOffset, setInventoryOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
@@ -74,27 +88,9 @@ export default function Inventory() {
 
   useEffect(() => {
     if (selectedItemDetails) {
-      const q = query(
-        collection(db, 'inventoryTransactions'),
-        where('materialId', '==', selectedItemDetails.id)
-      );
-      
-      const unsubTransactions = onSnapshot(
-        q,
-        (snapshot) => {
-          const transactions = snapshot.docs.map(doc => ({ 
-            id: doc.id, 
-            ...doc.data() 
-          })).sort((a: any, b: any) => {
-            const dateA = a.createdAt?.toDate?.() || new Date(0);
-            const dateB = b.createdAt?.toDate?.() || new Date(0);
-            return dateB - dateA;
-          });
-          setItemTransactions(transactions);
-        },
-        (error) => handleFirestoreError(error, OperationType.GET, 'inventoryTransactions')
-      );
-      return () => unsubTransactions();
+      listInventoryTransactions({ materialId: selectedItemDetails.id, limit: 200 })
+        .then(setItemTransactions)
+        .catch((error) => handleFirestoreError(error, OperationType.GET, 'inventoryTransactions'));
     }
   }, [selectedItemDetails]);
 
@@ -144,17 +140,47 @@ export default function Inventory() {
   const [isTrashModalOpen, setIsTrashModalOpen] = useState(false);
   const [deletedRecords, setDeletedRecords] = useState<any[]>([]);
 
-  useEffect(() => {
-    const q = query(collection(db, 'deletedRecords'), orderBy('deletedAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const records = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setDeletedRecords(records);
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'deletedRecords'));
-    return () => unsubscribe();
+  const loadInventoryPage = React.useCallback(async (reset = false) => {
+    const nextOffset = reset ? 0 : inventoryOffset;
+    const response = await listInventory({
+      projectId: selectedProjectId || undefined,
+      limit: 50,
+      offset: nextOffset,
+    });
+
+    if (reset) {
+      setInventory(response.items);
+      setInventoryOffset(response.items.length);
+    } else {
+      setInventory(prev => [...prev, ...response.items]);
+      setInventoryOffset(nextOffset + response.items.length);
+    }
+    setHasMore(response.hasMore);
+
+    const rows = reset ? response.items : [...inventory, ...response.items];
+    rows.forEach((item: any) => {
+      if (item.stock <= item.minStock) {
+        sendNotification(
+          'Alerta de Stock Bajo',
+          `El material ${item.name} tiene solo ${item.stock} ${item.unit} en existencia.`,
+          'inventory'
+        );
+      }
+    });
+  }, [inventory, inventoryOffset, selectedProjectId]);
+
+  const loadDeletedRecords = React.useCallback(async () => {
+    try {
+      const items = await listDeletedRecords();
+      setDeletedRecords(items);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'deletedRecords');
+    }
   }, []);
+
+  useEffect(() => {
+    loadDeletedRecords();
+  }, [loadDeletedRecords]);
 
   const [reorderList, setReorderList] = useState<string[]>([]);
 
@@ -182,7 +208,7 @@ export default function Inventory() {
         const quantityToOrder = Math.max(item.minStock * 2, (item.minStock * 2) - item.stock);
         const supplier = (item.suppliers && item.suppliers.length > 0) ? item.suppliers[0] : 'Proveedor por definir';
         
-        await addDoc(collection(db, 'purchaseOrders'), {
+        await createPurchaseOrder({
           projectId: selectedProjectId || '',
           budgetItemId: '',
           materialId: item.id,
@@ -194,14 +220,10 @@ export default function Inventory() {
           notes: 'Generado manualmente desde lista de reordenamiento',
           status: 'Pending',
           date: new Date().toISOString().split('T')[0],
-          createdAt: serverTimestamp()
         });
 
         // Deduct from stock as requested by user
-        await updateDoc(doc(db, 'inventory', item.id), {
-          stock: Math.max(0, (item.stock || 0) - quantityToOrder),
-          updatedAt: serverTimestamp()
-        });
+        await adjustInventoryStock(item.id, { delta: -quantityToOrder });
 
         successCount++;
       } catch (error) {
@@ -299,40 +321,17 @@ export default function Inventory() {
             if (isNaN(stock) || stock < 0) throw new Error('El stock inicial debe ser un número no negativo');
             if (isNaN(minStock) || minStock < 0) throw new Error('El stock mínimo debe ser un número no negativo');
 
-            // Check if material already exists (by name and project)
-            const q = query(
-              collection(db, 'inventory'), 
-              where('name', '==', name),
-              where('projectId', '==', selectedProjectId || '')
-            );
-            const querySnapshot = await getDocs(q);
-
-            if (!querySnapshot.empty) {
-              const existingDoc = querySnapshot.docs[0];
-              const existingData = existingDoc.data();
-              await updateDoc(doc(db, 'inventory', existingDoc.id), {
-                unitPrice,
-                stock: Number(existingData.stock || 0) + stock,
-                category,
-                unit,
-                minStock,
-                updatedAt: serverTimestamp()
-              });
-            } else {
-              await addDoc(collection(db, 'inventory'), {
-                name,
-                category,
-                unit,
-                unitPrice,
-                stock,
-                minStock,
-                projectId: selectedProjectId || '',
-                suppliers: [],
-                batches: [],
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-              });
-            }
+            await upsertInventoryItem({
+              name,
+              category,
+              unit,
+              unitPrice,
+              stock,
+              minStock,
+              projectId: selectedProjectId || '',
+              suppliers: [],
+              batches: [],
+            });
             successCount++;
           } catch (error: any) {
             errorList.push({
@@ -494,7 +493,7 @@ export default function Inventory() {
         const quantityToOrder = (item.minStock * 2) - item.stock;
         const supplier = (item.suppliers && item.suppliers.length > 0) ? item.suppliers[0] : 'Proveedor por definir';
         
-        await addDoc(collection(db, 'purchaseOrders'), {
+        await createPurchaseOrder({
           projectId: selectedProjectId || '',
           budgetItemId: '',
           materialId: item.id,
@@ -506,14 +505,10 @@ export default function Inventory() {
           notes: 'Generado automáticamente por stock crítico (Reponer a 2x Stock Mínimo)',
           status: 'Pending',
           date: new Date().toISOString().split('T')[0],
-          createdAt: serverTimestamp()
         });
 
         // Deduct from stock as requested by user
-        await updateDoc(doc(db, 'inventory', item.id), {
-          stock: Math.max(0, (item.stock || 0) - quantityToOrder),
-          updatedAt: serverTimestamp()
-        });
+        await adjustInventoryStock(item.id, { delta: -quantityToOrder });
 
         successCount++;
       } catch (error) {
@@ -622,15 +617,11 @@ export default function Inventory() {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       
       // Get historical consumption (simulated or from inventoryTransactions)
-      const transactionsRef = collection(db, 'inventoryTransactions');
-      const q = query(
-        transactionsRef, 
-        where('materialId', '==', selectedItemForPO.id),
-        where('type', '==', 'Out'),
-        limit(50)
-      );
-      const querySnapshot = await getDocs(q);
-      const history = querySnapshot.docs.map(doc => doc.data());
+      const history = await listInventoryTransactions({
+        materialId: selectedItemForPO.id,
+        type: 'Out',
+        limit: 50,
+      });
       
       const activeProjects = projects.filter(p => p.status === 'In Progress');
       
@@ -696,56 +687,61 @@ export default function Inventory() {
   };
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    loadInventoryPage(true).catch((error) => {
+      console.error('Error loading inventory from API:', error);
+      toast.error('No se pudo cargar inventario desde SQL');
+    });
+  }, [loadInventoryPage]);
 
-    const q = selectedProjectId 
-      ? query(collection(db, 'inventory'), where('projectId', '==', selectedProjectId), limit(50))
-      : query(collection(db, 'inventory'), where('projectId', '==', ''), limit(50));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setInventory(items);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-      setHasMore(snapshot.docs.length === 50);
-      
-      // Check for low stock
-      items.forEach((item: any) => {
-        if (item.stock <= item.minStock) {
-          sendNotification(
-            'Alerta de Stock Bajo',
-            `El material ${item.name} tiene solo ${item.stock} ${item.unit} en existencia.`,
-            'inventory'
-          );
-        }
+  useEffect(() => {
+    listProjects()
+      .then(setProjects)
+      .catch((error) => {
+        console.error('Error loading projects from API:', error);
       });
-    }, (error) => {
-      if (error.code !== 'permission-denied') {
-        handleFirestoreError(error, OperationType.GET, 'inventory');
-      }
-    });
-
-    const unsubscribeProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      if (error.code !== 'permission-denied') {
-        handleFirestoreError(error, OperationType.GET, 'projects');
-      }
-    });
-
-    const unsubscribeSuppliers = onSnapshot(collection(db, 'suppliers'), (snapshot) => {
-      setSuppliers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      if (error.code !== 'permission-denied') {
-        handleFirestoreError(error, OperationType.GET, 'suppliers');
-      }
-    });
-
-    return () => {
-      unsubscribe();
-      unsubscribeProjects();
-      unsubscribeSuppliers();
-    };
   }, []);
+
+  useEffect(() => {
+    const supplierNames = Array.from(
+      new Set(
+        inventory.flatMap((item: any) => (Array.isArray(item.suppliers) ? item.suppliers : []))
+      )
+    ).filter(Boolean);
+
+    setSuppliers(
+      supplierNames.map((name: string) => ({
+        id: name,
+        name,
+        category: 'General',
+        status: 'Active',
+      }))
+    );
+  }, [inventory]);
+
+  const incrementBudgetItemUsedQuantity = async (projectId: string, materialName: string, quantity: number) => {
+    if (!projectId || quantity <= 0) return;
+
+    try {
+      const budgetItems = await listProjectBudgetItemsDetailed(projectId);
+      const targetItem = budgetItems.find((item: any) =>
+        Array.isArray(item.materials) &&
+        item.materials.some((m: any) => m.name?.toLowerCase() === materialName.toLowerCase())
+      );
+
+      if (!targetItem) return;
+
+      const updatedMaterials = (targetItem.materials || []).map((m: any) => {
+        if (m.name?.toLowerCase() === materialName.toLowerCase()) {
+          return { ...m, usedQuantity: (m.usedQuantity || 0) + quantity };
+        }
+        return m;
+      });
+
+      await updateProjectBudgetItem(projectId, targetItem.id, { materials: updatedMaterials });
+    } catch (error) {
+      console.error('Error updating budget material used quantity:', error);
+    }
+  };
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -759,44 +755,20 @@ export default function Inventory() {
     setIsSyncing(true);
     try {
       const projectName = projects.find(p => p.id === selectedProjectId)?.name || 'Proyecto';
-      let addedCount = 0;
-      
-      for (const budgeted of projectMaterialSummary) {
-        // Check if material already exists in inventory for THIS project
-        const q = query(
-          collection(db, 'inventory'), 
-          where('projectId', '==', selectedProjectId),
-          where('name', '==', budgeted.name)
-        );
-        const snapshot = await getDocs(q);
-        
-        if (snapshot.empty) {
-          // Add to inventory
-          await addDoc(collection(db, 'inventory'), {
-            name: budgeted.name,
-            category: 'Material de Obra',
-            unit: budgeted.unit,
-            unitPrice: budgeted.unitPrice || 0,
-            stock: budgeted.budgeted, // Initial stock is the total budgeted quantity
-            minStock: budgeted.budgeted * 0.1,
-            projectId: selectedProjectId,
-            projectName: projectName,
-            suppliers: [],
-            batches: [],
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-          addedCount++;
-        } else {
-          // Update existing material stock if it's linked to this project
-          const invDoc = snapshot.docs[0];
-          await updateDoc(doc(db, 'inventory', invDoc.id), {
-            stock: budgeted.budgeted,
-            unitPrice: budgeted.unitPrice || invDoc.data().unitPrice,
-            updatedAt: serverTimestamp()
-          });
-        }
-      }
+
+      await syncInventoryFromBudget(
+        selectedProjectId,
+        projectMaterialSummary.map((budgeted: any) => ({
+          name: budgeted.name,
+          unit: budgeted.unit,
+          totalQuantity: budgeted.budgeted,
+          unitPrice: budgeted.unitPrice || 0,
+          category: 'Material de Obra',
+        }))
+      );
+
+      const addedCount = projectMaterialSummary.length;
+      await loadInventoryPage(true);
       
       if (addedCount > 0) {
         toast.success(`${addedCount} materiales agregados desde el presupuesto.`);
@@ -813,15 +785,10 @@ export default function Inventory() {
   };
 
   const loadMoreInventory = async () => {
-    if (!lastDoc || isLoadingMore) return;
+    if (!hasMore || isLoadingMore) return;
     setIsLoadingMore(true);
     try {
-      const q = query(collection(db, 'inventory'), startAfter(lastDoc), limit(50));
-      const snapshot = await getDocs(q);
-      const newBatch = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setInventory(prev => [...prev, ...newBatch]);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-      setHasMore(snapshot.docs.length === 50);
+      await loadInventoryPage(false);
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, 'inventory');
     } finally {
@@ -830,15 +797,17 @@ export default function Inventory() {
   };
 
   useEffect(() => {
-    if (!auth.currentUser || !selectedProjectId) {
+    if (!selectedProjectId) {
       setProjectBudgetItems([]);
       return;
     }
 
-    const unsubscribeBudget = onSnapshot(collection(db, `projects/${selectedProjectId}/budgetItems`), (snapshot) => {
-      setProjectBudgetItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, `projects/${selectedProjectId}/budgetItems`));
-    return () => unsubscribeBudget();
+    listProjectBudgetItemsDetailed(selectedProjectId)
+      .then((items) => setProjectBudgetItems(items as any[]))
+      .catch((error) => {
+        console.error('Error loading project budget items from API:', error);
+        setProjectBudgetItems([]);
+      });
   }, [selectedProjectId]);
 
   const projectMaterialSummary = React.useMemo(() => {
@@ -932,53 +901,28 @@ export default function Inventory() {
     try {
       if (editingMaterialId) {
         // Update existing material
-        await updateDoc(doc(db, 'inventory', editingMaterialId), {
+        await updateInventoryItem(editingMaterialId, {
           ...newMaterial,
           stock: Number(newMaterial.stock),
           minStock: Number(newMaterial.minStock),
           unitPrice: Number(newMaterial.unitPrice),
           projectId: selectedProjectId || '',
-          updatedAt: serverTimestamp()
         });
         toast.success('Material actualizado exitosamente');
         await logAction('Edición de Material', 'Inventario', `Material ${newMaterial.name} actualizado`, 'update', { materialId: editingMaterialId });
       } else {
-        // Check if material already exists (by name and project)
-        const q = query(
-          collection(db, 'inventory'), 
-          where('name', '==', newMaterial.name),
-          where('projectId', '==', selectedProjectId || '')
-        );
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          // Material exists, update it
-          const existingDoc = querySnapshot.docs[0];
-          const existingData = existingDoc.data();
-          await updateDoc(doc(db, 'inventory', existingDoc.id), {
-            unitPrice: Number(newMaterial.unitPrice),
-            stock: Number(existingData.stock || 0) + Number(newMaterial.stock),
-            category: newMaterial.category,
-            unit: newMaterial.unit,
-            minStock: Number(newMaterial.minStock),
-            updatedAt: serverTimestamp()
-          });
-          toast.success('Material actualizado exitosamente');
-        } else {
-          // New material
-          const docRef = await addDoc(collection(db, 'inventory'), {
-            ...newMaterial,
-            stock: Number(newMaterial.stock),
-            minStock: Number(newMaterial.minStock),
-            unitPrice: Number(newMaterial.unitPrice),
-            projectId: selectedProjectId || '',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-          toast.success('Material agregado exitosamente');
-          await logAction('Registro de Material', 'Inventario', `Nuevo material ${newMaterial.name} registrado`, 'create', { materialId: docRef.id });
-        }
+        const saved = await upsertInventoryItem({
+          ...newMaterial,
+          stock: Number(newMaterial.stock),
+          minStock: Number(newMaterial.minStock),
+          unitPrice: Number(newMaterial.unitPrice),
+          projectId: selectedProjectId || '',
+        });
+        toast.success('Material agregado exitosamente');
+        await logAction('Registro de Material', 'Inventario', `Nuevo material ${newMaterial.name} registrado`, 'create', { materialId: saved.id });
       }
+
+      await loadInventoryPage(true);
       
       setIsModalOpen(false);
       setEditingMaterialId(null);
@@ -1008,15 +952,16 @@ export default function Inventory() {
     try {
       const materialToDelete = inventory.find(i => i.id === itemToDelete);
       if (materialToDelete) {
-        await addDoc(collection(db, 'deletedRecords'), {
+        await createDeletedRecord({
           type: 'material',
           originalId: itemToDelete,
           data: materialToDelete,
-          deletedAt: serverTimestamp(),
           reason: 'Eliminación de material completo'
         });
       }
-      await deleteDoc(doc(db, 'inventory', itemToDelete));
+      await deleteInventoryItem(itemToDelete);
+      await loadInventoryPage(true);
+      await loadDeletedRecords();
       setItemToDelete(null);
       toast.success('Material movido a la papelera');
       await logAction('Eliminación de Material', 'Inventario', `Material ${materialToDelete?.name || itemToDelete} eliminado`, 'delete', { materialId: itemToDelete });
@@ -1031,7 +976,7 @@ export default function Inventory() {
 
     try {
       const poQuantity = Number(poData.quantity);
-      await addDoc(collection(db, 'purchaseOrders'), {
+      await createPurchaseOrder({
         projectId: selectedProjectId || '',
         materialId: selectedItemForPO.id,
         materialName: selectedItemForPO.name,
@@ -1042,14 +987,20 @@ export default function Inventory() {
         notes: poData.notes,
         status: 'Pending',
         date: new Date().toISOString().split('T')[0],
-        createdAt: serverTimestamp()
       });
 
       // Deduct from stock as requested by user (Stock represents remaining requirement)
-      const materialRef = doc(db, 'inventory', selectedItemForPO.id);
-      await updateDoc(materialRef, {
-        stock: Math.max(0, (selectedItemForPO.stock || 0) - poQuantity),
-        updatedAt: serverTimestamp()
+      await adjustInventoryStock(selectedItemForPO.id, { delta: -poQuantity });
+
+      await createInventoryTransaction({
+        materialId: selectedItemForPO.id,
+        materialName: selectedItemForPO.name,
+        type: 'Out',
+        quantity: poQuantity,
+        previousStock: selectedItemForPO.stock,
+        newStock: Math.max(0, (selectedItemForPO.stock || 0) - poQuantity),
+        reason: `Generación de orden de compra - ${poData.notes || 'Reposición automática'}`,
+        projectId: selectedProjectId || null,
       });
 
       setIsPOModalOpen(false);
@@ -1077,13 +1028,10 @@ export default function Inventory() {
     if (material) {
       try {
         const newStock = Math.max(0, material.stock + amount);
-        await updateDoc(doc(db, 'inventory', id), {
-          stock: newStock,
-          updatedAt: serverTimestamp()
-        });
+        await adjustInventoryStock(id, { delta: amount });
 
         // Record transaction
-        await addDoc(collection(db, 'inventoryTransactions'), {
+        await createInventoryTransaction({
           materialId: id,
           materialName: material.name,
           type: amount > 0 ? 'In' : 'Out',
@@ -1092,31 +1040,13 @@ export default function Inventory() {
           newStock: newStock,
           reason: reason,
           projectId: projectId || null,
-          createdAt: serverTimestamp()
         });
 
-        // If it's an output for a project, update the budget item usedQuantity
         if (type === 'Out' && projectId) {
-          const budgetItemsSnap = await getDocs(collection(db, `projects/${projectId}/budgetItems`));
-          const budgetItem = budgetItemsSnap.docs.find(d => {
-            const data = d.data();
-            return data.materials?.some((m: any) => m.name.toLowerCase() === material.name.toLowerCase());
-          });
-
-          if (budgetItem) {
-            const data = budgetItem.data();
-            const updatedMaterials = data.materials.map((m: any) => {
-              if (m.name.toLowerCase() === material.name.toLowerCase()) {
-                return { ...m, usedQuantity: (m.usedQuantity || 0) + Math.abs(amount) };
-              }
-              return m;
-            });
-            await updateDoc(doc(db, `projects/${projectId}/budgetItems`, budgetItem.id), {
-              materials: updatedMaterials
-            });
-          }
+          await incrementBudgetItemUsedQuantity(projectId, material.name, Math.abs(amount));
         }
 
+        await loadInventoryPage(true);
         toast.success(`Stock actualizado: ${material.name}`);
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, `inventory/${id}`);
@@ -1280,26 +1210,25 @@ export default function Inventory() {
 
       const { suggestedPOs } = JSON.parse(response.text);
       
-      // Create pending POs in Firestore
+      // Create pending POs in SQL
       for (const po of suggestedPOs) {
-        await addDoc(collection(db, 'purchaseOrders'), {
-          ...po,
+        await createPurchaseOrder({
           projectId: selectedProjectId || '',
+          materialId: po.materialId,
+          materialName: po.materialName,
+          quantity: po.quantity,
+          estimatedCost: po.quantity * po.estimatedUnitCost,
+          supplier: po.supplierName,
+          notes: `PO sugerida por IA (${po.priority})`,
           status: 'Pending',
-          orderDate: new Date().toISOString().split('T')[0],
-          totalAmount: po.quantity * po.estimatedUnitCost,
-          isAISuggested: true,
-          createdAt: serverTimestamp()
+          date: new Date().toISOString().split('T')[0],
         });
 
         // Deduct from stock as requested by user
         if (po.materialId) {
           const material = inventory.find(i => i.id === po.materialId);
           if (material) {
-            await updateDoc(doc(db, 'inventory', po.materialId), {
-              stock: Math.max(0, (material.stock || 0) - po.quantity),
-              updatedAt: serverTimestamp()
-            });
+            await adjustInventoryStock(po.materialId, { delta: -po.quantity });
           }
         }
       }
@@ -1379,7 +1308,6 @@ export default function Inventory() {
       const updateData: any = {
         stock: newStock,
         batches: batches.filter(b => b.quantity > 0),
-        updatedAt: serverTimestamp()
       };
 
       if (!editingBatchId && newBatch.type === 'In' && newBatch.price > 0) {
@@ -1393,7 +1321,7 @@ export default function Inventory() {
         updateData.unitPrice = newBatch.price;
       }
 
-      await updateDoc(doc(db, 'inventory', material.id), updateData);
+      await updateInventoryItem(material.id, updateData);
 
       await logAction(
         editingBatchId ? 'Edición de Lote' : 'Registro de Lote',
@@ -1405,7 +1333,7 @@ export default function Inventory() {
 
       // Record transaction
       const reason = newBatch.reason || (editingBatchId ? `Edición de lote ${newBatch.batchNumber ? `(${newBatch.batchNumber})` : ''}` : (newBatch.type === 'In' ? `Entrada de lote ${newBatch.batchNumber ? `(${newBatch.batchNumber})` : ''} - Ubicación: ${newBatch.location}` : `Salida de lote`));
-      await addDoc(collection(db, 'inventoryTransactions'), {
+      await createInventoryTransaction({
         materialId: material.id,
         materialName: material.name,
         type: editingBatchId ? 'Adjustment' : newBatch.type,
@@ -1415,29 +1343,10 @@ export default function Inventory() {
         newStock: newStock,
         reason: reason,
         projectId: newBatch.projectId || null,
-        createdAt: serverTimestamp()
       });
 
-      // If it's an output for a project, update the budget item usedQuantity
       if (!editingBatchId && newBatch.type === 'Out' && newBatch.projectId) {
-        const budgetItemsSnap = await getDocs(collection(db, `projects/${newBatch.projectId}/budgetItems`));
-        const budgetItem = budgetItemsSnap.docs.find(d => {
-          const data = d.data();
-          return data.materials?.some((m: any) => m.name.toLowerCase() === material.name.toLowerCase());
-        });
-
-        if (budgetItem) {
-          const data = budgetItem.data();
-          const updatedMaterials = data.materials.map((m: any) => {
-            if (m.name.toLowerCase() === material.name.toLowerCase()) {
-              return { ...m, usedQuantity: (m.usedQuantity || 0) + quantity };
-            }
-            return m;
-          });
-          await updateDoc(doc(db, `projects/${newBatch.projectId}/budgetItems`, budgetItem.id), {
-            materials: updatedMaterials
-          });
-        }
+        await incrementBudgetItemUsedQuantity(newBatch.projectId, material.name, quantity);
       }
 
       setIsBatchModalOpen(false);
@@ -1462,23 +1371,21 @@ export default function Inventory() {
       if (!batchToDelete) return;
 
       // Save to deletedRecords
-      await addDoc(collection(db, 'deletedRecords'), {
+      await createDeletedRecord({
         type: 'batch',
         materialId,
         materialName: materialDoc.name,
         batchId,
         data: batchToDelete,
-        deletedAt: serverTimestamp(),
         reason: `Eliminación de lote: ${batchToDelete.batchNumber || batchId}`
       });
 
       const newBatches = materialDoc.batches.filter((b: any) => b.id !== batchId);
       const newStock = Math.max(0, materialDoc.stock - batchToDelete.quantity);
 
-      await updateDoc(doc(db, 'inventory', materialId), {
+      await updateInventoryItem(materialId, {
         batches: newBatches,
         stock: newStock,
-        updatedAt: serverTimestamp()
       });
 
       await logAction(
@@ -1490,7 +1397,7 @@ export default function Inventory() {
       );
 
       // Record transaction for deletion
-      await addDoc(collection(db, 'inventoryTransactions'), {
+      await createInventoryTransaction({
         materialId,
         materialName: materialDoc.name,
         type: 'Out',
@@ -1498,13 +1405,13 @@ export default function Inventory() {
         reason: `Eliminación de lote: ${batchToDelete.batchNumber || batchId}`,
         previousStock: materialDoc.stock,
         newStock: newStock,
-        createdAt: serverTimestamp()
       });
 
       toast.success('Lote movido a la papelera y stock actualizado');
       if (selectedItemDetails?.id === materialId) {
         setSelectedItemDetails({ ...materialDoc, batches: newBatches, stock: newStock });
       }
+      await loadDeletedRecords();
       setIsBatchDeleteConfirmOpen(false);
       setItemToDeleteBatch(null);
     } catch (error) {
@@ -1518,15 +1425,14 @@ export default function Inventory() {
     try {
       const transactionToDelete = itemTransactions.find(t => t.id === itemToDeleteTransaction);
       if (transactionToDelete) {
-        await addDoc(collection(db, 'deletedRecords'), {
+        await createDeletedRecord({
           type: 'transaction',
           originalId: itemToDeleteTransaction,
           data: transactionToDelete,
-          deletedAt: serverTimestamp(),
           reason: `Eliminación de registro de kardex: ${transactionToDelete.reason}`
         });
       }
-      await deleteDoc(doc(db, 'inventoryTransactions', itemToDeleteTransaction));
+      await deleteInventoryTransaction(itemToDeleteTransaction);
       
       await logAction(
         'Eliminación de Transacción',
@@ -1537,6 +1443,7 @@ export default function Inventory() {
       );
 
       toast.success('Registro movido a la papelera');
+      await loadDeletedRecords();
       setIsTransactionDeleteConfirmOpen(false);
       setItemToDeleteTransaction(null);
     } catch (error) {
@@ -1547,10 +1454,16 @@ export default function Inventory() {
   const handleRestoreRecord = async (record: any) => {
     try {
       if (record.type === 'material') {
-        // Restore material
-        await setDoc(doc(db, 'inventory', record.originalId), {
-          ...record.data,
-          updatedAt: serverTimestamp()
+        await upsertInventoryItem({
+          projectId: record.data.projectId || selectedProjectId || '',
+          name: record.data.name,
+          category: record.data.category || 'Material de Obra',
+          unit: record.data.unit || '',
+          unitPrice: Number(record.data.unitPrice || 0),
+          stock: Number(record.data.stock || 0),
+          minStock: Number(record.data.minStock || 0),
+          suppliers: Array.isArray(record.data.suppliers) ? record.data.suppliers : [],
+          batches: Array.isArray(record.data.batches) ? record.data.batches : [],
         });
       } else if (record.type === 'batch') {
         // Restore batch
@@ -1558,14 +1471,13 @@ export default function Inventory() {
         if (materialDoc) {
           const updatedBatches = [...(materialDoc.batches || []), record.data];
           const updatedStock = materialDoc.stock + record.data.quantity;
-          await updateDoc(doc(db, 'inventory', record.materialId), {
+          await updateInventoryItem(record.materialId, {
             batches: updatedBatches,
             stock: updatedStock,
-            updatedAt: serverTimestamp()
           });
           
           // Record transaction for restoration
-          await addDoc(collection(db, 'inventoryTransactions'), {
+          await createInventoryTransaction({
             materialId: record.materialId,
             materialName: record.materialName,
             type: 'In',
@@ -1573,19 +1485,24 @@ export default function Inventory() {
             reason: `Restauración de lote: ${record.data.batchNumber || record.batchId}`,
             previousStock: materialDoc.stock,
             newStock: updatedStock,
-            createdAt: serverTimestamp()
           });
         }
       } else if (record.type === 'transaction') {
-        // Restore transaction
-        await setDoc(doc(db, 'inventoryTransactions', record.originalId), {
-          ...record.data,
-          createdAt: serverTimestamp() // Update timestamp to now or keep original? Let's keep original data but maybe update restoredAt
+        await createInventoryTransaction({
+          materialId: record.data.materialId,
+          materialName: record.data.materialName,
+          type: record.data.type,
+          quantity: Number(record.data.quantity || 0),
+          batchNumber: record.data.batchNumber || null,
+          previousStock: record.data.previousStock ?? null,
+          newStock: record.data.newStock ?? null,
+          reason: record.data.reason || 'Restauración de registro kardex',
+          projectId: record.data.projectId || null,
         });
       }
 
-      // Delete from deletedRecords
-      await deleteDoc(doc(db, 'deletedRecords', record.id));
+      await deleteDeletedRecord(record.id);
+      await loadDeletedRecords();
       toast.success('Registro restaurado exitosamente');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `deletedRecords/${record.id}`);
@@ -1594,7 +1511,8 @@ export default function Inventory() {
 
   const handlePermanentDeleteRecord = async (recordId: string) => {
     try {
-      await deleteDoc(doc(db, 'deletedRecords', recordId));
+      await deleteDeletedRecord(recordId);
+      await loadDeletedRecords();
       toast.success('Registro eliminado permanentemente');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `deletedRecords/${recordId}`);
@@ -1875,7 +1793,7 @@ export default function Inventory() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
-                      {record.deletedAt?.toDate ? formatDate(record.deletedAt.toDate().toISOString()) : 'Reciente'}
+                      {record.deletedAt ? formatDate(record.deletedAt) : 'Reciente'}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
@@ -3024,18 +2942,16 @@ export default function Inventory() {
                   for (const item of shortageItems) {
                     const invItem = inventory.find(i => i.name.toLowerCase() === item.name.toLowerCase());
                     if (invItem) {
-                      await addDoc(collection(db, 'purchaseOrders'), {
+                      await createPurchaseOrder({
                         materialId: invItem.id,
                         materialName: invItem.name,
                         quantity: item.shortage,
                         unit: invItem.unit,
                         estimatedCost: item.shortage * invItem.unitPrice,
                         supplier: 'Pendiente',
-                        supplierId: 'pending',
                         notes: `Compra masiva sugerida por faltante en proyecto: ${projects.find(p => p.id === selectedProjectId)?.name}`,
                         status: 'Pending',
                         date: new Date().toISOString().split('T')[0],
-                        createdAt: serverTimestamp()
                       });
                     }
                   }

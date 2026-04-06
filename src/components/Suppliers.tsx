@@ -24,9 +24,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency, handleFirestoreError, OperationType } from '../lib/utils';
 import { logAction } from '../lib/audit';
 import { toast } from 'sonner';
-import { collection, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
 import ConfirmModal from './ConfirmModal';
+import { createSupplier, deleteSupplier, listSuppliers, updateSupplier } from '../lib/suppliersApi';
 
 export default function Suppliers() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -50,14 +49,20 @@ export default function Suppliers() {
     balance: 0
   });
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'suppliers'), (snapshot) => {
-      setSuppliers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  const loadSuppliers = React.useCallback(async () => {
+    try {
+      const items = await listSuppliers();
+      setSuppliers(items);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'suppliers');
+    } finally {
       setLoading(false);
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'suppliers'));
-
-    return () => unsubscribe();
+    }
   }, []);
+
+  useEffect(() => {
+    loadSuppliers();
+  }, [loadSuppliers]);
 
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter(sup => 
@@ -77,21 +82,17 @@ export default function Suppliers() {
     e.preventDefault();
     try {
       if (isEditMode && editingSupplierId) {
-        await updateDoc(doc(db, 'suppliers', editingSupplierId), {
-          ...newSupplier,
-          updatedAt: serverTimestamp()
-        });
+        await updateSupplier(editingSupplierId, { ...newSupplier });
         toast.success('Proveedor actualizado exitosamente');
         await logAction('Edición de Proveedor', 'Proveedores', `Proveedor ${newSupplier.name} actualizado`, 'update', { supplierId: editingSupplierId });
       } else {
-        const docRef = await addDoc(collection(db, 'suppliers'), {
-          ...newSupplier,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
+        const saved = await createSupplier({ ...newSupplier });
         toast.success('Proveedor registrado exitosamente');
-        await logAction('Registro de Proveedor', 'Proveedores', `Nuevo proveedor ${newSupplier.name} registrado`, 'create', { supplierId: docRef.id });
+        await logAction('Registro de Proveedor', 'Proveedores', `Nuevo proveedor ${newSupplier.name} registrado`, 'create', { supplierId: saved.id });
       }
+
+      await loadSuppliers();
+
       setIsModalOpen(false);
       setIsEditMode(false);
       setEditingSupplierId(null);
@@ -130,9 +131,10 @@ export default function Suppliers() {
     if (!supplierToDelete) return;
     try {
       const supplier = suppliers.find(s => s.id === supplierToDelete);
-      await deleteDoc(doc(db, 'suppliers', supplierToDelete));
+      await deleteSupplier(supplierToDelete);
       toast.success('Proveedor eliminado exitosamente');
       await logAction('Eliminación de Proveedor', 'Proveedores', `Proveedor ${supplier?.name || supplierToDelete} eliminado`, 'delete', { supplierId: supplierToDelete });
+      await loadSuppliers();
       setIsDeleteConfirmOpen(false);
       setSupplierToDelete(null);
     } catch (error) {

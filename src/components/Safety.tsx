@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useCallback, useState, useMemo, useEffect } from 'react';
 import { 
   ShieldAlert, 
   CheckCircle2, 
@@ -27,10 +27,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { cn, handleFirestoreError, OperationType } from '../lib/utils';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { auth } from '../firebase';
 import ConfirmModal from './ConfirmModal';
 import { logAction } from '../lib/audit';
+import { createSafetyIncident, deleteSafetyIncident, listSafetyIncidents, updateSafetyIncident } from '../lib/safetyApi';
 
 export default function Safety() {
   const [incidents, setIncidents] = useState<any[]>([]);
@@ -56,35 +56,37 @@ export default function Safety() {
     status: 'Open'
   });
 
-  useEffect(() => {
-    const q = query(collection(db, 'safety_incidents'), orderBy('date', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setIncidents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  const loadIncidents = useCallback(async () => {
+    try {
+      const items = await listSafetyIncidents();
+      setIncidents(items);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'safety_incidents');
+    } finally {
       setLoading(false);
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'safety_incidents'));
-
-    return () => unsubscribe();
+    }
   }, []);
+
+  useEffect(() => {
+    loadIncidents();
+  }, [loadIncidents]);
 
   const handleAddIncident = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (isEditMode && editingIncidentId) {
-        await updateDoc(doc(db, 'safety_incidents', editingIncidentId), {
-          ...newIncident,
-          updatedAt: serverTimestamp()
-        });
+        await updateSafetyIncident(editingIncidentId, newIncident);
         toast.success('Incidente actualizado');
         await logAction('Edición de Incidente', 'Seguridad', `Incidente ${newIncident.title} actualizado`, 'update', { incidentId: editingIncidentId });
       } else {
-        const docRef = await addDoc(collection(db, 'safety_incidents'), {
+        const created = await createSafetyIncident({
           ...newIncident,
-          createdAt: serverTimestamp(),
           authorEmail: auth.currentUser?.email || 'salazaroliveros@gmail.com'
         });
         toast.success('Incidente registrado exitosamente');
-        await logAction('Reporte de Incidente', 'Seguridad', `Nuevo incidente reportado: ${newIncident.title}`, 'create', { incidentId: docRef.id });
+        await logAction('Reporte de Incidente', 'Seguridad', `Nuevo incidente reportado: ${newIncident.title}`, 'create', { incidentId: created.id });
       }
+      await loadIncidents();
       setIsModalOpen(false);
       resetForm();
     } catch (error) {
@@ -132,9 +134,10 @@ export default function Safety() {
     if (!incidentToDelete) return;
     try {
       const inc = incidents.find(i => i.id === incidentToDelete);
-      await deleteDoc(doc(db, 'safety_incidents', incidentToDelete));
+      await deleteSafetyIncident(incidentToDelete);
       toast.success('Incidente eliminado');
       await logAction('Eliminación de Incidente', 'Seguridad', `Incidente ${inc?.title} eliminado`, 'delete', { incidentId: incidentToDelete });
+      await loadIncidents();
       setIsDeleteConfirmOpen(false);
       setIncidentToDelete(null);
     } catch (error) {
@@ -252,7 +255,7 @@ export default function Safety() {
                 <h3 className="text-xl font-black text-slate-900 dark:text-white">
                   {isEditMode ? 'Editar Incidente' : 'Reportar Incidente'}
                 </h3>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                <button title="Cerrar formulario de incidente" aria-label="Cerrar formulario de incidente" onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
                   <X size={20} className="text-slate-500" />
                 </button>
               </div>
@@ -287,6 +290,8 @@ export default function Safety() {
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo</label>
                     <select
+                      title="Tipo de incidente"
+                      aria-label="Tipo de incidente"
                       value={newIncident.type}
                       onChange={(e) => setNewIncident({ ...newIncident, type: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -300,6 +305,8 @@ export default function Safety() {
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Severidad</label>
                     <select
+                      title="Severidad del incidente"
+                      aria-label="Severidad del incidente"
                       value={newIncident.severity}
                       onChange={(e) => setNewIncident({ ...newIncident, severity: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -317,6 +324,8 @@ export default function Safety() {
                     <input
                       required
                       type="text"
+                      title="Ubicacion del incidente"
+                      placeholder="Ubicacion del incidente"
                       value={newIncident.location}
                       onChange={(e) => setNewIncident({ ...newIncident, location: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -327,6 +336,8 @@ export default function Safety() {
                     <input
                       required
                       type="date"
+                      title="Fecha del incidente"
+                      placeholder="Fecha del incidente"
                       value={newIncident.date}
                       onChange={(e) => setNewIncident({ ...newIncident, date: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -336,6 +347,8 @@ export default function Safety() {
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado</label>
                   <select
+                    title="Estado del incidente"
+                    aria-label="Estado del incidente"
                     value={newIncident.status}
                     onChange={(e) => setNewIncident({ ...newIncident, status: e.target.value })}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -349,6 +362,8 @@ export default function Safety() {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Descripción</label>
                   <textarea
                     required
+                    title="Descripcion del incidente"
+                    placeholder="Descripcion del incidente"
                     value={newIncident.description}
                     onChange={(e) => setNewIncident({ ...newIncident, description: e.target.value })}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all h-20 resize-none"
@@ -463,12 +478,16 @@ export default function Safety() {
                       <td className="px-4 sm:px-6 py-3 sm:py-4 text-right">
                         <div className="flex items-center justify-end gap-1 sm:gap-2">
                           <button 
+                            title={`Editar incidente ${inc.title || inc.type}`}
+                            aria-label={`Editar incidente ${inc.title || inc.type}`}
                             onClick={() => handleEdit(inc)}
                             className="p-1.5 sm:p-2 text-slate-400 hover:text-primary transition-colors"
                           >
                             <Edit2 size={14} className="sm:w-4 sm:h-4" />
                           </button>
                           <button 
+                            title={`Eliminar incidente ${inc.title || inc.type}`}
+                            aria-label={`Eliminar incidente ${inc.title || inc.type}`}
                             onClick={() => handleDelete(inc.id)}
                             className="p-1.5 sm:p-2 text-slate-400 hover:text-rose-600 transition-colors"
                           >
@@ -497,6 +516,8 @@ export default function Safety() {
                 </p>
                 <div className="flex items-center gap-2">
                   <button
+                    title="Pagina anterior"
+                    aria-label="Pagina anterior"
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-50 text-slate-600 dark:text-slate-400"
@@ -504,6 +525,8 @@ export default function Safety() {
                     <ChevronLeft size={16} />
                   </button>
                   <button
+                    title="Pagina siguiente"
+                    aria-label="Pagina siguiente"
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-50 text-slate-600 dark:text-slate-400"

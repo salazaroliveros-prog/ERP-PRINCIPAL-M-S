@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, query, orderBy, limit, where, arrayUnion } from 'firebase/firestore';
-import { db, storage } from '../firebase';
+import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { 
   Plus, 
@@ -38,6 +37,17 @@ import L from 'leaflet';
 import ConfirmModal from './ConfirmModal';
 import { FormModal } from './FormModal';
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
+import {
+  addClientAttachment,
+  createClient,
+  createClientChat,
+  createClientInteraction,
+  deleteClient,
+  listClientChats,
+  listClientInteractions,
+  listClients,
+  updateClient,
+} from '../lib/clientsApi';
 
 // Client-side cache
 let cachedClients: any[] = [];
@@ -80,6 +90,21 @@ export default function Clients() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  const loadClients = React.useCallback(async () => {
+    try {
+      const items = await listClients();
+      setClients(items);
+      cachedClients = items;
+
+      if (selectedClient) {
+        const refreshed = items.find((c: any) => c.id === selectedClient.id);
+        if (refreshed) setSelectedClient(refreshed);
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'clients');
+    }
+  }, [selectedClient]);
+
   const validateField = (name: string, value: any) => {
     let error = '';
     if (!value && value !== 0) {
@@ -103,45 +128,23 @@ export default function Clients() {
   });
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'clients'), (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setClients(docs);
-      cachedClients = docs; // Update cache
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'clients'));
-    return unsubscribe;
-  }, []);
+    loadClients();
+  }, [loadClients]);
 
   useEffect(() => {
     if (!selectedClient || (!isChatOpen && !(isDetailOpen && activeDetailTab === 'chat'))) return;
 
-    const q = query(
-      collection(db, 'clientChats'),
-      where('clientId', '==', selectedClient.id),
-      orderBy('createdAt', 'asc'),
-      limit(50)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setChatMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, `clientChats/${selectedClient.id}`));
-
-    return unsubscribe;
+    listClientChats(selectedClient.id)
+      .then(setChatMessages)
+      .catch((error) => handleFirestoreError(error, OperationType.GET, `clientChats/${selectedClient.id}`));
   }, [selectedClient, isChatOpen, activeDetailTab, isDetailOpen]);
 
   useEffect(() => {
     if (!selectedClient || !isDetailOpen || activeDetailTab !== 'logs') return;
 
-    const q = query(
-      collection(db, 'clients', selectedClient.id, 'interactions'),
-      orderBy('date', 'desc'),
-      limit(50)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setInteractionLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, `clients/${selectedClient.id}/interactions`));
-
-    return unsubscribe;
+    listClientInteractions(selectedClient.id)
+      .then(setInteractionLogs)
+      .catch((error) => handleFirestoreError(error, OperationType.GET, `clients/${selectedClient.id}/interactions`));
   }, [selectedClient, isDetailOpen, activeDetailTab]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -149,18 +152,14 @@ export default function Clients() {
     if (!newMessage.trim() || !selectedClient) return;
 
     try {
-      const chatRef = collection(db, 'clientChats');
-      await addDoc(chatRef, {
-        clientId: selectedClient.id,
+      await createClientChat(selectedClient.id, {
         text: newMessage,
         sender: 'Admin',
-        createdAt: serverTimestamp()
       });
 
-      // Update last interaction on client
-      await updateDoc(doc(db, 'clients', selectedClient.id), {
-        lastInteraction: serverTimestamp()
-      });
+      const refreshedChats = await listClientChats(selectedClient.id);
+      setChatMessages(refreshedChats);
+      await loadClients();
 
       setNewMessage('');
     } catch (error) {
@@ -173,10 +172,14 @@ export default function Clients() {
     if (!newLog.notes.trim() || !selectedClient) return;
 
     try {
-      await addDoc(collection(db, 'clients', selectedClient.id, 'interactions'), {
+      await createClientInteraction(selectedClient.id, {
         ...newLog,
-        createdAt: serverTimestamp()
       });
+
+      const refreshedLogs = await listClientInteractions(selectedClient.id);
+      setInteractionLogs(refreshedLogs);
+      await loadClients();
+
       toast.success('Interacción registrada');
       setIsLogModalOpen(false);
       setNewLog({ type: 'Call', notes: '', date: new Date().toISOString().split('T')[0] });
@@ -196,14 +199,14 @@ export default function Clients() {
         navigator.geolocation.getCurrentPosition(
           async (position) => {
             try {
-              await updateDoc(doc(db, 'clients', selectedClient.id), {
+              await updateClient(selectedClient.id, {
                 location: {
                   lat: position.coords.latitude,
                   lng: position.coords.longitude,
                   accuracy: position.coords.accuracy,
-                  updatedAt: serverTimestamp()
                 }
               });
+              await loadClients();
               resolve(position);
             } catch (error) {
               reject(error);
@@ -232,14 +235,14 @@ export default function Clients() {
       await uploadBytes(fileRef, file);
       const url = await getDownloadURL(fileRef);
 
-      await updateDoc(doc(db, 'clients', selectedClient.id), {
-        attachments: arrayUnion({
-          name: file.name,
-          url: url,
-          type: file.type,
-          createdAt: new Date().toISOString()
-        })
+      await addClientAttachment(selectedClient.id, {
+        name: file.name,
+        url: url,
+        type: file.type,
+        createdAt: new Date().toISOString(),
       });
+
+      await loadClients();
 
       toast.success('Archivo subido con éxito', { id: toastId });
     } catch (error) {
@@ -252,9 +255,10 @@ export default function Clients() {
   const handleCloseChat = async () => {
     if (selectedClient) {
       try {
-        await updateDoc(doc(db, 'clients', selectedClient.id), {
-          lastInteraction: serverTimestamp()
+        await updateClient(selectedClient.id, {
+          lastInteraction: new Date().toISOString(),
         });
+        await loadClients();
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, `clients/${selectedClient.id}`);
       }
@@ -271,8 +275,9 @@ export default function Clients() {
     if (!clientToDelete) return;
     try {
       const client = clients.find(c => c.id === clientToDelete);
-      await deleteDoc(doc(db, 'clients', clientToDelete));
+      await deleteClient(clientToDelete);
       setClientToDelete(null);
+      await loadClients();
       toast.success('Cliente eliminado con éxito');
       await logAction('Eliminación de Cliente', 'Clientes', `Cliente ${client?.name || clientToDelete} eliminado`, 'delete', { clientId: clientToDelete });
     } catch (error) {
@@ -321,21 +326,20 @@ export default function Clients() {
     setIsSubmitting(true);
     try {
       if (selectedClient && isModalOpen) {
-        await updateDoc(doc(db, 'clients', selectedClient.id), {
-          ...newClient,
-          updatedAt: serverTimestamp()
-        });
+        await updateClient(selectedClient.id, { ...newClient });
         toast.success('Cliente actualizado con éxito');
         await logAction('Edición de Cliente', 'Clientes', `Cliente ${newClient.name} actualizado`, 'update', { clientId: selectedClient.id });
       } else {
-        const docRef = await addDoc(collection(db, 'clients'), {
+        const saved = await createClient({
           ...newClient,
-          createdAt: serverTimestamp(),
-          lastInteraction: serverTimestamp()
+          lastInteraction: new Date().toISOString(),
         });
         toast.success('Cliente guardado con éxito');
-        await logAction('Registro de Cliente', 'Clientes', `Nuevo cliente ${newClient.name} registrado`, 'create', { clientId: docRef.id });
+        await logAction('Registro de Cliente', 'Clientes', `Nuevo cliente ${newClient.name} registrado`, 'create', { clientId: saved.id });
       }
+
+      await loadClients();
+
       setIsModalOpen(false);
       setNewClient({ name: '', email: '', phone: '', company: '', contactPerson: '', contacto: '', status: 'Lead', notes: '' });
       setValidationErrors({});

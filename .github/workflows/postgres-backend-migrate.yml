@@ -1,0 +1,53 @@
+name: PostgreSQL Backend Migration
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - server.ts
+      - scripts/migrate.ts
+      - sql/**
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate-postgres:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run migrations
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL no esta configurado. Se omiten migraciones."
+            exit 0
+          fi
+          npm run db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Trigger backend deploy webhook
+        run: |
+          if [ -z "$BACKEND_DEPLOY_WEBHOOK_URL" ]; then
+            echo "No hay webhook de deploy configurado."
+            exit 0
+          fi
+          curl -fsSL -X POST "$BACKEND_DEPLOY_WEBHOOK_URL"
+        env:
+          BACKEND_DEPLOY_WEBHOOK_URL: ${{ secrets.BACKEND_DEPLOY_WEBHOOK_URL }}

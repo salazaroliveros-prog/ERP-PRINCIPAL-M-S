@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { listenForNotifications, Notification } from '../lib/notifications';
-import { collection, doc, updateDoc, query, where, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
+import { listenForNotifications, listNotifications, markNotificationAsRead, Notification } from '../lib/notifications';
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -24,28 +22,24 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; user: a
       return;
     }
 
-    // Listen for all notifications to show in a list (e.g. in a popover)
-    const q = query(
-      collection(db, 'notifications'),
-      orderBy('createdAt', 'desc')
-    );
+    let mounted = true;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newNotifications = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Notification[];
-      
-      setNotifications(newNotifications);
-      setUnreadCount(newNotifications.filter(n => !n.read).length);
-    }, (error) => {
-      console.error('Error listening for notifications in Provider:', error);
-    });
+    const refreshNotifications = async () => {
+      try {
+        const response = await listNotifications({ limit: 200, offset: 0 });
+        if (!mounted) return;
+        setNotifications(response.items);
+        setUnreadCount(response.items.filter(n => !n.read).length);
+      } catch (error) {
+        console.error('Error loading notifications in Provider:', error);
+      }
+    };
+
+    refreshNotifications();
+    const refreshInterval = window.setInterval(refreshNotifications, 10000);
 
     // Also listen for NEW notifications specifically to show toast
     const unsubscribeNew = listenForNotifications((n) => {
-      // Only toast if it's really new (created in the last few seconds)
-      // The listenForNotifications already filters by createdAt > now when it starts
       toast(n.title, {
         description: n.body,
         duration: 8000, // Longer duration for important alerts
@@ -54,17 +48,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; user: a
           onClick: () => markAsRead(n.id!)
         }
       });
+      refreshNotifications();
     });
 
     return () => {
-      unsubscribe();
+      mounted = false;
+      window.clearInterval(refreshInterval);
       unsubscribeNew();
     };
   }, [user]);
 
   const markAsRead = async (id: string) => {
     try {
-      await updateDoc(doc(db, 'notifications', id), { read: true });
+      await markNotificationAsRead(id);
+      setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, read: true } : item)));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -73,7 +71,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; user: a
   const markAllAsRead = async () => {
     try {
       const unread = notifications.filter(n => !n.read);
-      await Promise.all(unread.map(n => updateDoc(doc(db, 'notifications', n.id!), { read: true })));
+      await Promise.all(unread.map(n => markNotificationAsRead(n.id!)));
+      setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+      setUnreadCount(0);
     } catch (error) {
       console.error('Error marking all as read:', error);
     }

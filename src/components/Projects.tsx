@@ -1,6 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, getDocs, query, orderBy, writeBatch } from 'firebase/firestore';
-import { db } from '../firebase';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import Papa from 'papaparse';
 import { 
   Plus, 
@@ -66,6 +64,8 @@ import "react-datepicker/dist/react-datepicker.css";
 import ConfirmModal from './ConfirmModal';
 import ProjectBudget from './ProjectBudget';
 import { List, Map as MapIcon } from 'lucide-react';
+import { createBudgetItem, createProject, deleteProject, listProjects, updateProject } from '../lib/projectsApi';
+import { listClients } from '../lib/clientsApi';
 
 const StatusBadge = ({ status }: { status: string }) => {
   const styles: any = {
@@ -332,111 +332,45 @@ export default function Projects() {
     longitude: ''
   });
 
-  useEffect(() => {
-    const seedVillaMariana = async () => {
-      // Only run if we have projects loaded and Villa Mariana is NOT found
-      const villaMariana = projects.find(p => p.name === 'Villa Mariana');
-      if (projects.length > 0 && !villaMariana) {
-        try {
-          // Create project
-          const projectData = {
-            name: 'Villa Mariana',
-            location: 'Ubicación Pendiente',
-            projectManager: 'Ing. Responsable',
-            status: 'Planning',
-            budget: 0,
-            spent: 0,
-            physicalProgress: 0,
-            area: 150,
-            startDate: new Date().toISOString().split('T')[0],
-            endDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            typology: 'RESIDENCIAL',
-            createdAt: serverTimestamp()
-          };
-          const docRef = await addDoc(collection(db, 'projects'), projectData);
-          const projectId = docRef.id;
-          
-          // Seed budget items
-          const templates = APU_TEMPLATES.RESIDENCIAL;
-          const factors = AREA_FACTORS.RESIDENCIAL;
-          const batch = writeBatch(db);
-          let totalBudget = 0;
+  const loadProjectsFromApi = useCallback(async () => {
+    try {
+      const docs = await listProjects();
 
-          templates.forEach((template, index) => {
-            const itemRef = doc(collection(db, `projects/${projectId}/budgetItems`));
-            const factor = factors[template.description] || 0;
-            const quantity = 150 * factor;
-            
-            const materialCost = template.materials.reduce((sum: number, m: any) => sum + (m.quantity * m.unitPrice), 0);
-            const laborCost = template.labor.reduce((sum: number, l: any) => sum + (l.dailyRate / l.yield), 0);
-            const directCost = materialCost + laborCost;
-            const indirectCost = directCost * (template.indirectFactor || 0.2);
-            const totalUnitPrice = directCost + indirectCost;
-            const totalItemPrice = quantity * totalUnitPrice;
-
-            batch.set(itemRef, {
-              projectId,
-              description: template.description,
-              unit: template.unit,
-              quantity,
-              materialCost,
-              laborCost,
-              indirectCost,
-              totalUnitPrice,
-              totalItemPrice,
-              order: index + 1,
-              materials: template.materials,
-              labor: template.labor,
-              indirectFactor: template.indirectFactor || 0.2,
-              createdAt: serverTimestamp()
-            });
-            totalBudget += totalItemPrice;
-          });
-
-          await batch.commit();
-          await updateDoc(doc(db, 'projects', projectId), { budget: totalBudget });
-          toast.success('Proyecto Villa Mariana generado con presupuesto residencial (150m2)');
-        } catch (error) {
-          console.error('Error seeding Villa Mariana:', error);
-        }
-      }
-    };
-
-    seedVillaMariana();
-  }, [projects]);
-
-  useEffect(() => {
-    const unsubProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // Check for status changes using ref to avoid re-subscription loop
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'modified') {
-          const oldData = prevProjectsRef.current.find(p => p.id === change.doc.id);
-          const newData = change.doc.data() as any;
-          if (oldData && oldData.status !== newData.status) {
-            sendNotification(
-              'Cambio de Estado en Obra',
-              `La obra ${newData.name} ha cambiado de ${oldData.status} a ${newData.status}.`,
-              'project'
-            );
-          }
+      docs.forEach((newData) => {
+        const oldData = prevProjectsRef.current.find(p => p.id === newData.id);
+        if (oldData && oldData.status !== newData.status) {
+          sendNotification(
+            'Cambio de Estado en Obra',
+            `La obra ${newData.name} ha cambiado de ${oldData.status} a ${newData.status}.`,
+            'project'
+          );
         }
       });
-      
+
       setProjects(docs);
       prevProjectsRef.current = docs;
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'projects'));
+    } catch (error: any) {
+      toast.error('Error en la base de datos', {
+        description: `No se pudieron cargar proyectos: ${error?.message || 'Error desconocido'}`,
+      });
+    }
+  }, []);
 
-    const unsubClients = onSnapshot(collection(db, 'clients'), (snapshot) => {
-      setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'clients'));
+  const loadClientsFromApi = useCallback(async () => {
+    try {
+      const items = await listClients();
+      setClients(items);
+    } catch (error: any) {
+      toast.error('Error en la base de datos', {
+        description: `No se pudieron cargar clientes: ${error?.message || 'Error desconocido'}`,
+      });
+    }
+  }, []);
 
-    return () => {
-      unsubProjects();
-      unsubClients();
-    };
-  }, []); // Removed projects from dependency array
+  useEffect(() => {
+    loadProjectsFromApi();
+    loadClientsFromApi();
+  }, [loadProjectsFromApi, loadClientsFromApi]);
 
   const handleAISuggestions = async () => {
     if (!newProject.name) {
@@ -557,33 +491,46 @@ export default function Projects() {
       
       if (editingProject) {
         const financialProgress = Number(newProject.budget) > 0 ? (Number(newProject.spent) / Number(newProject.budget)) * 100 : 0;
-        await updateDoc(doc(db, 'projects', editingProject.id), {
-          ...newProject,
+        await updateProject(editingProject.id, {
+          name: newProject.name,
+          location: newProject.location,
+          projectManager: newProject.projectManager,
+          status: newProject.status,
           budget: Number(newProject.budget),
           spent: Number(newProject.spent),
           physicalProgress: Number(newProject.physicalProgress),
+          financialProgress,
           area: Number(newProject.area),
-          financialProgress: financialProgress,
-          coordinates: coordinates,
-          updatedAt: serverTimestamp()
+          startDate: newProject.startDate,
+          endDate: newProject.endDate,
+          clientUid: newProject.clientUid,
+          typology: newProject.typology,
+          latitude: coordinates?.lat ? String(coordinates.lat) : '',
+          longitude: coordinates?.lng ? String(coordinates.lng) : '',
         });
         toast.success('Obra actualizada con éxito');
         await logAction('Edición de Proyecto', 'Proyectos', `Proyecto ${newProject.name} actualizado`, 'update', { projectId: editingProject.id });
       } else {
         const financialProgress = Number(newProject.budget) > 0 ? (Number(newProject.spent) / Number(newProject.budget)) * 100 : 0;
-        const docRef = await addDoc(collection(db, 'projects'), {
-          ...newProject,
+        const created = await createProject({
+          name: newProject.name,
+          location: newProject.location,
+          projectManager: newProject.projectManager,
+          status: newProject.status,
           budget: Number(newProject.budget),
           spent: Number(newProject.spent),
           physicalProgress: Number(newProject.physicalProgress),
+          financialProgress,
           area: Number(newProject.area),
-          financialProgress: financialProgress,
-          coordinates: coordinates,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
+          startDate: newProject.startDate,
+          endDate: newProject.endDate,
+          clientUid: newProject.clientUid,
+          typology: newProject.typology,
+          latitude: coordinates?.lat ? String(coordinates.lat) : '',
+          longitude: coordinates?.lng ? String(coordinates.lng) : '',
         });
         toast.success('Obra registrada con éxito');
-        await logAction('Registro de Proyecto', 'Proyectos', `Nuevo proyecto ${newProject.name} registrado`, 'create', { projectId: docRef.id });
+        await logAction('Registro de Proyecto', 'Proyectos', `Nuevo proyecto ${newProject.name} registrado`, 'create', { projectId: created.id });
         
         // Initialize budget items based on typology
         const templates = APU_TEMPLATES[newProject.typology as keyof typeof APU_TEMPLATES] || [];
@@ -611,29 +558,37 @@ export default function Projects() {
             estimatedDays = Math.max(...daysPerRole);
           }
 
-          await addDoc(collection(db, `projects/${docRef.id}/budgetItems`), {
-            ...template,
-            projectId: docRef.id,
-            quantity,
-            materialCost,
-            laborCost,
-            indirectCost,
-            totalUnitPrice,
+          await createBudgetItem(created.id, {
+            description: template.description,
+            category: template.category || 'General',
             totalItemPrice,
-            estimatedDays,
             order: i + 1,
-            createdAt: serverTimestamp()
           });
         }
 
         if (totalBudget > 0) {
-          await updateDoc(doc(db, 'projects', docRef.id), {
+          await updateProject(created.id, {
+            name: newProject.name,
+            location: newProject.location,
+            projectManager: newProject.projectManager,
+            status: newProject.status,
             budget: totalBudget,
-            typology: newProject.typology
+            spent: Number(newProject.spent),
+            physicalProgress: Number(newProject.physicalProgress),
+            financialProgress,
+            area: Number(newProject.area),
+            startDate: newProject.startDate,
+            endDate: newProject.endDate,
+            clientUid: newProject.clientUid,
+            typology: newProject.typology,
+            latitude: coordinates?.lat ? String(coordinates.lat) : '',
+            longitude: coordinates?.lng ? String(coordinates.lng) : '',
           });
         }
         toast.success('Obra creada con éxito');
       }
+
+      await loadProjectsFromApi();
       
       setIsModalOpen(false);
       setEditingProject(null);
@@ -775,9 +730,7 @@ export default function Projects() {
   const generateBudgetReport = async (project: any) => {
     try {
       toast.loading('Generando reporte de presupuesto...', { id: 'budget-report' });
-      const budgetRef = collection(db, 'projects', project.id, 'budgetItems');
-      const snapshot = await getDocs(query(budgetRef, orderBy('order', 'asc')));
-      const budgetItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      const budgetItems = await listProjectBudgetItemsDetailed(project.id);
       
       if (budgetItems.length === 0) {
         toast.dismiss('budget-report');
@@ -986,12 +939,13 @@ export default function Projects() {
     if (!projectToDelete) return;
     try {
       const project = projects.find(p => p.id === projectToDelete);
-      await deleteDoc(doc(db, 'projects', projectToDelete));
+      await deleteProject(projectToDelete);
       setProjectToDelete(null);
       toast.success('Obra eliminada con éxito');
       await logAction('Eliminación de Proyecto', 'Proyectos', `Proyecto ${project?.name || projectToDelete} eliminado`, 'delete', { projectId: projectToDelete });
+      await loadProjectsFromApi();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `projects/${projectToDelete}`);
+      toast.error('Error al eliminar proyecto');
     }
   };
 
@@ -1122,7 +1076,7 @@ export default function Projects() {
           continue;
         }
 
-        await addDoc(collection(db, 'projects'), {
+        await createProject({
           name: row.name,
           location: row.location,
           projectManager: row.projectManager || '',
@@ -1131,12 +1085,13 @@ export default function Projects() {
           spent: spent,
           physicalProgress: physicalProgress,
           financialProgress: financialProgress,
+          area: Number(row.area) || 0,
           startDate: row.startDate || new Date().toISOString().split('T')[0],
           endDate: row.endDate || new Date().toISOString().split('T')[0],
           typology: row.typology || 'RESIDENCIAL',
           clientUid: row.clientUid || '',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
+          latitude: row.latitude || '',
+          longitude: row.longitude || '',
         });
         successCount++;
       } catch (error) {
@@ -1152,6 +1107,7 @@ export default function Projects() {
     if (errorCount > 0) {
       toast.error(`${errorCount} proyectos fallaron al cargar (datos inválidos)`);
     }
+    await loadProjectsFromApi();
   };
 
   return (

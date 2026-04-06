@@ -1,6 +1,4 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { collection, onSnapshot, addDoc, query, orderBy, serverTimestamp, limit, startAfter, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
@@ -25,11 +23,13 @@ import {
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
-import { formatCurrency, formatDate, cn, handleFirestoreError, OperationType } from '../lib/utils';
+import { formatCurrency, formatDate, cn } from '../lib/utils';
 import { logAction } from '../lib/audit';
 import { drawLogo } from '../lib/pdfUtils';
 import { FormModal } from './FormModal';
 import { toast } from 'sonner';
+import { createTransaction, deleteTransactionById, listTransactions } from '../lib/financialsApi';
+import { listBudgetItems, listProjects } from '../lib/projectsApi';
 import { GoogleGenAI, Type } from "@google/genai";
 import { 
   AreaChart, 
@@ -86,6 +86,7 @@ const INCOME_CATEGORIES = [
 ];
 
 export default function Financials() {
+  const PAGE_SIZE = 50;
   const [transactions, setTransactions] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -95,7 +96,7 @@ export default function Financials() {
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
   
   const [budgetItems, setBudgetItems] = useState<any[]>([]);
-  const [lastDoc, setLastDoc] = useState<any>(null);
+  const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
@@ -113,52 +114,66 @@ export default function Financials() {
   });
 
   useEffect(() => {
-    if (newTransaction.projectId) {
-      const q = query(collection(db, `projects/${newTransaction.projectId}/budgetItems`), orderBy('order', 'asc'));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        setBudgetItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }, (error) => handleFirestoreError(error, OperationType.GET, `projects/${newTransaction.projectId}/budgetItems`));
-      return unsubscribe;
-    } else {
-      setBudgetItems([]);
-    }
+    const loadBudgetItemsForProject = async () => {
+      if (!newTransaction.projectId) {
+        setBudgetItems([]);
+        return;
+      }
+
+      try {
+        const items = await listBudgetItems(newTransaction.projectId);
+        setBudgetItems(items);
+      } catch (error: any) {
+        toast.error('Error en la base de datos', {
+          description: `No se pudieron cargar partidas del proyecto: ${error?.message || 'Error desconocido'}`,
+        });
+        setBudgetItems([]);
+      }
+    };
+
+    loadBudgetItemsForProject();
   }, [newTransaction.projectId]);
 
   useEffect(() => {
-    const q = query(collection(db, 'transactions'), orderBy('date', 'desc'), limit(50));
-    const unsubTransactions = onSnapshot(q, (snapshot) => {
-      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-      setHasMore(snapshot.docs.length === 50);
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'transactions'));
-    
-    const unsubProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'projects'));
+    let isActive = true;
+
+    const loadInitialData = async () => {
+      try {
+        const [response, projectItems] = await Promise.all([
+          listTransactions({ limit: PAGE_SIZE, offset: 0 }),
+          listProjects(),
+        ]);
+        if (!isActive) return;
+        setTransactions(response.items);
+        setOffset(response.items.length);
+        setHasMore(response.hasMore);
+        setProjects(projectItems);
+      } catch (error: any) {
+        toast.error('Error en la base de datos', {
+          description: `No se pudieron cargar datos iniciales: ${error?.message || 'Error desconocido'}`,
+        });
+      }
+    };
+
+    loadInitialData();
 
     return () => {
-      unsubTransactions();
-      unsubProjects();
+      isActive = false;
     };
   }, []);
 
   const loadMoreTransactions = async () => {
-    if (!lastDoc || isLoadingMore) return;
+    if (isLoadingMore || !hasMore) return;
     setIsLoadingMore(true);
     try {
-      const q = query(
-        collection(db, 'transactions'), 
-        orderBy('date', 'desc'), 
-        startAfter(lastDoc), 
-        limit(50)
-      );
-      const snapshot = await getDocs(q);
-      const newBatch = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setTransactions(prev => [...prev, ...newBatch]);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-      setHasMore(snapshot.docs.length === 50);
+      const response = await listTransactions({ limit: PAGE_SIZE, offset });
+      setTransactions(prev => [...prev, ...response.items]);
+      setOffset(prev => prev + response.items.length);
+      setHasMore(response.hasMore);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'transactions');
+      toast.error('Error en la base de datos', {
+        description: `No se pudieron cargar más transacciones: ${error instanceof Error ? error.message : String(error)}`,
+      });
     } finally {
       setIsLoadingMore(false);
     }
@@ -477,12 +492,15 @@ export default function Financials() {
     if (!transactionToDelete) return;
     try {
       const transaction = transactions.find(t => t.id === transactionToDelete);
-      await deleteDoc(doc(db, 'transactions', transactionToDelete));
+      await deleteTransactionById(transactionToDelete);
+      setTransactions(prev => prev.filter(t => t.id !== transactionToDelete));
       toast.success('Transacción eliminada con éxito');
       await logAction('Eliminación de Transacción', 'Finanzas', `Transacción de ${formatCurrency(transaction?.amount || 0)} eliminada`, 'delete', { transactionId: transactionToDelete });
       setTransactionToDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `transactions/${transactionToDelete}`);
+      toast.error('Error al eliminar transacción', {
+        description: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setIsDeleteConfirmOpen(false);
     }
@@ -503,13 +521,14 @@ export default function Financials() {
     }
 
     try {
-      const docRef = await addDoc(collection(db, 'transactions'), {
+      const created = await createTransaction({
         ...newTransaction,
-        amount: Number(newTransaction.amount),
-        createdAt: serverTimestamp()
+        amount: Number(newTransaction.amount)
       });
+      setTransactions(prev => [created, ...prev]);
+      setOffset(prev => prev + 1);
       toast.success('Transacción registrada con éxito');
-      await logAction('Registro de Transacción', 'Finanzas', `${newTransaction.type === 'Income' ? 'Ingreso' : 'Egreso'} de ${formatCurrency(Number(newTransaction.amount))} registrado`, 'create', { transactionId: docRef.id });
+      await logAction('Registro de Transacción', 'Finanzas', `${newTransaction.type === 'Income' ? 'Ingreso' : 'Egreso'} de ${formatCurrency(Number(newTransaction.amount))} registrado`, 'create', { transactionId: created.id });
       setIsModalOpen(false);
       setNewTransaction({
         projectId: '',
@@ -521,7 +540,9 @@ export default function Financials() {
         description: ''
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'transactions');
+      toast.error('Error al registrar transacción', {
+        description: error instanceof Error ? error.message : String(error),
+      });
     }
   };
 
@@ -564,28 +585,25 @@ export default function Financials() {
 
   useEffect(() => {
     const fetchAllBudgetItems = async () => {
-      const allItems: any[] = [];
-      for (const project of projects) {
-        const q = query(collection(db, `projects/${project.id}/budgetItems`));
-        const snapshot = await getDocs(q);
-        snapshot.docs.forEach(doc => {
-          allItems.push({ ...doc.data(), projectId: project.id });
+      try {
+        const allItems = await listBudgetItems();
+        setAllBudgetItems(allItems);
+      } catch (error: any) {
+        toast.error('Error en la base de datos', {
+          description: `No se pudieron cargar partidas presupuestarias: ${error?.message || 'Error desconocido'}`,
         });
       }
-      setAllBudgetItems(allItems);
     };
 
-    if (projects.length > 0) {
-      fetchAllBudgetItems();
-    }
-  }, [projects]);
+    fetchAllBudgetItems();
+  }, []);
 
   const deviationAnalysis = useMemo(() => {
     const categories = EXPENSE_CATEGORIES;
     const analysis = categories.map(category => {
       const budgeted = allBudgetItems
         .filter(item => item.category === category)
-        .reduce((acc, item) => acc + (item.total || 0), 0);
+        .reduce((acc, item) => acc + (item.totalItemPrice || item.total || 0), 0);
       
       const spent = transactions
         .filter(t => t.type === 'Expense' && t.category === category)

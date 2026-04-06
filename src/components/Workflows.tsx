@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { 
   CheckSquare, 
   Clock, 
@@ -19,11 +19,10 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, onSnapshot, orderBy, updateDoc, doc, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
-import { db } from '../firebase';
 import { cn, handleFirestoreError, OperationType } from '../lib/utils';
 import { logAction } from '../lib/audit';
 import { toast } from 'sonner';
+import { createWorkflow, deleteWorkflow, listWorkflows, updateWorkflow, updateWorkflowStatus } from '../lib/workflowsApi';
 
 interface WorkflowTask {
   id: string;
@@ -32,7 +31,7 @@ interface WorkflowTask {
   referenceId: string;
   status: 'pending' | 'approved' | 'rejected';
   requestedBy: string;
-  requestedAt: any;
+  requestedAt: string;
   priority: 'low' | 'medium' | 'high';
   description: string;
   amount?: number;
@@ -61,27 +60,25 @@ const Workflows = () => {
     requestedBy: ''
   });
 
-  useEffect(() => {
-    const q = query(collection(db, 'workflows'), orderBy('requestedAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const tasksData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as WorkflowTask[];
-      setTasks(tasksData);
+  const loadWorkflows = useCallback(async () => {
+    try {
+      const items = await listWorkflows();
+      setTasks(items as WorkflowTask[]);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'workflows');
+    } finally {
       setLoading(false);
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'workflows'));
-
-    return unsubscribe;
+    }
   }, []);
+
+  useEffect(() => {
+    loadWorkflows();
+  }, [loadWorkflows]);
 
   const handleAction = async (taskId: string, action: 'approved' | 'rejected') => {
     try {
       const task = tasks.find(t => t.id === taskId);
-      await updateDoc(doc(db, 'workflows', taskId), {
-        status: action,
-        resolvedAt: serverTimestamp()
-      });
+      await updateWorkflowStatus(taskId, action);
 
       if (task) {
         await logAction(
@@ -94,6 +91,7 @@ const Workflows = () => {
       }
 
       toast.success(`Tarea ${action === 'approved' ? 'aprobada' : 'rechazada'} correctamente`);
+      await loadWorkflows();
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `workflows/${taskId}`);
     }
@@ -103,21 +101,15 @@ const Workflows = () => {
     e.preventDefault();
     try {
       if (editingTask) {
-        await updateDoc(doc(db, 'workflows', editingTask.id), {
-          ...formData,
-          updatedAt: serverTimestamp()
-        });
+        await updateWorkflow(editingTask.id, formData);
         await logAction('Editar Tarea de Flujo', 'Workflows', `Se editó la tarea: ${formData.title}`, 'update');
         toast.success('Tarea actualizada correctamente');
       } else {
-        await addDoc(collection(db, 'workflows'), {
-          ...formData,
-          status: 'pending',
-          requestedAt: serverTimestamp()
-        });
+        await createWorkflow(formData);
         await logAction('Crear Tarea de Flujo', 'Workflows', `Se creó una nueva tarea: ${formData.title}`, 'create');
         toast.success('Tarea creada correctamente');
       }
+      await loadWorkflows();
       setIsModalOpen(false);
       setEditingTask(null);
       resetForm();
@@ -129,9 +121,10 @@ const Workflows = () => {
   const handleDeleteTask = async () => {
     if (!taskToDelete) return;
     try {
-      await deleteDoc(doc(db, 'workflows', taskToDelete));
+      await deleteWorkflow(taskToDelete);
       await logAction('Eliminar Tarea de Flujo', 'Workflows', `Se eliminó la tarea ID: ${taskToDelete}`, 'delete');
       toast.success('Tarea eliminada correctamente');
+      await loadWorkflows();
       setIsDeleteModalOpen(false);
       setTaskToDelete(null);
     } catch (error) {
@@ -413,7 +406,7 @@ const Workflows = () => {
                 <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                   {editingTask ? 'Editar Tarea' : 'Nueva Tarea de Flujo'}
                 </h2>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+                <button title="Cerrar formulario" aria-label="Cerrar formulario" onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
                   <XCircle size={20} className="text-slate-400" />
                 </button>
               </div>
@@ -434,6 +427,8 @@ const Workflows = () => {
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tipo de Proceso</label>
                     <select
+                      title="Tipo de proceso"
+                      aria-label="Tipo de proceso"
                       value={formData.type}
                       onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all"
@@ -458,6 +453,8 @@ const Workflows = () => {
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prioridad</label>
                     <select
+                      title="Prioridad"
+                      aria-label="Prioridad"
                       value={formData.priority}
                       onChange={(e) => setFormData({ ...formData, priority: e.target.value as any })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all"
@@ -471,6 +468,8 @@ const Workflows = () => {
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Monto (Opcional)</label>
                     <input
                       type="number"
+                      title="Monto"
+                      placeholder="Monto"
                       value={formData.amount}
                       onChange={(e) => setFormData({ ...formData, amount: Number(e.target.value) })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all"

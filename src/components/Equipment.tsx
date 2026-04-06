@@ -1,6 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { 
   Plus, 
   Wrench, 
@@ -31,6 +29,8 @@ import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { drawLogo } from '../lib/pdfUtils';
+import { listProjects } from '../lib/projectsApi';
+import { createEquipment, deleteEquipment, listEquipment, updateEquipment } from '../lib/equipmentApi';
 
 export default function Equipment() {
   const [equipment, setEquipment] = useState<any[]>([]);
@@ -56,19 +56,19 @@ export default function Equipment() {
     status: 'Available'
   });
 
-  useEffect(() => {
-    const unsubEquip = onSnapshot(collection(db, 'equipment'), (snapshot) => {
-      setEquipment(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'equipment'));
-    const unsubProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'projects'));
-
-    return () => {
-      unsubEquip();
-      unsubProjects();
-    };
+  const loadEquipmentData = useCallback(async () => {
+    try {
+      const [equipmentItems, projectItems] = await Promise.all([listEquipment(), listProjects()]);
+      setEquipment(equipmentItems);
+      setProjects(projectItems);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'equipment');
+    }
   }, []);
+
+  useEffect(() => {
+    loadEquipmentData();
+  }, [loadEquipmentData]);
 
   const filteredEquipment = useMemo(() => {
     return equipment.filter(item => 
@@ -120,24 +120,20 @@ export default function Equipment() {
         ...newEquip,
         name: newEquip.name.trim(),
         dailyRate: Number(newEquip.dailyRate),
+        estimatedDays: Number(newEquip.estimatedDays || 0),
         status: newEquip.projectId ? 'In Use' : newEquip.status
       };
 
       if (editingEquip) {
-        await updateDoc(doc(db, 'equipment', editingEquip.id), {
-          ...equipData,
-          updatedAt: serverTimestamp()
-        });
+        await updateEquipment(editingEquip.id, equipData);
         toast.success('Equipo actualizado con éxito');
         await logAction('Edición de Equipo', 'Maquinaria', `Equipo ${equipData.name} actualizado`, 'update', { equipmentId: editingEquip.id });
       } else {
-        const docRef = await addDoc(collection(db, 'equipment'), {
-          ...equipData,
-          createdAt: serverTimestamp()
-        });
+        const created = await createEquipment(equipData);
         toast.success('Equipo registrado con éxito');
-        await logAction('Registro de Equipo', 'Maquinaria', `Nuevo equipo ${equipData.name} registrado`, 'create', { equipmentId: docRef.id });
+        await logAction('Registro de Equipo', 'Maquinaria', `Nuevo equipo ${equipData.name} registrado`, 'create', { equipmentId: created.id });
       }
+      await loadEquipmentData();
       setIsModalOpen(false);
       setEditingEquip(null);
       setNewEquip({ name: '', type: 'Owned', projectId: '', dailyRate: 0, estimatedDays: 0, status: 'Available' });
@@ -252,10 +248,11 @@ export default function Equipment() {
     if (!equipToDelete) return;
     try {
       const equip = equipment.find(e => e.id === equipToDelete);
-      await deleteDoc(doc(db, 'equipment', equipToDelete));
+      await deleteEquipment(equipToDelete);
       setEquipToDelete(null);
       toast.success('Equipo eliminado con éxito');
       await logAction('Eliminación de Equipo', 'Maquinaria', `Equipo ${equip?.name || equipToDelete} eliminado`, 'delete', { equipmentId: equipToDelete });
+      await loadEquipmentData();
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `equipment/${equipToDelete}`);
     }
@@ -391,12 +388,14 @@ export default function Equipment() {
                         <div className="flex items-center justify-end gap-2">
                           <button 
                             onClick={() => openEditModal(item)}
+                            title="Editar equipo"
                             className="p-2 text-slate-400 dark:text-slate-500 hover:text-primary dark:hover:text-primary transition-colors"
                           >
                             <Settings size={16} />
                           </button>
                           <button 
                             onClick={() => handleDeleteEquip(item.id)}
+                            title="Eliminar equipo"
                             className="p-2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
                           >
                             <Trash2 size={16} />
@@ -459,12 +458,14 @@ export default function Equipment() {
               <div className="flex gap-1.5 sm:gap-2 pt-3 sm:pt-4 mt-3 sm:mt-4 border-t border-slate-50 dark:border-slate-800">
                 <button 
                   onClick={() => openEditModal(item)}
+                  title="Editar equipo"
                   className="flex-1 py-1.5 sm:py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] sm:text-xs font-bold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all border border-slate-100 dark:border-slate-700"
                 >
                   Asignar / Editar
                 </button>
                 <button 
                   onClick={() => handleDeleteEquip(item.id)}
+                  title="Eliminar equipo"
                   className="p-1.5 sm:p-2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
                 >
                   <Trash2 size={14} className="sm:w-4 sm:h-4" />
@@ -486,6 +487,8 @@ export default function Equipment() {
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Por página:</label>
               <select 
+                aria-label="Cantidad de equipos por pagina"
+                title="Cantidad de equipos por pagina"
                 className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold outline-none text-slate-900 dark:text-white"
                 value={itemsPerPage}
                 onChange={(e) => {
@@ -503,6 +506,8 @@ export default function Equipment() {
             <button 
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              aria-label="Pagina anterior"
+              title="Pagina anterior"
               className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
             >
               <ChevronLeft size={20} />
@@ -534,6 +539,8 @@ export default function Equipment() {
             <button 
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              aria-label="Pagina siguiente"
+              title="Pagina siguiente"
               className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
             >
               <ChevronRight size={20} />

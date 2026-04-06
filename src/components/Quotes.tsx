@@ -1,7 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
 import { 
   Plus, 
   FileText, 
@@ -22,13 +20,12 @@ import {
   MessageCircle
 } from 'lucide-react';
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
-import { formatCurrency, formatDate, cn, handleFirestoreError, OperationType, safeCreate, updateWithConflictCheck, safeUpdate } from '../lib/utils';
+import { formatCurrency, formatDate, cn, handleFirestoreError, OperationType } from '../lib/utils';
 import { logAction } from '../lib/audit';
 import { motion, AnimatePresence } from 'motion/react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import ConfirmModal from './ConfirmModal';
-import { deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { drawLogo } from '../lib/pdfUtils';
@@ -36,6 +33,9 @@ import { toast } from 'sonner';
 import { FormModal } from './FormModal';
 import { Info, List, ChevronLeft, ChevronRight, CheckCircle2, Database, Sparkles, Loader2 } from 'lucide-react';
 import { APU_TEMPLATES } from '../constants/apuData';
+import { listClients } from '../lib/clientsApi';
+import { listProjects, listProjectBudgetItemsDetailed } from '../lib/projectsApi';
+import { createQuoteRecord, deleteQuoteRecord, listQuotes, updateQuoteRecord } from '../lib/quotesApi';
 
 export default function Quotes() {
   const [quotes, setQuotes] = useState<any[]>([]);
@@ -69,7 +69,6 @@ export default function Quotes() {
       laborCost?: number;
     }[];
     status: string;
-    _lastModifiedAt?: any;
   }>({
     clientId: '',
     projectId: '',
@@ -85,36 +84,35 @@ export default function Quotes() {
   const [selectedItemForAPU, setSelectedItemForAPU] = useState<any | null>(null);
   const [isAPUModalOpen, setIsAPUModalOpen] = useState(false);
 
-  useEffect(() => {
-    const unsubQuotes = onSnapshot(collection(db, 'quotes'), (snapshot) => {
-      setQuotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'quotes'));
-    
-    const unsubClients = onSnapshot(collection(db, 'clients'), (snapshot) => {
-      setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'clients'));
+  const loadQuotes = useCallback(async () => {
+    try {
+      const items = await listQuotes();
+      setQuotes(items);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'quotes');
+    }
+  }, []);
 
-    const unsubProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'projects'));
-
-    return () => {
-      unsubQuotes();
-      unsubClients();
-      unsubProjects();
-    };
+  const loadReferenceData = useCallback(async () => {
+    try {
+      const [clientItems, projectItems] = await Promise.all([listClients(), listProjects()]);
+      setClients(clientItems);
+      setProjects(projectItems);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'quotes/reference-data');
+    }
   }, []);
 
   useEffect(() => {
+    loadQuotes();
+    loadReferenceData();
+  }, [loadQuotes, loadReferenceData]);
+
+  useEffect(() => {
     if (newQuote.projectId) {
-      const q = query(
-        collection(db, `projects/${newQuote.projectId}/budgetItems`),
-        orderBy('order', 'asc')
-      );
-      const unsub = onSnapshot(q, (snapshot) => {
-        setProjectBudgetItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }, (error) => handleFirestoreError(error, OperationType.GET, `projects/${newQuote.projectId}/budgetItems`));
-      return unsub;
+      listProjectBudgetItemsDetailed(newQuote.projectId)
+        .then((items) => setProjectBudgetItems(items as any[]))
+        .catch((error) => handleFirestoreError(error, OperationType.GET, `projects/${newQuote.projectId}/budgetItems`));
     } else {
       setProjectBudgetItems([]);
     }
@@ -272,20 +270,17 @@ export default function Quotes() {
 
     try {
       const quoteData = {
-        ...newQuote,
+        clientId: newQuote.clientId,
+        projectId: newQuote.projectId,
         date: newQuote.date.toISOString(),
+        notes: newQuote.notes,
+        items: newQuote.items,
+        status: newQuote.status,
         total: totalQuote,
       };
 
       if (editingQuoteId) {
-        const success = await updateWithConflictCheck(
-          'quotes',
-          editingQuoteId,
-          quoteData,
-          newQuote._lastModifiedAt
-        );
-
-        if (!success) return;
+        await updateQuoteRecord(editingQuoteId, quoteData);
 
         await logAction(
           'Actualización de Cotización',
@@ -296,8 +291,7 @@ export default function Quotes() {
 
         toast.success('Cotización actualizada con éxito');
       } else {
-        const success = await safeCreate('quotes', quoteData);
-        if (!success) return;
+        await createQuoteRecord(quoteData);
 
         await logAction(
           'Creación de Cotización',
@@ -308,6 +302,7 @@ export default function Quotes() {
 
         toast.success('Cotización generada con éxito');
       }
+      await loadQuotes();
       setIsModalOpen(false);
       setEditingQuoteId(null);
       setNewQuote({ clientId: '', projectId: '', date: new Date(), notes: '', items: [{ description: '', quantity: 1, unitPrice: 0 }], status: 'Pending' });
@@ -325,7 +320,6 @@ export default function Quotes() {
       notes: quote.notes || '',
       items: quote.items.map((item: any) => ({ ...item })),
       status: quote.status,
-      _lastModifiedAt: quote._lastModifiedAt
     });
     setCurrentStep(0);
     setIsModalOpen(true);
@@ -340,7 +334,7 @@ export default function Quotes() {
     if (!quoteToDelete) return;
     try {
       const quote = quotes.find(q => q.id === quoteToDelete);
-      await deleteDoc(doc(db, 'quotes', quoteToDelete));
+      await deleteQuoteRecord(quoteToDelete);
       
       if (quote) {
         await logAction(
@@ -353,6 +347,7 @@ export default function Quotes() {
 
       setQuoteToDelete(null);
       toast.success('Cotización eliminada');
+      await loadQuotes();
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `quotes/${quoteToDelete}`);
     }
@@ -523,10 +518,11 @@ export default function Quotes() {
           // Update status to 'Sent' if it was 'Pending'
           const updateData = {
             status: quote.status === 'Pending' ? 'Sent' : quote.status,
-            sentAt: serverTimestamp(),
+            sentAt: new Date().toISOString(),
           };
-          
-          await safeUpdate('quotes', quote.id, updateData);
+
+          await updateQuoteRecord(quote.id, updateData);
+          await loadQuotes();
         },
         {
           loading: 'Actualizando estado de envío...',
@@ -568,10 +564,11 @@ export default function Quotes() {
     
     // Update status to 'Sent' if it was 'Pending'
     if (quote.status === 'Pending') {
-      safeUpdate('quotes', quote.id, {
+      updateQuoteRecord(quote.id, {
         status: 'Sent',
-        sentAt: serverTimestamp(),
+        sentAt: new Date().toISOString(),
       });
+      loadQuotes();
     }
     
     toast.success('Abriendo WhatsApp...');
@@ -615,6 +612,8 @@ export default function Quotes() {
         </div>
         <div className="grid grid-cols-2 lg:flex gap-2 sm:gap-3 md:gap-4">
           <select 
+            aria-label="Filtrar cotizaciones por estado"
+            title="Filtrar cotizaciones por estado"
             className="px-2.5 sm:px-4 py-2.5 sm:py-3 md:py-4 bg-white border border-slate-200 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary transition-all shadow-sm text-[10px] sm:text-xs md:text-sm font-bold text-slate-600 appearance-none"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -625,6 +624,8 @@ export default function Quotes() {
             <option value="Accepted">Aceptadas</option>
           </select>
           <select 
+            aria-label="Filtrar cotizaciones por cliente"
+            title="Filtrar cotizaciones por cliente"
             className="px-2.5 sm:px-4 py-2.5 sm:py-3 md:py-4 bg-white border border-slate-200 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary transition-all shadow-sm text-[10px] sm:text-xs md:text-sm font-bold text-slate-600 appearance-none"
             value={clientFilter}
             onChange={(e) => setClientFilter(e.target.value)}
@@ -718,7 +719,12 @@ export default function Quotes() {
                         >
                           <Edit2 size={16} />
                         </button>
-                        <button onClick={() => handleDeleteQuote(quote.id)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors">
+                        <button
+                          onClick={() => handleDeleteQuote(quote.id)}
+                          aria-label="Eliminar cotizacion"
+                          title="Eliminar cotizacion"
+                          className="p-2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+                        >
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -740,6 +746,8 @@ export default function Quotes() {
               <div className="flex items-center gap-2">
                 <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Por página:</label>
                 <select 
+                  aria-label="Cantidad de cotizaciones por pagina"
+                  title="Cantidad de cotizaciones por pagina"
                   className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold outline-none text-slate-900 dark:text-white"
                   value={itemsPerPage}
                   onChange={(e) => {
@@ -757,6 +765,8 @@ export default function Quotes() {
               <button 
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                aria-label="Pagina anterior"
+                title="Pagina anterior"
                 className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
               >
                 <ChevronLeft size={20} />
@@ -788,6 +798,8 @@ export default function Quotes() {
               <button 
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                aria-label="Pagina siguiente"
+                title="Pagina siguiente"
                 className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
               >
                 <ChevronRight size={20} />
@@ -1003,6 +1015,8 @@ export default function Quotes() {
                                 const newItems = newQuote.items.filter((_, i) => i !== index);
                                 setNewQuote({...newQuote, items: newItems});
                               }}
+                              aria-label="Eliminar item de cotizacion"
+                              title="Eliminar item"
                               className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors"
                             >
                               <Trash2 size={16} />
@@ -1054,6 +1068,9 @@ export default function Quotes() {
                                   "w-full px-4 py-2.5 bg-white dark:bg-slate-900 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm text-slate-900 dark:text-white",
                                   itemErrors[index]?.quantity ? "border-rose-500 ring-1 ring-rose-500" : "border-slate-200 dark:border-slate-800"
                                 )}
+                                aria-label="Cantidad del item"
+                                title="Cantidad del item"
+                                placeholder="Cantidad"
                                 value={item.quantity}
                                 onChange={(e) => {
                                   const val = Number(e.target.value);
@@ -1076,6 +1093,9 @@ export default function Quotes() {
                                   "w-full px-4 py-2.5 bg-white dark:bg-slate-900 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm text-right text-slate-900 dark:text-white",
                                   itemErrors[index]?.unitPrice ? "border-rose-500 ring-1 ring-rose-500" : "border-slate-200 dark:border-slate-800"
                                 )}
+                                aria-label="Precio unitario del item"
+                                title="Precio unitario del item"
+                                placeholder="Precio unitario"
                                 value={item.unitPrice}
                                 onChange={(e) => {
                                   const val = Number(e.target.value);
@@ -1312,6 +1332,9 @@ export default function Quotes() {
                             <input 
                               type="number"
                               value={m.quantity}
+                              aria-label="Cantidad de material"
+                              title="Cantidad de material"
+                              placeholder="Cantidad"
                               onChange={(e) => {
                                 const materials = [...selectedItemForAPU.materials];
                                 materials[idx].quantity = Number(e.target.value);
@@ -1324,6 +1347,9 @@ export default function Quotes() {
                             <input 
                               type="number"
                               value={m.unitPrice}
+                              aria-label="Precio unitario de material"
+                              title="Precio unitario de material"
+                              placeholder="Precio"
                               onChange={(e) => {
                                 const materials = [...selectedItemForAPU.materials];
                                 materials[idx].unitPrice = Number(e.target.value);
@@ -1339,6 +1365,8 @@ export default function Quotes() {
                                 const materials = selectedItemForAPU.materials.filter((_: any, i: number) => i !== idx);
                                 setSelectedItemForAPU({...selectedItemForAPU, materials});
                               }}
+                              aria-label="Eliminar material"
+                              title="Eliminar material"
                               className="text-slate-300 hover:text-rose-500 transition-colors"
                             >
                               <X size={14} />
@@ -1404,6 +1432,9 @@ export default function Quotes() {
                             <input 
                               type="number"
                               value={l.dailyRate}
+                              aria-label="Pago diario de cuadrilla"
+                              title="Pago diario de cuadrilla"
+                              placeholder="Pago diario"
                               onChange={(e) => {
                                 const labor = [...selectedItemForAPU.labor];
                                 labor[idx].dailyRate = Number(e.target.value);
@@ -1416,6 +1447,9 @@ export default function Quotes() {
                             <input 
                               type="number"
                               value={l.yield}
+                              aria-label="Rendimiento de cuadrilla"
+                              title="Rendimiento de cuadrilla"
+                              placeholder="Rendimiento"
                               onChange={(e) => {
                                 const labor = [...selectedItemForAPU.labor];
                                 labor[idx].yield = Number(e.target.value);
@@ -1433,6 +1467,8 @@ export default function Quotes() {
                                 const labor = selectedItemForAPU.labor.filter((_: any, i: number) => i !== idx);
                                 setSelectedItemForAPU({...selectedItemForAPU, labor});
                               }}
+                              aria-label="Eliminar cuadrilla"
+                              title="Eliminar cuadrilla"
                               className="text-slate-300 hover:text-rose-500 transition-colors"
                             >
                               <X size={14} />
@@ -1472,6 +1508,9 @@ export default function Quotes() {
                     <input 
                       type="number"
                       step="0.01"
+                      aria-label="Factor indirecto"
+                      title="Factor indirecto"
+                      placeholder="Factor"
                       value={selectedItemForAPU.indirectFactor || 0.2}
                       onChange={(e) => setSelectedItemForAPU({...selectedItemForAPU, indirectFactor: Number(e.target.value)})}
                       className="w-16 bg-transparent border-b border-primary/20 focus:border-primary focus:ring-0 text-sm font-bold text-slate-900 dark:text-white"

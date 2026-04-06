@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Users, 
   UserPlus, 
@@ -24,10 +24,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency, handleFirestoreError, OperationType } from '../lib/utils';
 import { toast } from 'sonner';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
 import ConfirmModal from './ConfirmModal';
 import { logAction } from '../lib/audit';
+import { createAttendance, createEmployee, deleteEmployee, listEmployees, updateEmployee } from '../lib/hrApi';
 
 export default function HR() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -59,14 +58,20 @@ export default function HR() {
     joinDate: new Date().toISOString().split('T')[0]
   });
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'employees'), (snapshot) => {
-      setEmployees(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  const loadEmployees = useCallback(async () => {
+    try {
+      const items = await listEmployees();
+      setEmployees(items);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'employees');
+    } finally {
       setLoading(false);
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'employees'));
-
-    return () => unsubscribe();
+    }
   }, []);
+
+  useEffect(() => {
+    loadEmployees();
+  }, [loadEmployees]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter(emp => 
@@ -87,22 +92,22 @@ export default function HR() {
     
     try {
       if (isEditMode && editingEmployeeId) {
-        await updateDoc(doc(db, 'employees', editingEmployeeId), {
+        await updateEmployee(editingEmployeeId, {
           ...newEmployee,
           salary: Number(newEmployee.salary),
-          updatedAt: serverTimestamp()
         });
         toast.success('Empleado actualizado exitosamente');
         await logAction('Edición de Empleado', 'RRHH', `Empleado ${newEmployee.name} actualizado`, 'update', { employeeId: editingEmployeeId });
       } else {
-        const docRef = await addDoc(collection(db, 'employees'), {
+        const created = await createEmployee({
           ...newEmployee,
           salary: Number(newEmployee.salary),
-          createdAt: serverTimestamp()
         });
         toast.success('Empleado registrado exitosamente');
-        await logAction('Registro de Empleado', 'RRHH', `Nuevo empleado ${newEmployee.name} registrado`, 'create', { employeeId: docRef.id });
+        await logAction('Registro de Empleado', 'RRHH', `Nuevo empleado ${newEmployee.name} registrado`, 'create', { employeeId: created.id });
       }
+
+      await loadEmployees();
       
       setIsModalOpen(false);
       resetForm();
@@ -147,9 +152,10 @@ export default function HR() {
     if (!employeeToDelete) return;
     try {
       const emp = employees.find(e => e.id === employeeToDelete);
-      await deleteDoc(doc(db, 'employees', employeeToDelete));
+      await deleteEmployee(employeeToDelete);
       toast.success('Empleado eliminado');
       await logAction('Eliminación de Empleado', 'RRHH', `Empleado ${emp?.name} eliminado`, 'delete', { employeeId: employeeToDelete });
+      await loadEmployees();
       setIsDeleteConfirmOpen(false);
       setEmployeeToDelete(null);
     } catch (error) {
@@ -201,10 +207,9 @@ export default function HR() {
     e.preventDefault();
     try {
       const emp = employees.find(e => e.id === attendanceRecord.employeeId);
-      await addDoc(collection(db, 'attendance'), {
+      await createAttendance({
         ...attendanceRecord,
         employeeName: emp?.name,
-        createdAt: serverTimestamp()
       });
       toast.success(`Asistencia (${attendanceRecord.type}) registrada para ${emp?.name}`);
       await logAction('Registro de Asistencia', 'RRHH', `Asistencia ${attendanceRecord.type} para ${emp?.name}`, 'create', { employeeId: attendanceRecord.employeeId });
@@ -238,13 +243,14 @@ export default function HR() {
       ];
 
       for (const emp of sampleEmployees) {
-        await addDoc(collection(db, 'employees'), {
+        await createEmployee({
           ...emp,
-          createdAt: serverTimestamp()
+          joinDate: emp.joinDate,
         });
       }
       toast.success('Datos de ejemplo generados correctamente');
       await logAction('Generación de Datos', 'RRHH', 'Se generaron empleados de ejemplo', 'create');
+      await loadEmployees();
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'employees');
     } finally {
@@ -331,7 +337,7 @@ export default function HR() {
             >
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 <h3 className="text-xl font-black text-slate-900 dark:text-white">Control de Asistencia</h3>
-                <button onClick={() => setIsAttendanceModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                <button title="Cerrar modal de asistencia" aria-label="Cerrar modal de asistencia" onClick={() => setIsAttendanceModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
                   <X size={20} className="text-slate-500" />
                 </button>
               </div>
@@ -340,6 +346,8 @@ export default function HR() {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Empleado</label>
                   <select
                     required
+                    title="Seleccionar empleado"
+                    aria-label="Seleccionar empleado"
                     value={attendanceRecord.employeeId}
                     onChange={(e) => setAttendanceRecord({ ...attendanceRecord, employeeId: e.target.value })}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -354,6 +362,8 @@ export default function HR() {
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo</label>
                     <select
+                      title="Tipo de asistencia"
+                      aria-label="Tipo de asistencia"
                       value={attendanceRecord.type}
                       onChange={(e) => setAttendanceRecord({ ...attendanceRecord, type: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -366,6 +376,8 @@ export default function HR() {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha y Hora</label>
                     <input
                       type="datetime-local"
+                      title="Fecha y hora de asistencia"
+                      placeholder="Selecciona la fecha y hora"
                       value={attendanceRecord.timestamp}
                       onChange={(e) => setAttendanceRecord({ ...attendanceRecord, timestamp: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -390,7 +402,7 @@ export default function HR() {
             >
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 <h3 className="text-xl font-black text-slate-900 dark:text-white">Detalle de Nómina Estimada</h3>
-                <button onClick={() => setIsPayrollModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                <button title="Cerrar detalle de nomina" aria-label="Cerrar detalle de nomina" onClick={() => setIsPayrollModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
                   <X size={20} className="text-slate-500" />
                 </button>
               </div>
@@ -430,7 +442,7 @@ export default function HR() {
                 <h3 className="text-xl font-black text-slate-900 dark:text-white">
                   {isEditMode ? 'Editar Empleado' : 'Nuevo Empleado'}
                 </h3>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                <button title="Cerrar formulario de empleado" aria-label="Cerrar formulario de empleado" onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
                   <X size={20} className="text-slate-500" />
                 </button>
               </div>
@@ -440,6 +452,8 @@ export default function HR() {
                   <input
                     required
                     type="text"
+                    title="Nombre completo"
+                    placeholder="Nombre del empleado"
                     value={newEmployee.name}
                     onChange={(e) => setNewEmployee({ ...newEmployee, name: e.target.value })}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -466,6 +480,8 @@ export default function HR() {
                     <input
                       required
                       type="text"
+                      title="Cargo"
+                      placeholder="Cargo del empleado"
                       value={newEmployee.role}
                       onChange={(e) => setNewEmployee({ ...newEmployee, role: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -474,6 +490,8 @@ export default function HR() {
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Departamento</label>
                     <select
+                      title="Departamento"
+                      aria-label="Departamento"
                       value={newEmployee.department}
                       onChange={(e) => setNewEmployee({ ...newEmployee, department: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -502,6 +520,8 @@ export default function HR() {
                     <input
                       required
                       type="number"
+                      title="Salario mensual"
+                      placeholder="Salario mensual"
                       value={newEmployee.salary}
                       onChange={(e) => setNewEmployee({ ...newEmployee, salary: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -512,6 +532,8 @@ export default function HR() {
                     <input
                       required
                       type="date"
+                      title="Fecha de ingreso"
+                      placeholder="Fecha de ingreso"
                       value={newEmployee.joinDate}
                       onChange={(e) => setNewEmployee({ ...newEmployee, joinDate: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -521,6 +543,8 @@ export default function HR() {
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado</label>
                   <select
+                    title="Estado del empleado"
+                    aria-label="Estado del empleado"
                     value={newEmployee.status}
                     onChange={(e) => setNewEmployee({ ...newEmployee, status: e.target.value })}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -631,12 +655,16 @@ export default function HR() {
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button 
+                              title={`Editar ${emp.name}`}
+                              aria-label={`Editar ${emp.name}`}
                               onClick={() => handleEdit(emp)}
                               className="p-2 text-slate-400 hover:text-primary transition-colors"
                             >
                               <Edit2 size={16} />
                             </button>
                             <button 
+                              title={`Eliminar ${emp.name}`}
+                              aria-label={`Eliminar ${emp.name}`}
                               onClick={() => handleDelete(emp.id)}
                               className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
                             >
@@ -669,6 +697,8 @@ export default function HR() {
                 </p>
                 <div className="flex items-center gap-2">
                   <button 
+                    title="Pagina anterior"
+                    aria-label="Pagina anterior"
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     className="p-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 hover:text-primary transition-colors disabled:opacity-50"
@@ -679,6 +709,8 @@ export default function HR() {
                     {Array.from({ length: totalPages }, (_, i) => (
                       <button
                         key={i + 1}
+                        title={`Ir a la pagina ${i + 1}`}
+                        aria-label={`Ir a la pagina ${i + 1}`}
                         onClick={() => setCurrentPage(i + 1)}
                         className={cn(
                           "w-7 h-7 rounded-lg text-[10px] font-black transition-all",
@@ -692,6 +724,8 @@ export default function HR() {
                     ))}
                   </div>
                   <button 
+                    title="Pagina siguiente"
+                    aria-label="Pagina siguiente"
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     className="p-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 hover:text-primary transition-colors disabled:opacity-50"

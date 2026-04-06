@@ -20,9 +20,8 @@ import {
   Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, onSnapshot, orderBy, limit, startAfter, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import { cn, handleFirestoreError, OperationType } from '../lib/utils';
+import { cn } from '../lib/utils';
+import { listAuditLogs } from '../lib/auditApi';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -49,54 +48,47 @@ const AuditLogs = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'create' | 'update' | 'delete' | 'auth' | 'system'>('all');
-  const [lastVisible, setLastVisible] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    let cancelled = false;
 
-    const q = query(
-      collection(db, 'audit_logs'), 
-      orderBy('timestamp', 'desc'),
-      limit(20)
-    );
+    const loadInitial = async () => {
+      try {
+        setLoading(true);
+        const response = await listAuditLogs({ limit: 20, offset: 0 });
+        if (cancelled) return;
+        setLogs(response.items as AuditLog[]);
+        setHasMore(Boolean(response.hasMore));
+      } catch (error) {
+        if (!cancelled) {
+          toast.error('No se pudieron cargar los logs de auditoria');
+          console.error('Error loading audit logs:', error);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const logsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as AuditLog[];
-      setLogs(logsData);
-      setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
-      setLoading(false);
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'audit_logs'));
-
-    return unsubscribe;
+    loadInitial();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const loadMore = async () => {
-    if (!lastVisible || !hasMore) return;
+    if (!hasMore) return;
 
-    const q = query(
-      collection(db, 'audit_logs'),
-      orderBy('timestamp', 'desc'),
-      startAfter(lastVisible),
-      limit(20)
-    );
-
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) {
-      setHasMore(false);
-      return;
+    try {
+      const response = await listAuditLogs({ limit: 20, offset: logs.length });
+      setLogs(prev => [...prev, ...(response.items as AuditLog[])]);
+      setHasMore(Boolean(response.hasMore));
+    } catch (error) {
+      toast.error('No se pudieron cargar mas registros');
+      console.error('Error loading more audit logs:', error);
     }
-
-    const newLogs = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as AuditLog[];
-
-    setLogs(prev => [...prev, ...newLogs]);
-    setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
   };
 
   const filteredLogs = logs.filter(log => {
@@ -199,7 +191,7 @@ const AuditLogs = () => {
                       <div className="flex items-center gap-1.5 sm:gap-2">
                         <CalendarIcon size={12} className="text-slate-400 sm:w-3.5 sm:h-3.5" />
                         <span className="text-[10px] sm:text-xs font-bold text-slate-600 dark:text-slate-300">
-                          {log.timestamp?.toDate ? format(log.timestamp.toDate(), "dd MMM yyyy, HH:mm", { locale: es }) : 'Reciente'}
+                          {log.timestamp ? format(new Date(log.timestamp), "dd MMM yyyy, HH:mm", { locale: es }) : 'Reciente'}
                         </span>
                       </div>
                     </td>

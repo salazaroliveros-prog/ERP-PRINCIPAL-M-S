@@ -23,12 +23,19 @@ import {
   Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn, handleFirestoreError, OperationType } from '../lib/utils';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { cn } from '../lib/utils';
+import { auth } from '../firebase';
 import { toast } from 'sonner';
 import ConfirmModal from './ConfirmModal';
 import { logAction } from '../lib/audit';
+import {
+  listDocuments,
+  createDocument,
+  updateDocument,
+  deleteDocument,
+  listFolders,
+  createFolder,
+} from '../lib/documentsApi';
 
 export default function Documents() {
   const [documents, setDocuments] = useState<any[]>([]);
@@ -56,35 +63,42 @@ export default function Documents() {
   });
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'documents'), (snapshot) => {
-      setDocuments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'documents'));
+    let cancelled = false;
 
-    return () => unsubscribe();
-  }, []);
+    const loadData = async () => {
+      try {
+        const [docs, folders] = await Promise.all([listDocuments(), listFolders()]);
+        if (cancelled) return;
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'folders'), (snapshot) => {
-      const fetchedFolders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (fetchedFolders.length === 0) {
-        // Initialize default folders if none exist
-        const defaults = [
-          { name: 'Planos', color: 'text-blue-500' },
-          { name: 'Finanzas', color: 'text-emerald-500' },
-          { name: 'Legal', color: 'text-rose-500' },
-          { name: 'Diseño', color: 'text-purple-500' },
-          { name: 'General', color: 'text-slate-500' },
-        ];
-        defaults.forEach(async (f) => {
-          await addDoc(collection(db, 'folders'), { ...f, createdAt: serverTimestamp() });
-        });
-      } else {
-        setDbFolders(fetchedFolders);
+        setDocuments(docs);
+        if (folders.length > 0) {
+          setDbFolders(folders);
+        } else {
+          const defaults = [
+            { name: 'Planos', color: 'text-blue-500' },
+            { name: 'Finanzas', color: 'text-emerald-500' },
+            { name: 'Legal', color: 'text-rose-500' },
+            { name: 'Diseno', color: 'text-purple-500' },
+            { name: 'General', color: 'text-slate-500' },
+          ];
+
+          const created = await Promise.all(defaults.map((f) => createFolder(f)));
+          if (!cancelled) setDbFolders(created);
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          toast.error(error?.message || 'No se pudieron cargar documentos');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'folders'));
+    };
 
-    return () => unsubscribe();
+    loadData();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
@@ -121,10 +135,14 @@ export default function Documents() {
     e.preventDefault();
     try {
       if (isEditMode && editingDocId) {
-        await updateDoc(doc(db, 'documents', editingDocId), {
-          ...newDoc,
-          updatedAt: serverTimestamp()
+        const updated = await updateDocument(editingDocId, {
+          name: newDoc.name,
+          type: newDoc.type,
+          size: newDoc.size,
+          folder: newDoc.folder,
+          author: newDoc.author,
         });
+        setDocuments((prev) => prev.map((d) => (d.id === editingDocId ? updated : d)));
         toast.success('Documento actualizado');
         await logAction('Edición de Documento', 'Documentos', `Documento ${newDoc.name} actualizado`, 'update', { docId: editingDocId });
       } else {
@@ -142,11 +160,11 @@ export default function Documents() {
           });
         }, 100);
 
-        const docRef = await addDoc(collection(db, 'documents'), {
+        const created = await createDocument({
           ...newDoc,
           date: new Date().toISOString().split('T')[0],
-          createdAt: serverTimestamp()
         });
+        setDocuments((prev) => [created, ...prev]);
         
         clearInterval(interval);
         setUploadProgress(100);
@@ -155,7 +173,7 @@ export default function Documents() {
           setIsUploading(false);
           setUploadProgress(0);
           toast.success('Documento registrado');
-          logAction('Carga de Documento', 'Documentos', `Nuevo documento ${newDoc.name} cargado`, 'create', { docId: docRef.id });
+          logAction('Carga de Documento', 'Documentos', `Nuevo documento ${newDoc.name} cargado`, 'create', { docId: created.id });
           setIsModalOpen(false);
           resetForm();
         }, 500);
@@ -163,9 +181,9 @@ export default function Documents() {
       }
       setIsModalOpen(false);
       resetForm();
-    } catch (error) {
+    } catch (error: any) {
       setIsUploading(false);
-      handleFirestoreError(error, isEditMode ? OperationType.UPDATE : OperationType.WRITE, 'documents');
+      toast.error(error?.message || 'No se pudo guardar el documento');
     }
   };
 
@@ -203,13 +221,14 @@ export default function Documents() {
     if (!docToDelete) return;
     try {
       const d = documents.find(doc => doc.id === docToDelete);
-      await deleteDoc(doc(db, 'documents', docToDelete));
+      await deleteDocument(docToDelete);
+      setDocuments((prev) => prev.filter((doc) => doc.id !== docToDelete));
       toast.success('Documento eliminado');
       await logAction('Eliminación de Documento', 'Documentos', `Documento ${d?.name} eliminado`, 'delete', { docId: docToDelete });
       setIsDeleteConfirmOpen(false);
       setDocToDelete(null);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'documents');
+    } catch (error: any) {
+      toast.error(error?.message || 'No se pudo eliminar el documento');
     }
   };
 
@@ -227,17 +246,22 @@ export default function Documents() {
     e.preventDefault();
     if (!newFolderName.trim()) return;
     try {
-      await addDoc(collection(db, 'folders'), {
+      const created = await createFolder({
         name: newFolderName.trim(),
         color: 'text-slate-500',
-        createdAt: serverTimestamp()
+      });
+      setDbFolders((prev) => {
+        if (prev.some((f) => f.name === created.name)) {
+          return prev.map((f) => (f.name === created.name ? created : f));
+        }
+        return [...prev, created].sort((a, b) => a.name.localeCompare(b.name));
       });
       toast.success(`Carpeta "${newFolderName}" creada`);
       await logAction('Creación de Carpeta', 'Documentos', `Nueva carpeta ${newFolderName} creada`, 'create');
       setIsNewFolderModalOpen(false);
       setNewFolderName('');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'folders');
+    } catch (error: any) {
+      toast.error(error?.message || 'No se pudo crear la carpeta');
     }
   };
 
@@ -288,7 +312,12 @@ export default function Documents() {
             >
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 <h3 className="text-xl font-black text-slate-900 dark:text-white">Nueva Carpeta</h3>
-                <button onClick={() => setIsNewFolderModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                <button
+                  onClick={() => setIsNewFolderModalOpen(false)}
+                  aria-label="Cerrar modal de nueva carpeta"
+                  title="Cerrar"
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                >
                   <X size={20} className="text-slate-500" />
                 </button>
               </div>
@@ -325,7 +354,12 @@ export default function Documents() {
                 <h3 className="text-xl font-black text-slate-900 dark:text-white">
                   {isEditMode ? 'Editar Documento' : 'Subir Archivo'}
                 </h3>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  aria-label="Cerrar modal de documento"
+                  title="Cerrar"
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                >
                   <X size={20} className="text-slate-500" />
                 </button>
               </div>
@@ -345,6 +379,8 @@ export default function Documents() {
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo</label>
                     <select
+                      aria-label="Tipo de archivo"
+                      title="Tipo de archivo"
                       value={newDoc.type}
                       onChange={(e) => setNewDoc({ ...newDoc, type: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -359,6 +395,8 @@ export default function Documents() {
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Carpeta</label>
                     <select
+                      aria-label="Carpeta del documento"
+                      title="Carpeta del documento"
                       value={newDoc.folder}
                       onChange={(e) => setNewDoc({ ...newDoc, folder: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -374,6 +412,9 @@ export default function Documents() {
                   <input
                     required
                     type="text"
+                    aria-label="Tamano del archivo"
+                    title="Tamano del archivo"
+                    placeholder="ej: 2.5 MB"
                     value={newDoc.size}
                     onChange={(e) => setNewDoc({ ...newDoc, size: e.target.value })}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -550,6 +591,8 @@ export default function Documents() {
                   <button
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    aria-label="Pagina anterior"
+                    title="Pagina anterior"
                     className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-50 text-slate-600 dark:text-slate-400"
                   >
                     <ChevronLeft size={16} />
@@ -557,6 +600,8 @@ export default function Documents() {
                   <button
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    aria-label="Pagina siguiente"
+                    title="Pagina siguiente"
                     className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-50 text-slate-600 dark:text-slate-400"
                   >
                     <ChevronRight size={16} />

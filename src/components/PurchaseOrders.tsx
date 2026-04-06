@@ -1,6 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { collection, onSnapshot, updateDoc, doc, deleteDoc, serverTimestamp, addDoc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { 
   ShoppingBag, 
   Clock, 
@@ -27,6 +25,17 @@ import { toast } from 'sonner';
 import { motion } from 'motion/react';
 import { sendNotification } from '../lib/notifications';
 import ConfirmModal from './ConfirmModal';
+import {
+  adjustInventoryStock,
+  createPurchaseOrder,
+  deletePurchaseOrder,
+  listInventory,
+  listPurchaseOrders,
+  updatePurchaseOrder,
+} from '../lib/operationsApi';
+import { listProjects, listProjectBudgetItemsDetailed, updateProjectBudgetItem } from '../lib/projectsApi';
+import { listSuppliers } from '../lib/suppliersApi';
+import { createTransaction } from '../lib/financialsApi';
 
 export default function PurchaseOrders() {
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
@@ -54,38 +63,42 @@ export default function PurchaseOrders() {
     notes: ''
   });
 
-  useEffect(() => {
-    const unsubscribePO = onSnapshot(collection(db, 'purchaseOrders'), (snapshot) => {
-      setPurchaseOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  const loadPurchaseOrders = useCallback(async () => {
+    try {
+      const items = await listPurchaseOrders();
+      setPurchaseOrders(items);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'purchaseOrders');
+    } finally {
       setLoading(false);
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'purchaseOrders'));
+    }
+  }, []);
 
-    const unsubscribeInv = onSnapshot(collection(db, 'inventory'), (snapshot) => {
-      setInventory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'inventory'));
-
-    const unsubscribeProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'projects'));
-
-    const unsubscribeSuppliers = onSnapshot(collection(db, 'suppliers'), (snapshot) => {
-      setSuppliers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'suppliers'));
-
-    return () => {
-      unsubscribePO();
-      unsubscribeInv();
-      unsubscribeProjects();
-      unsubscribeSuppliers();
-    };
+  const loadReferenceData = useCallback(async () => {
+    try {
+      const [invRes, projectItems, supplierItems] = await Promise.all([
+        listInventory({ limit: 500, offset: 0 }),
+        listProjects(),
+        listSuppliers(),
+      ]);
+      setInventory(invRes.items);
+      setProjects(projectItems);
+      setSuppliers(supplierItems);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'purchaseOrders/reference-data');
+    }
   }, []);
 
   useEffect(() => {
+    loadPurchaseOrders();
+    loadReferenceData();
+  }, [loadPurchaseOrders, loadReferenceData]);
+
+  useEffect(() => {
     if (newPO.projectId) {
-      const unsubscribeBudget = onSnapshot(collection(db, `projects/${newPO.projectId}/budgetItems`), (snapshot) => {
-        setBudgetItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }, (error) => handleFirestoreError(error, OperationType.GET, `projects/${newPO.projectId}/budgetItems`));
-      return () => unsubscribeBudget();
+      listProjectBudgetItemsDetailed(newPO.projectId)
+        .then((items) => setBudgetItems(items as any[]))
+        .catch((error) => handleFirestoreError(error, OperationType.GET, `projects/${newPO.projectId}/budgetItems`));
     } else {
       setBudgetItems([]);
     }
@@ -113,9 +126,9 @@ export default function PurchaseOrders() {
 
   const filteredPurchaseOrders = useMemo(() => {
     return purchaseOrders.filter(po => 
-      po.supplier.toLowerCase().includes(supplierFilter.toLowerCase()) ||
-      inventory.find(i => i.id === po.materialId)?.name.toLowerCase().includes(supplierFilter.toLowerCase()) ||
-      projects.find(p => p.id === po.projectId)?.name.toLowerCase().includes(supplierFilter.toLowerCase())
+      (po.supplier || '').toLowerCase().includes(supplierFilter.toLowerCase()) ||
+      (inventory.find(i => i.id === po.materialId)?.name || '').toLowerCase().includes(supplierFilter.toLowerCase()) ||
+      (projects.find(p => p.id === po.projectId)?.name || '').toLowerCase().includes(supplierFilter.toLowerCase())
     );
   }, [purchaseOrders, supplierFilter, inventory, projects]);
 
@@ -145,7 +158,7 @@ export default function PurchaseOrders() {
 
     try {
       if (isEditMode && poToEdit) {
-        await updateDoc(doc(db, 'purchaseOrders', poToEdit.id), {
+        await updatePurchaseOrder(poToEdit.id, {
           projectId: newPO.projectId,
           budgetItemId: newPO.budgetItemId,
           materialId: material.id,
@@ -156,7 +169,6 @@ export default function PurchaseOrders() {
           supplier: newPO.supplier,
           supplierId: newPO.supplierId,
           notes: newPO.notes,
-          updatedAt: serverTimestamp()
         });
 
         await logAction(
@@ -169,7 +181,7 @@ export default function PurchaseOrders() {
 
         toast.success('Orden de compra actualizada');
       } else {
-        const docRef = await addDoc(collection(db, 'purchaseOrders'), {
+        const created = await createPurchaseOrder({
           projectId: newPO.projectId,
           budgetItemId: newPO.budgetItemId,
           materialId: material.id,
@@ -182,30 +194,23 @@ export default function PurchaseOrders() {
           notes: newPO.notes,
           status: 'Pending',
           date: new Date().toISOString().split('T')[0],
-          createdAt: serverTimestamp()
         });
 
         // Deduct from stock as requested by user (Stock represents remaining requirement)
-        const materialRef = doc(db, 'inventory', material.id);
-        const materialSnap = await getDoc(materialRef);
-        if (materialSnap.exists()) {
-          const materialData = materialSnap.data();
-          await updateDoc(materialRef, {
-            stock: Math.max(0, (materialData.stock || 0) - Number(newPO.quantity)),
-            updatedAt: serverTimestamp()
-          });
-        }
+        await adjustInventoryStock(material.id, { delta: -Number(newPO.quantity) });
 
         await logAction(
           'Creación de Orden de Compra',
           'Compras',
           `Nueva orden de compra para ${material.name} (${newPO.quantity} ${material.unit}) - Proveedor: ${newPO.supplier}. Se descontó del stock de requerimientos.`,
           'create',
-          { projectId: newPO.projectId, poId: docRef.id }
+          { projectId: newPO.projectId, poId: created.id }
         );
 
         toast.success('Orden de compra creada y stock de requerimientos actualizado');
       }
+
+      await Promise.all([loadPurchaseOrders(), loadReferenceData()]);
 
       setIsModalOpen(false);
       setNewPO({ projectId: '', budgetItemId: '', materialId: '', quantity: 0, supplier: '', supplierId: '', notes: '' });
@@ -221,10 +226,9 @@ export default function PurchaseOrders() {
       const po = purchaseOrders.find(p => p.id === id);
       if (!po) return;
 
-      await updateDoc(doc(db, 'purchaseOrders', id), {
+      await updatePurchaseOrder(id, {
         status,
-        updatedAt: serverTimestamp(),
-        ...(status === 'Completed' ? { dateReceived: new Date().toISOString().split('T')[0] } : {})
+        ...(status === 'Completed' ? { dateReceived: new Date().toISOString().split('T')[0] } : { dateReceived: null })
       });
 
       await logAction(
@@ -239,25 +243,15 @@ export default function PurchaseOrders() {
       if (status === 'Cancelled') {
         // Return to stock if cancelled (since it was deducted on creation)
         if (po.materialId) {
-          const materialRef = doc(db, 'inventory', po.materialId);
-          const materialSnap = await getDoc(materialRef);
-          
-          if (materialSnap.exists()) {
-            const materialData = materialSnap.data();
-            await updateDoc(materialRef, {
-              stock: (materialData.stock || 0) + (po.quantity || 0),
-              updatedAt: serverTimestamp()
-            });
-          }
+          await adjustInventoryStock(po.materialId, { delta: Number(po.quantity || 0) });
         }
       } else if (status === 'Completed') {
         // Update Project Budget Material Tracking and Recalculate Costs
         if (po.projectId && po.budgetItemId && po.materialName) {
-          const budgetItemRef = doc(db, `projects/${po.projectId}/budgetItems`, po.budgetItemId);
-          const budgetItemSnap = await getDoc(budgetItemRef);
+          const budgetItemsForProject = await listProjectBudgetItemsDetailed(po.projectId);
+          const budgetItemData = budgetItemsForProject.find((b: any) => b.id === po.budgetItemId);
 
-          if (budgetItemSnap.exists()) {
-            const budgetItemData = budgetItemSnap.data();
+          if (budgetItemData) {
             const actualUnitPrice = po.estimatedCost / po.quantity;
 
             const updatedMaterials = (budgetItemData.materials || []).map((m: any) => {
@@ -279,29 +273,28 @@ export default function PurchaseOrders() {
             const totalUnitPrice = directCost + indirectCost;
             const totalItemPrice = (budgetItemData.quantity || 1) * totalUnitPrice;
 
-            await updateDoc(budgetItemRef, {
+            await updateProjectBudgetItem(po.projectId, po.budgetItemId, {
               materials: updatedMaterials,
               materialCost,
               totalUnitPrice,
               totalItemPrice,
-              updatedAt: serverTimestamp()
             });
 
             // Record financial transaction
-            await addDoc(collection(db, 'transactions'), {
+            await createTransaction({
               projectId: po.projectId,
               budgetItemId: po.budgetItemId,
               amount: po.estimatedCost,
               type: 'Expense',
               category: 'Materiales',
               description: `Compra de ${po.materialName} (Orden #${po.id.slice(0, 5)})`,
-              date: new Date().toISOString(),
-              status: 'Completed',
-              createdAt: serverTimestamp()
+              date: new Date().toISOString().slice(0, 10),
             });
           }
         }
       }
+
+      await Promise.all([loadPurchaseOrders(), loadReferenceData()]);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `purchaseOrders/${id}`);
     }
@@ -332,7 +325,7 @@ export default function PurchaseOrders() {
     if (!poToDelete) return;
     try {
       const po = purchaseOrders.find(p => p.id === poToDelete);
-      await deleteDoc(doc(db, 'purchaseOrders', poToDelete));
+      await deletePurchaseOrder(poToDelete);
       
       if (po) {
         await logAction(
@@ -346,6 +339,7 @@ export default function PurchaseOrders() {
 
       setPoToDelete(null);
       toast.success('Orden de compra eliminada');
+      await loadPurchaseOrders();
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `purchaseOrders/${poToDelete}`);
     }
@@ -484,6 +478,8 @@ export default function PurchaseOrders() {
                 )}
                 <button 
                   onClick={() => handleDelete(po.id)}
+                  aria-label="Eliminar orden"
+                  title="Eliminar orden"
                   className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
                 >
                   <Trash2 size={18} />
@@ -568,6 +564,8 @@ export default function PurchaseOrders() {
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Por página:</label>
               <select 
+                aria-label="Cantidad por pagina"
+                title="Cantidad por pagina"
                 className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold outline-none text-slate-900 dark:text-white"
                 value={itemsPerPage}
                 onChange={(e) => {
@@ -585,6 +583,8 @@ export default function PurchaseOrders() {
             <button 
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              aria-label="Pagina anterior"
+              title="Pagina anterior"
               className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
             >
               <ChevronLeft size={20} />
@@ -616,6 +616,8 @@ export default function PurchaseOrders() {
             <button 
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              aria-label="Pagina siguiente"
+              title="Pagina siguiente"
               className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
             >
               <ChevronRight size={20} />

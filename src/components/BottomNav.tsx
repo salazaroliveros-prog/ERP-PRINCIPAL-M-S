@@ -15,11 +15,13 @@ import { motion } from 'motion/react';
 
 interface BottomNavProps {
   onMenuClick: () => void;
+  onPrefetchRoute?: (path: string) => void;
+  onNavigateIntent?: (path: string) => void;
   deferredPrompt: any;
   onInstall: () => void;
 }
 
-export const BottomNav = ({ onMenuClick, deferredPrompt, onInstall }: BottomNavProps) => {
+export const BottomNav = ({ onMenuClick, onPrefetchRoute, onNavigateIntent, deferredPrompt, onInstall }: BottomNavProps) => {
   const location = useLocation();
 
   const navItems = [
@@ -40,6 +42,10 @@ export const BottomNav = ({ onMenuClick, deferredPrompt, onInstall }: BottomNavP
             <Link
               key={item.to}
               to={item.to}
+              onClick={() => onNavigateIntent?.(item.to)}
+              onMouseEnter={() => onPrefetchRoute?.(item.to)}
+              onFocus={() => onPrefetchRoute?.(item.to)}
+              onTouchStart={() => onPrefetchRoute?.(item.to)}
               className={cn(
                 "flex flex-col items-center gap-1 p-2 transition-all duration-300 relative min-w-[60px]",
                 isActive ? "text-primary" : "text-slate-400 dark:text-slate-500"

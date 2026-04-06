@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where, orderBy, limit, updateDoc, doc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -57,6 +55,11 @@ import { formatCurrency, cn, handleFirestoreError, OperationType, getMitigationS
 import { motion, AnimatePresence } from 'motion/react';
 import { sendNotification } from '../lib/notifications';
 import { logAction } from '../lib/audit';
+import { listProjects, listProjectBudgetItemsDetailed, updateProject, updateProjectBudgetItem } from '../lib/projectsApi';
+import { listTransactions } from '../lib/financialsApi';
+import { listInventory } from '../lib/operationsApi';
+import { listSubcontracts } from '../lib/subcontractsApi';
+import { listWorkflows } from '../lib/workflowsApi';
 
 const COLORS = [
   '#3b82f6', // Blue
@@ -128,26 +131,55 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!selectedQuickProjectId || !db) {
+    if (!selectedQuickProjectId) {
       setQuickBudgetItems([]);
       return;
     }
 
+    let cancelled = false;
     setIsLoadingQuickItems(true);
-    const unsub = onSnapshot(
-      collection(db, `projects/${selectedQuickProjectId}/budgetItems`),
-      (snapshot) => {
-        setQuickBudgetItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        setIsLoadingQuickItems(false);
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.GET, `projects/${selectedQuickProjectId}/budgetItems`);
-        setIsLoadingQuickItems(false);
-      }
-    );
 
-    return () => unsub();
+    (async () => {
+      try {
+        const items = await listProjectBudgetItemsDetailed(selectedQuickProjectId);
+        if (!cancelled) setQuickBudgetItems(items);
+      } catch (error) {
+        if (!cancelled) {
+          handleFirestoreError(error, OperationType.GET, `projects/${selectedQuickProjectId}/budgetItems`);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingQuickItems(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedQuickProjectId]);
+
+  const buildProjectPayload = (project: any, physicalProgress: number) => {
+    const budget = Number(project?.budget || 0);
+    const spent = Number(project?.spent || 0);
+    return {
+      name: project?.name || '',
+      location: project?.location || '',
+      projectManager: project?.projectManager || '',
+      status: project?.status || 'Planning',
+      budget,
+      spent,
+      physicalProgress,
+      financialProgress: budget > 0 ? (spent / budget) * 100 : Number(project?.financialProgress || 0),
+      area: Number(project?.area || 0),
+      startDate: project?.startDate || '',
+      endDate: project?.endDate || '',
+      clientUid: project?.clientUid || '',
+      typology: project?.typology || 'RESIDENCIAL',
+      latitude: project?.latitude || '',
+      longitude: project?.longitude || '',
+    };
+  };
 
   const handleQuickProgressUpdate = async (budgetItemId: string, newProgress: number) => {
     if (!selectedQuickProjectId) return;
@@ -159,8 +191,8 @@ export default function Dashboard() {
     }
 
     try {
-      await updateDoc(doc(db, `projects/${selectedQuickProjectId}/budgetItems`, budgetItemId), {
-        progress: newProgress
+      await updateProjectBudgetItem(selectedQuickProjectId, budgetItemId, {
+        progress: newProgress,
       });
 
       // Recalculate project physical progress
@@ -173,11 +205,12 @@ export default function Dashboard() {
         ? updatedBudgetItems.reduce((acc, i) => acc + ((i.progress || 0) * ((i.materialCost + i.laborCost + i.indirectCost) * (i.quantity || 1))), 0) / totalBudget
         : 0;
 
-      await updateDoc(doc(db, 'projects', selectedQuickProjectId), {
-        physicalProgress: overallProgress
-      });
-
       const project = projects.find(p => p.id === selectedQuickProjectId);
+      if (project) {
+        await updateProject(selectedQuickProjectId, buildProjectPayload(project, overallProgress));
+      }
+      setProjects(prev => prev.map(p => p.id === selectedQuickProjectId ? { ...p, physicalProgress: overallProgress } : p));
+
       const budgetItem = quickBudgetItems.find(i => i.id === budgetItemId);
       await logAction(
         'Actualización Rápida de Avance',
@@ -194,69 +227,41 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    if (!db || !auth.currentUser) return;
+    let cancelled = false;
 
-    const unsubProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      if (error.code !== 'permission-denied') {
-        handleFirestoreError(error, OperationType.GET, 'projects');
-      }
-    });
+    (async () => {
+      try {
+        const [projectsItems, transactionsResult, inventoryResult, subcontractsItems, workflowsItems] = await Promise.all([
+          listProjects(),
+          listTransactions({ limit: 100, offset: 0 }),
+          listInventory({ limit: 500, offset: 0 }),
+          listSubcontracts({ status: 'Active' }),
+          listWorkflows({ status: 'pending' }),
+        ]);
 
-    const qTransactions = query(collection(db, 'transactions'), orderBy('date', 'desc'), limit(100));
-    const unsubTransactions = onSnapshot(qTransactions, (snapshot) => {
-      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      if (error.code !== 'permission-denied') {
-        handleFirestoreError(error, OperationType.GET, 'transactions');
-      }
-    });
+        if (cancelled) return;
 
-    const qInventory = query(collection(db, 'inventory'), where('stock', '<=', 100)); // Example filter
-    const unsubInventory = onSnapshot(qInventory, (snapshot) => {
-      setInventory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      if (error.code !== 'permission-denied') {
-        handleFirestoreError(error, OperationType.GET, 'inventory');
+        setProjects(projectsItems);
+        setTransactions(transactionsResult.items);
+        setInventory(inventoryResult.items);
+        setSubcontracts(subcontractsItems);
+        setPendingWorkflows(workflowsItems.slice(0, 5));
+        setRecentLogs([]);
+      } catch (error) {
+        if (!cancelled) {
+          handleFirestoreError(error, OperationType.GET, 'dashboard');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-    });
-
-    const qSubs = query(collection(db, 'subcontracts'), where('status', '==', 'Active'));
-    const unsubSubs = onSnapshot(qSubs, (snapshot) => {
-      setSubcontracts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      if (error.code !== 'permission-denied') {
-        handleFirestoreError(error, OperationType.GET, 'subcontracts');
-      }
-    });
-
-    const unsubLogs = onSnapshot(query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc'), limit(5)), (snapshot) => {
-      setRecentLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      if (error.code !== 'permission-denied') {
-        handleFirestoreError(error, OperationType.GET, 'audit_logs');
-      }
-    });
-
-    const unsubWorkflows = onSnapshot(query(collection(db, 'workflows'), where('status', '==', 'pending'), limit(5)), (snapshot) => {
-      setPendingWorkflows(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    }, (error) => {
-      if (error.code !== 'permission-denied') {
-        handleFirestoreError(error, OperationType.GET, 'workflows');
-      }
-    });
+    })();
 
     return () => {
-      unsubProjects();
-      unsubTransactions();
-      unsubInventory();
-      unsubSubs();
-      unsubLogs();
-      unsubWorkflows();
+      cancelled = true;
     };
-  }, [auth.currentUser]);
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -418,7 +423,7 @@ export default function Dashboard() {
 
   const inactiveProjects = projects.filter(p => {
     if (p.status === 'Completed') return false;
-    const lastUpdate = p.updatedAt?.toDate ? p.updatedAt.toDate() : (p.createdAt?.toDate ? p.createdAt.toDate() : new Date(p.createdAt || Date.now()));
+    const lastUpdate = new Date(p.updatedAt || p.createdAt || Date.now());
     const diffDays = Math.ceil((new Date().getTime() - lastUpdate.getTime()) / (1000 * 3600 * 24));
     return diffDays > 15;
   });
@@ -1030,6 +1035,8 @@ export default function Dashboard() {
         </AnimatePresence>
         
         <button
+          title={isFabOpen ? 'Cerrar acciones rapidas' : 'Abrir acciones rapidas'}
+          aria-label={isFabOpen ? 'Cerrar acciones rapidas' : 'Abrir acciones rapidas'}
           onClick={() => setIsFabOpen(!isFabOpen)}
           className={cn(
             "w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300",
@@ -1056,6 +1063,8 @@ export default function Dashboard() {
                   Actualización Rápida de Avance
                 </h2>
                 <button
+                  title="Cerrar actualizacion rapida"
+                  aria-label="Cerrar actualizacion rapida"
                   onClick={() => {
                     setIsQuickProgressModalOpen(false);
                     setSelectedQuickProjectId(null);
@@ -1141,6 +1150,8 @@ export default function Dashboard() {
                                       type="number"
                                       min="0"
                                       max="100"
+                                      title={`Avance de ${item.description}`}
+                                      placeholder="0"
                                       defaultValue={item.progress || 0}
                                       onBlur={(e) => {
                                         const val = parseFloat(e.target.value);

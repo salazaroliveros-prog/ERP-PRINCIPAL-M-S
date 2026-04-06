@@ -1,7 +1,26 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { collection, onSnapshot, query, where, doc, updateDoc, deleteDoc, serverTimestamp, addDoc, orderBy } from 'firebase/firestore';
-import { db, storage } from '../firebase';
+import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import {
+  listProjects,
+  listProjectBudgetItemsDetailed,
+  updateProject as updateProjectApi,
+  updateProjectBudgetItem,
+} from '../lib/projectsApi';
+import { listTransactions } from '../lib/financialsApi';
+import { listSubcontracts } from '../lib/subcontractsApi';
+import { listEquipment } from '../lib/equipmentApi';
+import { listClients } from '../lib/clientsApi';
+import {
+  createProjectLogbookEntry,
+  createProjectPoi,
+  deleteProjectLogbookEntry,
+  deleteProjectPoi,
+  listProjectLogbookEntries,
+  listProjectPois,
+  updateProjectPoi,
+} from '../lib/projectDetailsApi';
+import { listAuditLogs } from '../lib/auditApi';
 import ConfirmModal from './ConfirmModal';
 import ProjectBudget from './ProjectBudget';
 import ProjectMap from './ProjectMap';
@@ -251,76 +270,106 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
   const [projectForMap, setProjectForMap] = useState<any>(null);
 
   useEffect(() => {
-    const unsubProject = onSnapshot(doc(db, 'projects', projectId), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setProject({ id: doc.id, ...data });
-        // Only update editForm if not currently editing to avoid losing user input
-        if (!isEditing) {
-          setEditForm({ id: doc.id, ...data });
+    let isMounted = true;
+
+    const loadData = async () => {
+      try {
+        const [projects, clientsData, transactionsData, subcontractsData, equipmentData, budgetData, poisData, logbookData, auditData] = await Promise.all([
+          listProjects(),
+          listClients(),
+          listTransactions({ projectId, limit: 1000, offset: 0 }),
+          listSubcontracts({ projectId }),
+          listEquipment(),
+          listProjectBudgetItemsDetailed(projectId),
+          listProjectPois(projectId),
+          listProjectLogbookEntries(projectId),
+          listAuditLogs({ projectId, limit: 200, offset: 0 }),
+        ]);
+
+        if (!isMounted) {
+          return;
         }
-      }
-    }, (error) => handleFirestoreError(error, OperationType.GET, `projects/${projectId}`));
 
-    const unsubClients = onSnapshot(collection(db, 'clients'), (snapshot) => {
-      setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'clients'));
-
-    const qTransactions = query(collection(db, 'transactions'), where('projectId', '==', projectId));
-    const unsubTransactions = onSnapshot(qTransactions, (snapshot) => {
-      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'transactions'));
-
-    const qSubcontracts = query(collection(db, 'subcontracts'), where('projectId', '==', projectId));
-    const unsubSubcontracts = onSnapshot(qSubcontracts, (snapshot) => {
-      setSubcontracts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'subcontracts'));
-
-    const qEquipment = query(collection(db, 'equipment'), where('projectId', '==', projectId));
-    const unsubEquipment = onSnapshot(qEquipment, (snapshot) => {
-      setEquipment(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'equipment'));
-
-    const qAudit = query(collection(db, 'audit_logs'), where('projectId', '==', projectId));
-    const unsubAudit = onSnapshot(qAudit, (snapshot) => {
-      setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a: any, b: any) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'audit_logs'));
-
-    const qBudget = query(collection(db, `projects/${projectId}/budgetItems`));
-    const unsubBudget = onSnapshot(qBudget, (snapshot) => {
-      setBudgetItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, `projects/${projectId}/budgetItems`));
-
-    // Listen for project POIs
-    const unsubPois = onSnapshot(doc(db, 'projects', projectId), (doc) => {
-      if (doc.exists()) {
-        setPois(doc.data().pois || []);
-        if (doc.data().coordinates) {
-          setMapCenter([doc.data().coordinates.lat, doc.data().coordinates.lng]);
+        const selectedProject = projects.find((item) => item.id === projectId) || null;
+        setProject(selectedProject);
+        if (!isEditing && selectedProject) {
+          setEditForm(selectedProject);
         }
-      }
-    }, (error) => handleFirestoreError(error, OperationType.GET, `projects/${projectId}/pois`));
 
-    const unsubLogbook = onSnapshot(
-      query(collection(db, 'projects', projectId, 'logbook'), orderBy('date', 'desc')),
-      (snapshot) => {
-        setLogbookEntries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      },
-      (error) => handleFirestoreError(error, OperationType.GET, `projects/${projectId}/logbook`)
-    );
+        setClients(clientsData);
+        setTransactions(transactionsData.items);
+        setSubcontracts(subcontractsData);
+        setEquipment(equipmentData.filter((item) => item.projectId === projectId));
+        setAuditLogs(auditData.items);
+        setBudgetItems(budgetData);
+        setPois(poisData);
+        setLogbookEntries(logbookData);
+
+        if (selectedProject?.coordinates) {
+          setMapCenter([selectedProject.coordinates.lat, selectedProject.coordinates.lng]);
+        }
+      } catch (error) {
+        console.error('Error loading project details:', error);
+        toast.error('No se pudieron cargar todos los detalles del proyecto');
+      }
+    };
+
+    loadData();
 
     return () => {
-      unsubProject();
-      unsubClients();
-      unsubTransactions();
-      unsubSubcontracts();
-      unsubEquipment();
-      unsubAudit();
-      unsubBudget();
-      unsubPois();
-      unsubLogbook();
+      isMounted = false;
     };
-  }, [projectId]);
+  }, [projectId, isEditing]);
+
+  const calculateProjectProgress = (items: any[]) => {
+    const totalBudget = items.reduce(
+      (acc, item) => acc + ((item.materialCost + item.laborCost + item.indirectCost) * (item.quantity || 1)),
+      0
+    );
+    return totalBudget > 0
+      ? items.reduce(
+          (acc, item) =>
+            acc + ((item.progress || 0) * ((item.materialCost + item.laborCost + item.indirectCost) * (item.quantity || 1))),
+          0
+        ) / totalBudget
+      : 0;
+  };
+
+  const persistProjectProgress = async (items: any[]) => {
+    if (!project) {
+      return;
+    }
+
+    const overallProgress = calculateProjectProgress(items);
+
+    await updateProjectApi(projectId, {
+      name: project.name,
+      location: project.location || '',
+      projectManager: project.projectManager || '',
+      status: project.status || 'Planning',
+      budget: Number(project.budget || 0),
+      spent: Number(project.spent || 0),
+      physicalProgress: Number(overallProgress),
+      financialProgress: Number(project.financialProgress || 0),
+      area: Number(project.area || 0),
+      startDate: project.startDate || '',
+      endDate: project.endDate || '',
+      clientUid: project.clientUid || '',
+      typology: project.typology || 'RESIDENCIAL',
+      latitude: project.coordinates?.lat ? String(project.coordinates.lat) : project.latitude,
+      longitude: project.coordinates?.lng ? String(project.coordinates.lng) : project.longitude,
+    });
+
+    setProject((prev: any) => (prev ? { ...prev, physicalProgress: Number(overallProgress) } : prev));
+
+    await logAction(
+      'Actualización de Avance Físico',
+      'Proyectos',
+      `Avance físico del proyecto "${project.name}" actualizado a ${(overallProgress * 100).toFixed(1)}%`,
+      'update',
+      { projectId, physicalProgress: overallProgress }
+    );
+  };
 
   useEffect(() => {
     if (project) {
@@ -604,7 +653,7 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
         ? updatedSubtasks.reduce((acc: number, s: any) => acc + (s.progress || 0), 0) / totalSubtasks
         : 0;
 
-      await updateDoc(doc(db, `projects/${projectId}/budgetItems`, selectedBudgetItem.id), {
+      await updateProjectBudgetItem(projectId, selectedBudgetItem.id, {
         subtasks: updatedSubtasks,
         progress: itemProgress
       });
@@ -622,22 +671,9 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
         i.id === selectedBudgetItem.id ? { ...i, subtasks: updatedSubtasks, progress: itemProgress } : i
       );
       
-      const totalBudget = updatedBudgetItems.reduce((acc, i) => acc + ((i.materialCost + i.laborCost + i.indirectCost) * (i.quantity || 1)), 0);
-      const overallProgress = totalBudget > 0
-        ? updatedBudgetItems.reduce((acc, i) => acc + ((i.progress || 0) * ((i.materialCost + i.laborCost + i.indirectCost) * (i.quantity || 1))), 0) / totalBudget
-        : 0;
-
-      await updateDoc(doc(db, 'projects', projectId), {
-        physicalProgress: overallProgress
-      });
-
-      await logAction(
-        'Actualización de Avance Físico',
-        'Proyectos',
-        `Avance físico del proyecto "${project.name}" actualizado a ${(overallProgress * 100).toFixed(1)}%`,
-        'update',
-        { projectId, physicalProgress: overallProgress }
-      );
+      setBudgetItems(updatedBudgetItems);
+      setSelectedBudgetItem((prev: any) => (prev ? { ...prev, subtasks: updatedSubtasks, progress: itemProgress } : prev));
+      await persistProjectProgress(updatedBudgetItems);
 
       setIsSubtaskModalOpen(false);
       setNewSubtask({ name: '', status: 'Pending', responsible: '', progress: 0 });
@@ -662,7 +698,7 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
       : 0;
 
     try {
-      await updateDoc(doc(db, `projects/${projectId}/budgetItems`, budgetItemId), {
+      await updateProjectBudgetItem(projectId, budgetItemId, {
         subtasks: updatedSubtasks,
         progress: itemProgress
       });
@@ -680,24 +716,11 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
         i.id === budgetItemId ? { ...i, subtasks: updatedSubtasks, progress: itemProgress } : i
       );
       
-      const totalBudget = updatedBudgetItems.reduce((acc, i) => acc + ((i.materialCost + i.laborCost + i.indirectCost) * (i.quantity || 1)), 0);
-      const overallProgress = totalBudget > 0
-        ? updatedBudgetItems.reduce((acc, i) => acc + ((i.progress || 0) * ((i.materialCost + i.laborCost + i.indirectCost) * (i.quantity || 1))), 0) / totalBudget
-        : 0;
-
-      await updateDoc(doc(db, 'projects', projectId), {
-        physicalProgress: overallProgress
-      });
-
-      await logAction(
-        'Actualización de Avance Físico',
-        'Proyectos',
-        `Avance físico del proyecto "${project.name}" actualizado a ${(overallProgress * 100).toFixed(1)}%`,
-        'update',
-        { projectId, physicalProgress: overallProgress }
-      );
+      setBudgetItems(updatedBudgetItems);
+      await persistProjectProgress(updatedBudgetItems);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${projectId}/budgetItems/${budgetItemId}`);
+      console.error('Error updating subtask:', error);
+      toast.error('No se pudo actualizar la subtarea');
     }
   };
 
@@ -722,7 +745,7 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
       : 0;
 
     try {
-      await updateDoc(doc(db, `projects/${projectId}/budgetItems`, budgetItemId), {
+      await updateProjectBudgetItem(projectId, budgetItemId, {
         subtasks: updatedSubtasks,
         progress: itemProgress
       });
@@ -740,26 +763,13 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
         i.id === budgetItemId ? { ...i, subtasks: updatedSubtasks, progress: itemProgress } : i
       );
       
-      const totalBudget = updatedBudgetItems.reduce((acc, i) => acc + ((i.materialCost + i.laborCost + i.indirectCost) * (i.quantity || 1)), 0);
-      const overallProgress = totalBudget > 0
-        ? updatedBudgetItems.reduce((acc, i) => acc + ((i.progress || 0) * ((i.materialCost + i.laborCost + i.indirectCost) * (i.quantity || 1))), 0) / totalBudget
-        : 0;
-
-      await updateDoc(doc(db, 'projects', projectId), {
-        physicalProgress: overallProgress
-      });
-
-      await logAction(
-        'Actualización de Avance Físico',
-        'Proyectos',
-        `Avance físico del proyecto "${project.name}" actualizado a ${(overallProgress * 100).toFixed(1)}%`,
-        'update',
-        { projectId, physicalProgress: overallProgress }
-      );
+      setBudgetItems(updatedBudgetItems);
+      await persistProjectProgress(updatedBudgetItems);
 
       toast.success('Subtarea eliminada');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${projectId}/budgetItems/${budgetItemId}`);
+      console.error('Error deleting subtask:', error);
+      toast.error('No se pudo eliminar la subtarea');
     } finally {
       setIsSubtaskDeleteConfirmOpen(false);
       setSubtaskToDelete(null);
@@ -772,18 +782,25 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
       return;
     }
 
-    let updatedPois = [...pois];
-    if (editingPoiIndex !== null) {
-      updatedPois[editingPoiIndex] = { ...newPoiData, id: pois[editingPoiIndex].id };
-    } else {
-      const newPoi = { id: Date.now().toString(), ...newPoiData };
-      updatedPois = [...pois, newPoi];
-    }
-
     try {
-      await updateDoc(doc(db, 'projects', projectId), {
-        pois: updatedPois
-      });
+      if (editingPoiIndex !== null) {
+        const poi = pois[editingPoiIndex];
+        const updatedPoi = await updateProjectPoi(projectId, poi.id, {
+          name: newPoiData.name,
+          comment: newPoiData.comment,
+          lat: newPoiData.lat,
+          lng: newPoiData.lng,
+        });
+        setPois((prev) => prev.map((item, idx) => (idx === editingPoiIndex ? updatedPoi : item)));
+      } else {
+        const createdPoi = await createProjectPoi(projectId, {
+          name: newPoiData.name,
+          comment: newPoiData.comment,
+          lat: newPoiData.lat,
+          lng: newPoiData.lng,
+        });
+        setPois((prev) => [...prev, createdPoi]);
+      }
       
       await logAction(
         editingPoiIndex !== null ? 'Edición de Punto de Interés' : 'Adición de Punto de Interés',
@@ -798,7 +815,8 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
       setEditingPoiIndex(null);
       setNewPoiData({ lat: 0, lng: 0, name: '', comment: '' });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${projectId}`);
+      console.error('Error saving point of interest:', error);
+      toast.error('No se pudo guardar el punto de interés');
     }
   };
 
@@ -816,12 +834,14 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
   };
 
   const handleDeletePoi = async (index: number) => {
-    const updatedPois = pois.filter((_, i) => i !== index);
     const poiToDelete = pois[index];
     try {
-      await updateDoc(doc(db, 'projects', projectId), {
-        pois: updatedPois
-      });
+      if (!poiToDelete?.id) {
+        toast.error('No se encontró el punto de interés');
+        return;
+      }
+      await deleteProjectPoi(projectId, poiToDelete.id);
+      setPois((prev) => prev.filter((_, i) => i !== index));
       await logAction(
         'Eliminación de Punto de Interés',
         'Proyectos',
@@ -831,7 +851,8 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
       );
       toast.success('Punto de interés eliminado');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${projectId}`);
+      console.error('Error deleting point of interest:', error);
+      toast.error('No se pudo eliminar el punto de interés');
     }
   };
 
@@ -843,17 +864,21 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
     }
 
     try {
-      const docRef = await addDoc(collection(db, 'projects', projectId, 'logbook'), {
-        ...newLogEntry,
-        createdAt: serverTimestamp(),
+      const createdEntry = await createProjectLogbookEntry(projectId, {
+        date: newLogEntry.date,
+        content: newLogEntry.content,
+        weather: newLogEntry.weather,
+        workersCount: newLogEntry.workersCount,
+        photos: newLogEntry.photos,
         authorEmail: auth.currentUser?.email || 'salazaroliveros@gmail.com'
       });
+      setLogbookEntries((prev) => [createdEntry, ...prev]);
       await logAction(
         'Registro en Bitácora',
         'Proyectos',
         `Nueva entrada de bitácora añadida al proyecto "${project.name}"`,
         'create',
-        { projectId, logEntryId: docRef.id }
+        { projectId, logEntryId: createdEntry.id }
       );
       toast.success('Entrada de bitácora añadida');
       setIsLogbookModalOpen(false);
@@ -865,13 +890,15 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
         photos: []
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${projectId}/logbook`);
+      console.error('Error creating logbook entry:', error);
+      toast.error('No se pudo guardar la entrada de bitácora');
     }
   };
 
   const handleDeleteLogEntry = async (entryId: string) => {
     try {
-      await deleteDoc(doc(db, 'projects', projectId, 'logbook', entryId));
+      await deleteProjectLogbookEntry(projectId, entryId);
+      setLogbookEntries((prev) => prev.filter((entry) => entry.id !== entryId));
       await logAction(
         'Eliminación de Bitácora',
         'Proyectos',
@@ -881,7 +908,8 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
       );
       toast.success('Entrada de bitácora eliminada');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${projectId}/logbook/${entryId}`);
+      console.error('Error deleting logbook entry:', error);
+      toast.error('No se pudo eliminar la entrada de bitácora');
     }
   };
 
@@ -1028,20 +1056,33 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
         }
       }
 
-      await updateDoc(doc(db, 'projects', projectId), {
-        ...editForm,
+      const updatedProject = await updateProjectApi(projectId, {
+        name: editForm.name,
+        location: editForm.location,
+        projectManager: editForm.projectManager,
+        status: editForm.status,
         budget: Number(editForm.budget),
         spent: Number(editForm.spent),
-        area: Number(editForm.area),
         physicalProgress: Number(editForm.physicalProgress),
-        financialProgress: financialProgress,
-        coordinates: coordinates || null,
-        updatedAt: serverTimestamp()
+        financialProgress,
+        area: Number(editForm.area),
+        startDate: editForm.startDate,
+        endDate: editForm.endDate,
+        clientUid: editForm.clientUid || '',
+        typology: editForm.typology || 'RESIDENCIAL',
+        latitude: coordinates?.lat ? String(coordinates.lat) : undefined,
+        longitude: coordinates?.lng ? String(coordinates.lng) : undefined,
       });
+      setProject(updatedProject);
+      setEditForm(updatedProject);
+      if (updatedProject.coordinates) {
+        setMapCenter([updatedProject.coordinates.lat, updatedProject.coordinates.lng]);
+      }
       setIsEditing(false);
       toast.success('Obra actualizada con éxito');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${projectId}`);
+      console.error('Error updating project:', error);
+      toast.error('No se pudo actualizar el proyecto');
     }
   };
 
@@ -2610,18 +2651,17 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
                       {auditLogs.map(log => (
                         <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="px-6 py-4 text-xs text-slate-600 font-medium">
-                            {log.timestamp ? formatDate(log.timestamp.toDate().toISOString()) : 'Reciente'}
+                            {log.timestamp ? formatDate(log.timestamp) : 'Reciente'}
                           </td>
                           <td className="px-6 py-4">
-                            <p className="text-xs font-bold text-slate-900">{log.userEmail}</p>
+                            <p className="text-xs font-bold text-slate-900">{log.userEmail || log.userName || 'Usuario'}</p>
                           </td>
                           <td className="px-6 py-4">
                             <span className="px-2 py-1 bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-md">
-                              {log.field}
+                              {log.action}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-xs text-slate-400 line-through font-medium">{String(log.oldValue)}</td>
-                          <td className="px-6 py-4 text-xs text-emerald-600 font-black">{String(log.newValue)}</td>
+                          <td className="px-6 py-4 text-xs text-slate-500 font-medium" colSpan={2}>{log.details}</td>
                         </tr>
                       ))}
                       {auditLogs.length === 0 && (
@@ -3192,9 +3232,21 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    <tr>
-                      <td colSpan={4} className="px-6 py-8 text-center text-slate-400 italic">No hay registros de auditoría disponibles</td>
-                    </tr>
+                    {auditLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-4 text-xs text-slate-600 font-medium">
+                          {log.timestamp ? formatDate(log.timestamp) : 'Reciente'}
+                        </td>
+                        <td className="px-6 py-4 text-xs font-bold text-slate-900">{log.userEmail || log.userName || 'Usuario'}</td>
+                        <td className="px-6 py-4 text-xs text-slate-700 font-semibold">{log.action}</td>
+                        <td className="px-6 py-4 text-xs text-slate-500">{log.details}</td>
+                      </tr>
+                    ))}
+                    {auditLogs.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-8 text-center text-slate-400 italic">No hay registros de auditoría disponibles</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

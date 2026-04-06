@@ -1,6 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, query, where, orderBy, setDoc, getDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { 
   Plus, 
   Search, 
@@ -33,6 +31,9 @@ import { motion } from 'motion/react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import ConfirmModal from './ConfirmModal';
+import { listProjects, listProjectBudgetItemsDetailed } from '../lib/projectsApi';
+import { createSubcontract, deleteSubcontract, listSubcontracts, updateSubcontract } from '../lib/subcontractsApi';
+import { createTransaction, listTransactions } from '../lib/financialsApi';
 
 export default function Subcontracts() {
   const [subcontracts, setSubcontracts] = useState<any[]>([]);
@@ -81,37 +82,50 @@ export default function Subcontracts() {
     status: 'Active'
   });
 
+  const loadSubcontracts = useCallback(async () => {
+    try {
+      const items = await listSubcontracts();
+      setSubcontracts(items);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'subcontracts');
+    }
+  }, []);
+
+  const loadProjects = useCallback(async () => {
+    try {
+      const items = await listProjects();
+      setProjects(items);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, 'projects');
+    }
+  }, []);
+
   useEffect(() => {
-    if (!auth.currentUser || !newSub.projectId) {
+    if (!newSub.projectId) {
       setBudgetItems([]);
       return;
     }
 
-    const unsubBudget = onSnapshot(
-      collection(db, `projects/${newSub.projectId}/budgetItems`),
-      (snapshot) => {
-        setBudgetItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      },
-      (error) => handleFirestoreError(error, OperationType.GET, `projects/${newSub.projectId}/budgetItems`)
-    );
-    return () => unsubBudget();
+    let cancelled = false;
+    (async () => {
+      try {
+        const items = await listProjectBudgetItemsDetailed(newSub.projectId);
+        if (!cancelled) setBudgetItems(items);
+      } catch (error) {
+        if (!cancelled) handleFirestoreError(error, OperationType.GET, `projects/${newSub.projectId}/budgetItems`);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [newSub.projectId]);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
-
-    const unsubSubs = onSnapshot(collection(db, 'subcontracts'), (snapshot) => {
-      setSubcontracts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'subcontracts'));
-    const unsubProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'projects'));
-
-    return () => {
-      unsubSubs();
-      unsubProjects();
-    };
-  }, []);
+    (async () => {
+      await Promise.all([loadSubcontracts(), loadProjects()]);
+    })();
+  }, [loadProjects, loadSubcontracts]);
 
   const filteredSubcontracts = useMemo(() => {
     return subcontracts.filter(sub => 
@@ -126,6 +140,31 @@ export default function Subcontracts() {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredSubcontracts.slice(start, start + itemsPerPage);
   }, [filteredSubcontracts, currentPage, itemsPerPage]);
+
+  const getProgressWidthClass = (value: number) => {
+    if (!Number.isFinite(value) || value <= 0) return 'w-0';
+    if (value >= 100) return 'w-full';
+    if (value >= 95) return 'w-[95%]';
+    if (value >= 90) return 'w-[90%]';
+    if (value >= 85) return 'w-[85%]';
+    if (value >= 80) return 'w-[80%]';
+    if (value >= 75) return 'w-[75%]';
+    if (value >= 70) return 'w-[70%]';
+    if (value >= 65) return 'w-[65%]';
+    if (value >= 60) return 'w-[60%]';
+    if (value >= 55) return 'w-[55%]';
+    if (value >= 50) return 'w-1/2';
+    if (value >= 45) return 'w-[45%]';
+    if (value >= 40) return 'w-2/5';
+    if (value >= 35) return 'w-[35%]';
+    if (value >= 30) return 'w-[30%]';
+    if (value >= 25) return 'w-1/4';
+    if (value >= 20) return 'w-1/5';
+    if (value >= 15) return 'w-[15%]';
+    if (value >= 10) return 'w-[10%]';
+    if (value >= 5) return 'w-[5%]';
+    return 'w-[1%]';
+  };
 
   useEffect(() => {
     const checkExpirations = () => {
@@ -163,10 +202,11 @@ export default function Subcontracts() {
     if (!subToDelete) return;
     try {
       const sub = subcontracts.find(s => s.id === subToDelete);
-      await deleteDoc(doc(db, 'subcontracts', subToDelete));
+      await deleteSubcontract(subToDelete);
       setSubToDelete(null);
       toast.success('Subcontrato eliminado exitosamente');
       await logAction('Eliminación de Subcontrato', 'Subcontratos', `Subcontrato con ${sub?.contractor || subToDelete} eliminado`, 'delete', { subcontractId: subToDelete });
+      await loadSubcontracts();
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `subcontracts/${subToDelete}`);
     }
@@ -248,32 +288,24 @@ export default function Subcontracts() {
       };
 
       if (editingSub) {
-        await updateDoc(doc(db, 'subcontracts', editingSub.id), {
-          ...subData,
-          updatedAt: serverTimestamp()
-        });
+        await updateSubcontract(editingSub.id, subData);
         toast.success('Subcontrato actualizado exitosamente');
         await logAction('Edición de Subcontrato', 'Subcontratos', `Subcontrato con ${subData.contractor} actualizado`, 'update', { subcontractId: editingSub.id });
       } else {
-        // Generate a deterministic ID to prevent duplicates (projectId + service)
-        const sanitizedService = newSub.service.toLowerCase().trim().replace(/[^a-z0-9]/g, '_');
-        const customId = `${newSub.projectId}_${sanitizedService}`;
-        const subRef = doc(db, 'subcontracts', customId);
-        
-        // Check if it already exists
-        const subSnap = await getDoc(subRef);
-        if (subSnap.exists()) {
+        const duplicated = subcontracts.some(
+          sub => sub.projectId === newSub.projectId && String(sub.service || '').trim().toLowerCase() === newSub.service.trim().toLowerCase()
+        );
+        if (duplicated) {
           toast.error(`Ya existe un subcontrato para el servicio "${newSub.service}" en este proyecto.`);
           return;
         }
 
-        await setDoc(subRef, {
-          ...subData,
-          createdAt: serverTimestamp()
-        });
+        const created = await createSubcontract(subData);
         toast.success('Subcontrato registrado exitosamente');
-        await logAction('Registro de Subcontrato', 'Subcontratos', `Nuevo subcontrato con ${subData.contractor} registrado`, 'create', { subcontractId: customId });
+        await logAction('Registro de Subcontrato', 'Subcontratos', `Nuevo subcontrato con ${subData.contractor} registrado`, 'create', { subcontractId: created.id });
       }
+
+      await loadSubcontracts();
       setIsModalOpen(false);
       setEditingSub(null);
       setNewSub({ projectId: '', budgetItemId: '', contractor: '', service: '', startDate: '', endDate: '', total: 0, paid: 0, status: 'Active' });
@@ -284,43 +316,47 @@ export default function Subcontracts() {
   };
 
   useEffect(() => {
-    if (!auth.currentUser || !selectedSubDetails) {
+    if (!selectedSubDetails) {
       setSubTransactions([]);
       return;
     }
 
-    const q = query(
-      collection(db, 'transactions'),
-      where('subcontractId', '==', selectedSubDetails.id),
-      orderBy('date', 'desc')
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setSubTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => handleFirestoreError(error, OperationType.GET, `transactions (subcontract: ${selectedSubDetails.id})`));
-    return unsubscribe;
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await listTransactions({ subcontractId: selectedSubDetails.id, limit: 200, offset: 0 });
+        if (!cancelled) setSubTransactions(result.items);
+      } catch (error) {
+        if (!cancelled) handleFirestoreError(error, OperationType.GET, `transactions (subcontract: ${selectedSubDetails.id})`);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedSubDetails]);
 
   const handleMarkAsPaid = async (sub: any) => {
     try {
       const remaining = sub.total - sub.paid;
       if (remaining > 0) {
-        await addDoc(collection(db, 'transactions'), {
+        await createTransaction({
           projectId: sub.projectId,
+          budgetItemId: sub.budgetItemId || '',
           subcontractId: sub.id,
           type: 'Expense',
           category: 'Subcontratos',
           amount: remaining,
           date: new Date().toISOString().split('T')[0],
           description: `Pago final - ${sub.service} (${sub.contractor})`,
-          createdAt: serverTimestamp()
         });
       }
 
-      await updateDoc(doc(db, 'subcontracts', sub.id), {
+      await updateSubcontract(sub.id, {
         paid: sub.total,
         status: 'Finished',
-        updatedAt: serverTimestamp()
       });
+      await loadSubcontracts();
       toast.success('Subcontrato saldado correctamente');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `subcontracts/${sub.id}`);
@@ -338,22 +374,22 @@ export default function Subcontracts() {
 
     const newPaid = selectedSubForPayment.paid + paymentAmount;
     try {
-      await addDoc(collection(db, 'transactions'), {
+      await createTransaction({
         projectId: selectedSubForPayment.projectId,
+        budgetItemId: selectedSubForPayment.budgetItemId || '',
         subcontractId: selectedSubForPayment.id,
         type: 'Expense',
         category: 'Subcontratos',
         amount: paymentAmount,
         date: new Date().toISOString().split('T')[0],
         description: `Pago parcial - ${selectedSubForPayment.service} (${selectedSubForPayment.contractor})`,
-        createdAt: serverTimestamp()
       });
 
-      await updateDoc(doc(db, 'subcontracts', selectedSubForPayment.id), {
+      await updateSubcontract(selectedSubForPayment.id, {
         paid: newPaid,
         status: newPaid >= selectedSubForPayment.total ? 'Finished' : selectedSubForPayment.status,
-        updatedAt: serverTimestamp()
       });
+      await loadSubcontracts();
       setIsPaymentModalOpen(false);
       setSelectedSubForPayment(null);
       setPaymentAmount(0);
@@ -399,6 +435,8 @@ export default function Subcontracts() {
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 shadow-sm">
             <button 
+              title="Vista de tarjetas"
+              aria-label="Vista de tarjetas"
               onClick={() => setViewMode('grid')}
               className={cn(
                 "p-1.5 sm:p-2 rounded-lg transition-all",
@@ -408,6 +446,8 @@ export default function Subcontracts() {
               <LayoutGrid size={16} className="sm:w-4.5 sm:h-4.5" />
             </button>
             <button 
+              title="Vista de tabla"
+              aria-label="Vista de tabla"
               onClick={() => setViewMode('table')}
               className={cn(
                 "p-1.5 sm:p-2 rounded-lg transition-all",
@@ -506,7 +546,7 @@ export default function Subcontracts() {
                       <div className={cn(
                         "h-full transition-all duration-500",
                         progress >= 100 ? "bg-emerald-500" : "bg-primary"
-                      )} style={{ width: `${progress}%` }} />
+                      , getProgressWidthClass(progress))} />
                     </div>
                   </div>
 
@@ -552,6 +592,8 @@ export default function Subcontracts() {
                     </div>
                     <div className="flex items-center gap-2">
                       <button 
+                        title={`Editar subcontrato ${sub.contractor}`}
+                        aria-label={`Editar subcontrato ${sub.contractor}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           openEditModal(sub);
@@ -561,6 +603,8 @@ export default function Subcontracts() {
                         <Edit2 size={16} />
                       </button>
                       <button 
+                        title={`Eliminar subcontrato ${sub.contractor}`}
+                        aria-label={`Eliminar subcontrato ${sub.contractor}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeleteSub(sub.id);
@@ -655,6 +699,8 @@ export default function Subcontracts() {
                             </>
                           )}
                           <button 
+                            title={`Editar subcontrato ${sub.contractor}`}
+                            aria-label={`Editar subcontrato ${sub.contractor}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               openEditModal(sub);
@@ -664,6 +710,8 @@ export default function Subcontracts() {
                             <Edit2 size={16} />
                           </button>
                           <button 
+                            title={`Eliminar subcontrato ${sub.contractor}`}
+                            aria-label={`Eliminar subcontrato ${sub.contractor}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteSub(sub.id);
@@ -693,6 +741,8 @@ export default function Subcontracts() {
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Por página:</label>
               <select 
+                title="Cantidad por pagina"
+                aria-label="Cantidad por pagina"
                 className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold outline-none text-slate-900 dark:text-white"
                 value={itemsPerPage}
                 onChange={(e) => {
@@ -708,6 +758,8 @@ export default function Subcontracts() {
           </div>
           <div className="flex items-center gap-2">
             <button 
+              title="Pagina anterior"
+              aria-label="Pagina anterior"
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
@@ -739,6 +791,8 @@ export default function Subcontracts() {
               })}
             </div>
             <button 
+              title="Pagina siguiente"
+              aria-label="Pagina siguiente"
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
@@ -1124,7 +1178,10 @@ export default function Subcontracts() {
                   <span className="text-slate-900">{((selectedSubDetails.paid / selectedSubDetails.total) * 100).toFixed(1)}%</span>
                 </div>
                 <div className="h-3 bg-white rounded-full overflow-hidden border border-slate-200">
-                  <div className="h-full bg-emerald-500" style={{ width: `${(selectedSubDetails.paid / selectedSubDetails.total) * 100}%` }} />
+                  <div className={cn(
+                    "h-full bg-emerald-500 transition-all duration-500",
+                    getProgressWidthClass((selectedSubDetails.paid / selectedSubDetails.total) * 100)
+                  )} />
                 </div>
               </div>
             </div>
