@@ -1,3 +1,5 @@
+import { createApp } from '../server';
+
 type AppHandler = (req: any, res: any) => any;
 
 let cachedApp: AppHandler | null = null;
@@ -9,9 +11,8 @@ async function getApp() {
   }
 
   if (!appInitPromise) {
-    appInitPromise = import('../server')
-      .then(async ({ createApp }) => {
-        const app = await createApp({ includeFrontend: false });
+    appInitPromise = createApp({ includeFrontend: false })
+      .then((app) => {
         cachedApp = app as AppHandler;
         return cachedApp;
       })
