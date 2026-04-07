@@ -1,4 +1,4 @@
-import { createApp } from '../server';
+import { createApp } from '../server.js';
 
 type AppHandler = (req: any, res: any) => any;
 
