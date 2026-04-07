@@ -3,6 +3,7 @@ import { Settings as SettingsIcon, Palette, Check, Save, Building2, Globe, Dolla
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { logAction } from '../lib/audit';
+import { getOfflineQueueStatus, onOfflineQueueStatusChange, retryOfflineSync } from '../lib/api';
 
 import { useTheme, THEME_COLORS } from '../contexts/ThemeContext';
 
@@ -12,6 +13,31 @@ export default function Settings() {
   const [companyName, setCompanyName] = useState('WM_M&S CONSTRUCTORA');
   const [currency, setCurrency] = useState('GTQ');
   const [taxRate, setTaxRate] = useState(12);
+  const [queuePending, setQueuePending] = useState(0);
+  const [queueSyncing, setQueueSyncing] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    const initial = getOfflineQueueStatus();
+    setQueuePending(initial.pending);
+    setQueueSyncing(initial.syncing);
+    setLastSyncAt(initial.lastSyncAt);
+
+    return onOfflineQueueStatusChange((status) => {
+      setQueuePending(status.pending);
+      setQueueSyncing(status.syncing);
+      setLastSyncAt(status.lastSyncAt);
+    });
+  }, []);
+
+  const handleRetrySync = async () => {
+    await retryOfflineSync();
+    const refreshed = getOfflineQueueStatus();
+    setQueuePending(refreshed.pending);
+    setQueueSyncing(refreshed.syncing);
+    setLastSyncAt(refreshed.lastSyncAt);
+    toast.success('Sincronizacion manual ejecutada');
+  };
 
   const handleSaveSettings = async () => {
     setTheme(selectedTheme);
@@ -163,6 +189,45 @@ export default function Settings() {
             <p className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-[8px] sm:text-[10px]">Última Sincronización</p>
             <p className="text-slate-900 dark:text-white font-medium truncate">{new Date().toLocaleString()}</p>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-4 sm:p-8">
+        <div className="flex items-center gap-3 mb-4 sm:mb-6">
+          <div className="p-1.5 sm:p-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 rounded-lg">
+            <Save size={16} className="sm:w-5 sm:h-5" />
+          </div>
+          <h2 className="text-sm sm:text-xl font-bold text-slate-900 dark:text-white">Diagnóstico de Sincronización</h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6">
+          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4">
+            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Pendientes en Cola</p>
+            <p className="text-lg sm:text-2xl font-bold text-slate-900 dark:text-white mt-1">{queuePending}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4">
+            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Estado Sync</p>
+            <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1">
+              {queueSyncing ? 'Sincronizando...' : 'En espera'}
+            </p>
+          </div>
+          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4">
+            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Último Sync Real</p>
+            <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1 truncate">
+              {lastSyncAt ? new Date(lastSyncAt).toLocaleString() : 'Sin registros'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={handleRetrySync}
+            disabled={queueSyncing}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 text-white font-bold py-2.5 sm:py-3 px-6 sm:px-8 rounded-xl hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all text-xs sm:text-sm"
+          >
+            Reintentar Sincronización
+          </button>
         </div>
       </div>
     </div>

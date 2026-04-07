@@ -2,6 +2,7 @@ const configuredBase = (import.meta.env.VITE_API_BASE_URL || '').trim();
 const AUTH_STORAGE_KEY = 'erp_local_auth_user';
 const OFFLINE_QUEUE_KEY = 'erp_offline_request_queue';
 const OFFLINE_CACHE_PREFIX = 'erp_offline_cache:';
+const OFFLINE_LAST_SYNC_AT_KEY = 'erp_offline_last_sync_at';
 
 interface QueuedRequest {
   id: string;
@@ -13,6 +14,7 @@ interface QueuedRequest {
 }
 
 let isFlushingQueue = false;
+const queueStatusListeners = new Set<(status: { pending: number; syncing: boolean; lastSyncAt: string | null }) => void>();
 
 function normalizeBaseUrl(baseUrl: string) {
   if (!baseUrl) return '';
@@ -80,6 +82,7 @@ function readQueuedRequests(): QueuedRequest[] {
 function writeQueuedRequests(queue: QueuedRequest[]) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+  emitQueueStatus();
 }
 
 function queueRequest(item: QueuedRequest) {
@@ -88,12 +91,58 @@ function queueRequest(item: QueuedRequest) {
   writeQueuedRequests(queue);
 }
 
+function getLastSyncAt() {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(OFFLINE_LAST_SYNC_AT_KEY);
+}
+
+function setLastSyncAt(value: string) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(OFFLINE_LAST_SYNC_AT_KEY, value);
+}
+
+function emitQueueStatus() {
+  if (typeof window === 'undefined') return;
+
+  const status = {
+    pending: readQueuedRequests().length,
+    syncing: isFlushingQueue,
+    lastSyncAt: getLastSyncAt(),
+  };
+
+  queueStatusListeners.forEach((listener) => listener(status));
+}
+
+export function getOfflineQueueStatus() {
+  return {
+    pending: readQueuedRequests().length,
+    syncing: isFlushingQueue,
+    lastSyncAt: getLastSyncAt(),
+  };
+}
+
+export function onOfflineQueueStatusChange(
+  listener: (status: { pending: number; syncing: boolean; lastSyncAt: string | null }) => void
+) {
+  queueStatusListeners.add(listener);
+  listener(getOfflineQueueStatus());
+
+  return () => {
+    queueStatusListeners.delete(listener);
+  };
+}
+
+export async function retryOfflineSync() {
+  await flushQueuedRequests();
+}
+
 async function flushQueuedRequests() {
   if (typeof window === 'undefined' || isFlushingQueue || !navigator.onLine) return;
 
   isFlushingQueue = true;
+  emitQueueStatus();
   try {
-    let queue = readQueuedRequests();
+    const queue = readQueuedRequests();
     if (queue.length === 0) return;
 
     const pending: QueuedRequest[] = [];
@@ -115,8 +164,11 @@ async function flushQueuedRequests() {
     }
 
     writeQueuedRequests(pending);
+    setLastSyncAt(new Date().toISOString());
+    emitQueueStatus();
   } finally {
     isFlushingQueue = false;
+    emitQueueStatus();
   }
 }
 
@@ -261,7 +313,15 @@ if (typeof window !== 'undefined') {
     void flushQueuedRequests();
   });
 
+  window.addEventListener('storage', (event) => {
+    if (event.key === OFFLINE_QUEUE_KEY || event.key === OFFLINE_LAST_SYNC_AT_KEY) {
+      emitQueueStatus();
+    }
+  });
+
   if (navigator.onLine) {
     void flushQueuedRequests();
   }
+
+  emitQueueStatus();
 }
