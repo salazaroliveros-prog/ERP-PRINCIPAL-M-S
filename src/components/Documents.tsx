@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { auth } from '../firebase';
+import { auth } from '../lib/authStorageClient';
 import { toast } from 'sonner';
 import ConfirmModal from './ConfirmModal';
 import { logAction } from '../lib/audit';

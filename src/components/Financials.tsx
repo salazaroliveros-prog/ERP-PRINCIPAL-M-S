@@ -523,6 +523,7 @@ export default function Financials() {
     try {
       const created = await createTransaction({
         ...newTransaction,
+        type: newTransaction.type as 'Income' | 'Expense',
         amount: Number(newTransaction.amount)
       });
       setTransactions(prev => [created, ...prev]);

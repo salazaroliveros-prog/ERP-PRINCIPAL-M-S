@@ -64,7 +64,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import ConfirmModal from './ConfirmModal';
 import ProjectBudget from './ProjectBudget';
 import { List, Map as MapIcon } from 'lucide-react';
-import { createBudgetItem, createProject, deleteProject, listProjects, updateProject } from '../lib/projectsApi';
+import { createBudgetItem, createProject, deleteProject, listProjectBudgetItemsDetailed, listProjects, updateProject } from '../lib/projectsApi';
 import { listClients } from '../lib/clientsApi';
 
 const StatusBadge = ({ status }: { status: string }) => {
@@ -560,7 +560,7 @@ export default function Projects() {
 
           await createBudgetItem(created.id, {
             description: template.description,
-            category: template.category || 'General',
+            category: 'General',
             totalItemPrice,
             order: i + 1,
           });

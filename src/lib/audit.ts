@@ -1,4 +1,4 @@
-import { auth } from '../firebase';
+import { auth } from './authStorageClient';
 import { createAuditLog } from './auditApi';
 
 export type AuditLogType = 'create' | 'update' | 'delete' | 'auth' | 'system' | 'read';

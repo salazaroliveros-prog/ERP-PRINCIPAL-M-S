@@ -153,11 +153,11 @@ export default function Settings() {
           </div>
           <div className="space-y-0.5 sm:space-y-1">
             <p className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-[8px] sm:text-[10px]">Entorno</p>
-            <p className="text-slate-900 dark:text-white font-medium truncate">Producción (GitHub Pages + Firebase)</p>
+            <p className="text-slate-900 dark:text-white font-medium truncate">Producción (Vite + Node/Express)</p>
           </div>
           <div className="space-y-0.5 sm:space-y-1">
             <p className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-[8px] sm:text-[10px]">Base de Datos</p>
-            <p className="text-slate-900 dark:text-white font-medium">Firestore Enterprise</p>
+            <p className="text-slate-900 dark:text-white font-medium">PostgreSQL</p>
           </div>
           <div className="space-y-0.5 sm:space-y-1">
             <p className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-[8px] sm:text-[10px]">Última Sincronización</p>

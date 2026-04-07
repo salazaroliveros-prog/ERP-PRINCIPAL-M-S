@@ -5,12 +5,16 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Pool } from "pg";
+import multer from "multer";
+import fs from "fs/promises";
+import { randomUUID } from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
+const UPLOADS_PUBLIC_DIR = path.join(process.cwd(), "public", "uploads");
 
 const pool = DATABASE_URL
   ? new Pool({
@@ -18,6 +22,27 @@ const pool = DATABASE_URL
       ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false },
     })
   : null;
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 15 * 1024 * 1024,
+  },
+});
+
+function sanitizePathSegment(segment: string) {
+  return segment.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function toSafeRelativePath(rawPath: string) {
+  const normalized = rawPath.replace(/\\/g, "/").trim();
+  const segments = normalized
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment && segment !== "." && segment !== "..");
+
+  return segments.map(sanitizePathSegment).join("/");
+}
 
 type TransactionType = "Income" | "Expense";
 
@@ -364,6 +389,16 @@ interface NotificationRow {
   created_at: string;
 }
 
+interface AppUserRow {
+  id: string;
+  email: string;
+  display_name: string;
+  photo_url: string | null;
+  created_at: string;
+  updated_at: string;
+  last_login_at: string;
+}
+
 function mapTransaction(row: TransactionRow) {
   return {
     id: row.id,
@@ -473,6 +508,29 @@ function mapNotification(row: NotificationRow) {
     type: row.type,
     read: Boolean(row.read),
     createdAt: row.created_at,
+  };
+}
+
+function mapAppUser(row: AppUserRow) {
+  return {
+    uid: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    photoURL: row.photo_url,
+    emailVerified: true,
+    isAnonymous: false,
+    tenantId: null,
+    providerData: [
+      {
+        providerId: 'postgres-local',
+        displayName: row.display_name,
+        email: row.email,
+        photoURL: row.photo_url,
+      },
+    ],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastLoginAt: row.last_login_at,
   };
 }
 
@@ -789,6 +847,91 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
     })
   );
   app.use(express.json());
+  app.use("/uploads", express.static(UPLOADS_PUBLIC_DIR));
+
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const email = String(req.body?.email || '').trim().toLowerCase();
+      const displayName = String(req.body?.displayName || '').trim();
+      const photoURL = String(req.body?.photoURL || '').trim();
+
+      if (!email) {
+        return res.status(400).json({ error: 'email es obligatorio' });
+      }
+
+      const safeDisplayName = displayName || email.split('@')[0];
+
+      await db.query(
+        `
+          create table if not exists app_users (
+            id text primary key,
+            email text not null unique,
+            display_name text not null,
+            photo_url text,
+            created_at timestamptz not null default now(),
+            updated_at timestamptz not null default now(),
+            last_login_at timestamptz not null default now()
+          )
+        `
+      );
+
+      const result = await db.query<AppUserRow>(
+        `
+          insert into app_users (id, email, display_name, photo_url, last_login_at)
+          values ($1, $2, $3, $4, now())
+          on conflict (email)
+          do update
+          set
+            display_name = excluded.display_name,
+            photo_url = excluded.photo_url,
+            updated_at = now(),
+            last_login_at = now()
+          returning id, email, display_name, photo_url, created_at, updated_at, last_login_at
+        `,
+        [randomUUID(), email, safeDisplayName, photoURL || null]
+      );
+
+      return res.json(mapAppUser(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo iniciar sesion' });
+    }
+  });
+
+  app.post('/api/uploads', upload.single('file'), async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: 'Archivo requerido' });
+      }
+
+      const requestedPath = String(req.body?.path || '').trim();
+      const safePath = toSafeRelativePath(requestedPath || file.originalname);
+
+      const safeDir = path.dirname(safePath) === '.' ? '' : path.dirname(safePath);
+      const originalName = path.basename(safePath);
+      const timestamp = Date.now();
+      const randomToken = Math.random().toString(36).slice(2, 8);
+      const finalFileName = `${timestamp}-${randomToken}-${originalName}`;
+
+      const destinationDir = path.join(UPLOADS_PUBLIC_DIR, safeDir);
+      await fs.mkdir(destinationDir, { recursive: true });
+
+      const finalFilePath = path.join(destinationDir, finalFileName);
+      await fs.writeFile(finalFilePath, file.buffer);
+
+      const relativeParts = ['uploads'];
+      if (safeDir) {
+        relativeParts.push(safeDir);
+      }
+      relativeParts.push(finalFileName);
+
+      const publicUrl = `/${relativeParts.join('/').replace(/\\/g, '/')}`;
+      return res.status(201).json({ url: publicUrl });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo subir el archivo' });
+    }
+  });
 
   // API routes
   app.get("/api/health", async (req, res) => {

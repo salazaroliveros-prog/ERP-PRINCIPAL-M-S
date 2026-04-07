@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { signOut, User } from 'firebase/auth';
-import { auth } from '../firebase';
+import { User, auth } from '../lib/authStorageClient';
 import { 
   LayoutDashboard, 
   Construction, 
@@ -316,7 +315,7 @@ export const Sidebar = ({
                                     <p className="text-xs font-black text-slate-900 dark:text-white leading-tight mb-1">{n.title}</p>
                                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-2">{n.body}</p>
                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
-                                      {n.createdAt?.toDate ? n.createdAt.toDate().toLocaleString() : 'Reciente'}
+                                      {n.createdAt ? new Date(n.createdAt).toLocaleString() : 'Reciente'}
                                     </p>
                                   </div>
                                 </div>

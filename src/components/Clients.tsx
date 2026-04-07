@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { storage } from '../firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage, ref, uploadBytes, getDownloadURL } from '../lib/authStorageClient';
 import { 
   Plus, 
   Search, 

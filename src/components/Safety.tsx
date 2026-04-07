@@ -27,7 +27,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { cn, handleFirestoreError, OperationType } from '../lib/utils';
-import { auth } from '../firebase';
+import { auth } from '../lib/authStorageClient';
 import ConfirmModal from './ConfirmModal';
 import { logAction } from '../lib/audit';
 import { createSafetyIncident, deleteSafetyIncident, listSafetyIncidents, updateSafetyIncident } from '../lib/safetyApi';

@@ -60,9 +60,6 @@ export default defineConfig(({mode}) => {
             if (id.includes('jspdf') || id.includes('jspdf-autotable')) {
               return 'jspdf-vendor';
             }
-            if (id.includes('firebase')) {
-              return 'firebase-vendor';
-            }
             if (id.includes('react-router') || id.includes('@remix-run/router')) {
               return 'router-vendor';
             }

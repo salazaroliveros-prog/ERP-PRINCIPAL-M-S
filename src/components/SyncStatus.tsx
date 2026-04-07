@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Wifi, WifiOff, Cloud, CloudOff, RefreshCw } from 'lucide-react';
-import { onSyncStatusChange, isSyncing } from '../firebase';
+import { onSyncStatusChange, isSyncing } from '../lib/authStorageClient';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 

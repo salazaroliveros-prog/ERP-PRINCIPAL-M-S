@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from 'firebase/auth';
-import { auth } from './firebase';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User, auth } from './lib/authStorageClient';
 import { 
   LayoutDashboard, 
   Construction, 
@@ -142,9 +141,9 @@ const Login = () => {
           {isLoading ? (
             <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           ) : (
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+            <Users className="w-5 h-5" />
           )}
-          {isLoading ? 'Iniciando sesión...' : 'Ingresar con Google'}
+          {isLoading ? 'Iniciando sesión...' : 'Ingresar al sistema'}
         </button>
 
         <p className="mt-8 text-xs text-slate-400 dark:text-slate-500">
@@ -330,8 +329,8 @@ function AppContent({
       return () => (window as any).cancelIdleCallback?.(idleId);
     }
 
-    const timeoutId = window.setTimeout(runDeferredLoad, 1200);
-    return () => window.clearTimeout(timeoutId);
+    const timeoutId = globalThis.setTimeout(runDeferredLoad, 1200);
+    return () => globalThis.clearTimeout(timeoutId);
   }, [canPrefetch]);
 
   useEffect(() => {

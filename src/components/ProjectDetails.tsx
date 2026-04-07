@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { storage } from '../firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage, ref, uploadBytes, getDownloadURL, getAuth } from '../lib/authStorageClient';
 import {
   listProjects,
   listProjectBudgetItemsDetailed,
@@ -82,7 +81,6 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 import { FormModal } from './FormModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { getAuth } from 'firebase/auth';
 import { logAction, logProjectChange } from '../lib/audit';
 import { toast } from 'sonner';
 import { sendNotification } from '../lib/notifications';

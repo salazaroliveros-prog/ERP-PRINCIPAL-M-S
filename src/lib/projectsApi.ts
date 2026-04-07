@@ -69,6 +69,7 @@ export interface BudgetItemDetail {
   materials: any[];
   labor: any[];
   subtasks: any[];
+  progress?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,6 +92,7 @@ export interface BudgetItemUpsertInput {
   materials?: any[];
   labor?: any[];
   subtasks?: any[];
+  progress?: number;
 }
 
 export async function listProjects(): Promise<ProjectSummary[]> {

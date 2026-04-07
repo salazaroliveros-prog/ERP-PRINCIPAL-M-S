@@ -6,8 +6,7 @@ Backend en PostgreSQL (Express + SQL migrations).
 ## Requisitos
 
 - Node.js 20+
-- Cuenta de Firebase con proyecto activo (Auth y Storage)
-- Firebase CLI (opcional, solo para desplegar reglas de Storage)
+- PostgreSQL accesible desde el backend (DATABASE_URL)
 
 ## Ejecucion local
 
@@ -100,17 +99,19 @@ Variables opcionales para ajustar comportamiento en runtime:
 Fase completada en este repo:
 
 - Frontend continua desplegando en GitHub Pages.
-- Aplicacion frontend migrada a API REST SQL (sin uso de Firestore en codigo de app).
+- Aplicacion frontend migrada a API REST SQL (sin SDK de Firebase en la app).
 - Backend Express + PostgreSQL con migraciones automatizadas y workflow de migracion en GitHub Actions.
 - Notificaciones y auditoria persistidas en PostgreSQL.
+- Inicio de sesion persistido en PostgreSQL (tabla app_users) con fallback local si la BD no esta disponible.
+- Carga de archivos migrada a endpoint local /api/uploads con archivos servidos desde /uploads.
 
 Pendiente para terminar migracion total:
 
 - QA funcional end-to-end por modulo y smoke test de despliegue backend.
-- Opcional: retirar configuraciones de Firestore del proyecto Firebase si ya no se van a usar.
+- Revisar pipeline de deploy para garantizar build/rollback y observabilidad.
 
 ## Notas importantes
 
 - La app ya usa HashRouter, por lo que es compatible con GitHub Pages.
 - El backend no depende de Cloud Run para funcionar.
-- Si cambias de proyecto Firebase (Auth/Storage), actualiza [firebase-applet-config.json](firebase-applet-config.json).
+- Si deseas endurecer seguridad de archivos, agrega validaciones MIME/tamanio en /api/uploads y/o integra almacenamiento externo.

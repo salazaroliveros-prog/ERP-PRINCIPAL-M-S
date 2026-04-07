@@ -73,6 +73,7 @@ export interface CreatePurchaseOrderInput {
   unit?: string;
   estimatedCost?: number;
   supplier?: string;
+  supplierId?: string;
   notes?: string;
   status?: string;
   date?: string;
