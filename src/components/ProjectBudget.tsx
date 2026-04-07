@@ -701,7 +701,10 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const updateQuantity = async (itemId: string, quantity: number) => {
-    if (isNaN(quantity) || quantity < 0) {
+    if (!Number.isFinite(quantity)) {
+      return;
+    }
+    if (quantity < 0) {
       toast.error('La cantidad debe ser un número válido y no negativo');
       return;
     }
@@ -724,9 +727,27 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       estimatedDays,
     };
 
+    const updatedBudgetItems = budgetItems.map((budgetItem) =>
+      budgetItem.id === itemId
+        ? {
+            ...budgetItem,
+            quantity,
+            totalItemPrice,
+            estimatedDays,
+          }
+        : budgetItem
+    );
+
+    setBudgetItems(updatedBudgetItems);
+
     if (editingItem?.id === itemId) {
       setEditingItem(updatedItem);
     }
+
+    const newTotalBudget = updatedBudgetItems.reduce(
+      (sum, budgetItem) => sum + (budgetItem.totalItemPrice || 0),
+      0
+    );
 
     try {
       await patchBudgetItem(itemId, {
@@ -735,19 +756,27 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         estimatedDays,
       });
 
-      // Update project total budget
-      const newTotalBudget = budgetItems.reduce((sum, i) => {
-        if (i.id === itemId) return sum + totalItemPrice;
-        return sum + (i.totalItemPrice || 0);
-      }, 0);
-
       await patchProjectBudget({
         budget: newTotalBudget,
         typology: project.typology,
       });
     } catch (error) {
+      await loadBudgetItems();
       handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
+  };
+
+  const handleQuantityInputChange = (itemId: string, rawValue: string) => {
+    if (rawValue.trim() === '') {
+      return;
+    }
+
+    const parsedQuantity = Number(rawValue.replace(',', '.'));
+    if (!Number.isFinite(parsedQuantity)) {
+      return;
+    }
+
+    updateQuantity(itemId, parsedQuantity);
   };
 
   const handleDeleteItem = (itemId: string) => {
@@ -2285,7 +2314,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                   step="any"
                                   className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[11px] font-black focus:ring-2 focus:ring-primary outline-none transition-all"
                                   value={item.quantity}
-                                  onChange={(e) => updateQuantity(item.id, Number(e.target.value))}
+                                  onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
                                 />
                               </div>
                               <div className="col-span-2 flex items-center justify-end gap-1.5">
@@ -2315,7 +2344,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                   step="any"
                                   className="w-full px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-bold focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={item.quantity}
-                                  onChange={(e) => updateQuantity(item.id, Number(e.target.value))}
+                                  onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
                                 />
                               </div>
                               <div className="col-span-1 text-[10px] font-bold text-blue-600 text-right">{formatCurrency(item.laborCost || 0)}</div>
@@ -2369,7 +2398,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                   step="any"
                                   className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-black focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={item.quantity}
-                                  onChange={(e) => updateQuantity(item.id, Number(e.target.value))}
+                                  onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
                                 />
                               </div>
                               <button 
@@ -2444,7 +2473,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                     step="any"
                                     className="w-full pl-2 pr-6 py-1 bg-slate-50 border border-slate-200 rounded text-[10px] font-black focus:ring-1 focus:ring-primary outline-none transition-all"
                                     value={item.quantity}
-                                    onChange={(e) => updateQuantity(item.id, Number(e.target.value))}
+                                    onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
                                   />
                                   <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[6px] font-black text-slate-400 uppercase pointer-events-none">{item.unit}</span>
                                 </div>
@@ -3767,7 +3796,10 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                         className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-bold text-slate-700 dark:text-slate-200 text-sm transition-all"
                         value={editingItem.quantity}
                         onChange={(e) => {
-                          const qty = Number(e.target.value);
+                          const qty = Number(e.target.value.replace(',', '.'));
+                          if (!Number.isFinite(qty)) {
+                            return;
+                          }
                           const updated = { ...editingItem, quantity: qty };
                           setEditingItem(updated);
                           updateQuantity(editingItem.id, qty);
