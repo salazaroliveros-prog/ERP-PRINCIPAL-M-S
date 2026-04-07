@@ -266,6 +266,7 @@ export default function Quotes() {
     if (!validateAllItems(true)) return;
 
     if (!newQuote.clientId) return toast.error('Por favor seleccione un cliente');
+    if (!newQuote.projectId) return toast.error('Por favor seleccione un proyecto');
     if (newQuote.items.length === 0) return toast.error('Por favor agregue al menos un item');
 
     try {
@@ -855,6 +856,10 @@ export default function Quotes() {
                       toast.error('Por favor seleccione un cliente');
                       return;
                     }
+                    if (!newQuote.projectId) {
+                      toast.error('Por favor seleccione un proyecto');
+                      return;
+                    }
                     setCurrentStep(prev => prev + 1);
                   }}
                   className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary-hover transition-all shadow-lg shadow-primary-shadow group"
@@ -899,7 +904,7 @@ export default function Quotes() {
                   </FormSelect>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">Proyecto Relacionado (Opcional)</label>
+                      <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">Proyecto Relacionado *</label>
                       <button
                         type="button"
                         onClick={handleAISuggestions}
