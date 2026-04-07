@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express from "express";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -833,6 +833,96 @@ function requireDatabase() {
   return pool;
 }
 
+let dbAvailabilityCache: { ok: boolean; checkedAt: number } = { ok: !!pool, checkedAt: 0 };
+
+async function isDatabaseAvailable() {
+  if (!pool) return false;
+  const now = Date.now();
+  if (now - dbAvailabilityCache.checkedAt < 8000) {
+    return dbAvailabilityCache.ok;
+  }
+
+  try {
+    await pool.query('select 1');
+    dbAvailabilityCache = { ok: true, checkedAt: now };
+    return true;
+  } catch {
+    dbAvailabilityCache = { ok: false, checkedAt: now };
+    return false;
+  }
+}
+
+function mapFallbackUser(email: string, displayName: string, photoURL: string | null) {
+  return {
+    uid: randomUUID(),
+    email,
+    displayName,
+    photoURL,
+    emailVerified: true,
+    isAnonymous: false,
+    tenantId: null,
+    providerData: [
+      {
+        providerId: 'local-fallback',
+        displayName,
+        email,
+        photoURL,
+      },
+    ],
+  };
+}
+
+function serveFallbackRead(req: Request, res: Response) {
+  if (req.path === '/health') {
+    return res.json({ status: 'ok', db: 'unavailable' });
+  }
+
+  if (req.path === '/projects') {
+    return res.json({ items: [] });
+  }
+  if (req.path === '/clients') {
+    return res.json({ items: [] });
+  }
+  if (req.path === '/subcontracts') {
+    return res.json({ items: [] });
+  }
+  if (req.path === '/workflows') {
+    return res.json({ items: [] });
+  }
+  if (req.path === '/deleted-records') {
+    return res.json({ items: [] });
+  }
+  if (req.path === '/inventory') {
+    return res.json({ items: [], hasMore: false });
+  }
+  if (req.path === '/notifications') {
+    return res.json({ items: [], hasMore: false });
+  }
+  if (req.path === '/transactions') {
+    const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
+    const offset = Math.max(Number(req.query.offset || 0), 0);
+    return res.json({ items: [], hasMore: false, limit, offset });
+  }
+  if (req.path === '/notifications/stream') {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+    res.write('retry: 8000\n\n');
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(': keepalive\n\n');
+      } catch {
+        clearInterval(heartbeat);
+      }
+    }, 30000);
+    req.on('close', () => clearInterval(heartbeat));
+    return;
+  }
+
+  return res.status(503).json({ error: 'Base de datos no disponible temporalmente' });
+}
+
 export async function createApp(options?: { includeFrontend?: boolean }) {
   const app = express();
   const notificationStreams = new Set<Response>();
@@ -866,6 +956,27 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   );
   app.use(express.json());
   app.use("/uploads", express.static(UPLOADS_PUBLIC_DIR));
+
+  app.use('/api', async (req, res, next) => {
+    const dbAvailable = await isDatabaseAvailable();
+    if (dbAvailable) return next();
+
+    if (req.path === '/auth/login' && req.method === 'POST') {
+      const email = String(req.body?.email || '').trim().toLowerCase();
+      if (!email) {
+        return res.status(400).json({ error: 'email es obligatorio' });
+      }
+      const displayName = String(req.body?.displayName || '').trim() || email.split('@')[0];
+      const photoURL = String(req.body?.photoURL || '').trim() || null;
+      return res.json(mapFallbackUser(email, displayName, photoURL));
+    }
+
+    if (req.method === 'GET') {
+      return serveFallbackRead(req, res);
+    }
+
+    return res.status(503).json({ error: 'Base de datos no disponible temporalmente' });
+  });
 
   app.get('/api/notifications/stream', (req, res) => {
     if (!pool) {
