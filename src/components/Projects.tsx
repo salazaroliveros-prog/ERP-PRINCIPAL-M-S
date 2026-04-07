@@ -47,7 +47,7 @@ import {
 import { GoogleGenAI, Type } from "@google/genai";
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
 import { APU_TEMPLATES, MARKET_DATA, AREA_FACTORS } from '../constants/apuData';
-import { formatCurrency, formatDate, cn, handleFirestoreError, OperationType, getMitigationSuggestions } from '../lib/utils';
+import { formatCurrency, formatDate, cn, handleApiError, OperationType, getMitigationSuggestions } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import ProjectDetails from './ProjectDetails';
 import ProjectMap from './ProjectMap';
@@ -610,7 +610,7 @@ export default function Projects() {
       });
       setValidationErrors({});
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'projects');
+      handleApiError(error, OperationType.WRITE, 'projects');
     } finally {
       setIsSaving(false);
     }

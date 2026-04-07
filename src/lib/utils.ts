@@ -28,7 +28,7 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export interface FirestoreErrorInfo {
+export interface ApiErrorInfo {
   error: string;
   operationType: OperationType;
   path: string | null;
@@ -49,8 +49,8 @@ export interface FirestoreErrorInfo {
 
 import { toast } from 'sonner';
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
+export function handleApiError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: ApiErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: auth.currentUser?.uid,
@@ -68,7 +68,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  console.error('API Error: ', JSON.stringify(errInfo));
   
   // User-visible notification
   const userMessage = errInfo.error.includes('Missing or insufficient permissions')

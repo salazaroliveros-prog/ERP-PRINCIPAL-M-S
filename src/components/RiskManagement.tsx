@@ -26,7 +26,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { formatCurrency, formatDate, cn, handleFirestoreError, OperationType } from '../lib/utils';
+import { formatCurrency, formatDate, cn, handleApiError, OperationType } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { toast } from 'sonner';
@@ -86,7 +86,7 @@ export default function RiskManagement() {
       setRisks(riskItems as Risk[]);
       setProjects(projectItems);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'risks');
+      handleApiError(error, OperationType.GET, 'risks');
     } finally {
       setLoading(false);
     }
@@ -119,7 +119,7 @@ export default function RiskManagement() {
       setIsModalOpen(false);
       resetForm();
     } catch (error) {
-      handleFirestoreError(error, editingRisk ? OperationType.UPDATE : OperationType.WRITE, editingRisk ? `risks/${editingRisk.id}` : 'risks');
+      handleApiError(error, editingRisk ? OperationType.UPDATE : OperationType.WRITE, editingRisk ? `risks/${editingRisk.id}` : 'risks');
     }
   };
 
@@ -172,7 +172,7 @@ export default function RiskManagement() {
       setIsDeleteConfirmOpen(false);
       setRiskToDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `risks/${riskToDelete}`);
+      handleApiError(error, OperationType.DELETE, `risks/${riskToDelete}`);
     }
   };
 

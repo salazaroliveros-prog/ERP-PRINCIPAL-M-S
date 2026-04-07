@@ -26,7 +26,7 @@ import {
 import { GoogleGenAI, Type } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { cn, handleFirestoreError, OperationType } from '../lib/utils';
+import { cn, handleApiError, OperationType } from '../lib/utils';
 import { auth } from '../lib/authStorageClient';
 import ConfirmModal from './ConfirmModal';
 import { logAction } from '../lib/audit';
@@ -61,7 +61,7 @@ export default function Safety() {
       const items = await listSafetyIncidents();
       setIncidents(items);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'safety_incidents');
+      handleApiError(error, OperationType.GET, 'safety_incidents');
     } finally {
       setLoading(false);
     }
@@ -90,7 +90,7 @@ export default function Safety() {
       setIsModalOpen(false);
       resetForm();
     } catch (error) {
-      handleFirestoreError(error, isEditMode ? OperationType.UPDATE : OperationType.WRITE, 'safety_incidents');
+      handleApiError(error, isEditMode ? OperationType.UPDATE : OperationType.WRITE, 'safety_incidents');
     }
   };
 
@@ -141,7 +141,7 @@ export default function Safety() {
       setIsDeleteConfirmOpen(false);
       setIncidentToDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'safety_incidents');
+      handleApiError(error, OperationType.DELETE, 'safety_incidents');
     }
   };
 

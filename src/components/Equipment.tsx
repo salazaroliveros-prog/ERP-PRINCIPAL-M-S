@@ -19,7 +19,7 @@ import {
   LayoutGrid,
   List
 } from 'lucide-react';
-import { formatCurrency, cn, handleFirestoreError, OperationType, formatDate } from '../lib/utils';
+import { formatCurrency, cn, handleApiError, OperationType, formatDate } from '../lib/utils';
 import { logAction } from '../lib/audit';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -62,7 +62,7 @@ export default function Equipment() {
       setEquipment(equipmentItems);
       setProjects(projectItems);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'equipment');
+      handleApiError(error, OperationType.GET, 'equipment');
     }
   }, []);
 
@@ -140,7 +140,7 @@ export default function Equipment() {
       setCurrentStep(0);
       setValidationErrors({});
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'equipment');
+      handleApiError(error, OperationType.WRITE, 'equipment');
     } finally {
       setIsSubmitting(false);
     }
@@ -254,7 +254,7 @@ export default function Equipment() {
       await logAction('Eliminación de Equipo', 'Maquinaria', `Equipo ${equip?.name || equipToDelete} eliminado`, 'delete', { equipmentId: equipToDelete });
       await loadEquipmentData();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `equipment/${equipToDelete}`);
+      handleApiError(error, OperationType.DELETE, `equipment/${equipToDelete}`);
     }
   };
 

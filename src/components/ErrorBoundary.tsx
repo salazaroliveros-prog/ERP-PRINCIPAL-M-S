@@ -34,7 +34,7 @@ class ErrorBoundary extends Component<Props, State> {
       let errorMessage = "Ocurrió un error inesperado en la aplicación.";
       
       try {
-        // Check if it's a Firestore JSON error
+        // Check if it's an API JSON error
         if (this.state.error?.message.startsWith('{')) {
           const errData = JSON.parse(this.state.error.message);
           errorMessage = `Error de base de datos (${errData.operationType}): ${errData.error}`;

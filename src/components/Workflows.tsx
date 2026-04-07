@@ -19,7 +19,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn, handleFirestoreError, OperationType } from '../lib/utils';
+import { cn, handleApiError, OperationType } from '../lib/utils';
 import { logAction } from '../lib/audit';
 import { toast } from 'sonner';
 import { createWorkflow, deleteWorkflow, listWorkflows, updateWorkflow, updateWorkflowStatus } from '../lib/workflowsApi';
@@ -65,7 +65,7 @@ const Workflows = () => {
       const items = await listWorkflows();
       setTasks(items as WorkflowTask[]);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'workflows');
+      handleApiError(error, OperationType.GET, 'workflows');
     } finally {
       setLoading(false);
     }
@@ -93,7 +93,7 @@ const Workflows = () => {
       toast.success(`Tarea ${action === 'approved' ? 'aprobada' : 'rechazada'} correctamente`);
       await loadWorkflows();
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `workflows/${taskId}`);
+      handleApiError(error, OperationType.UPDATE, `workflows/${taskId}`);
     }
   };
 
@@ -114,7 +114,7 @@ const Workflows = () => {
       setEditingTask(null);
       resetForm();
     } catch (error) {
-      handleFirestoreError(error, editingTask ? OperationType.UPDATE : OperationType.CREATE, 'workflows');
+      handleApiError(error, editingTask ? OperationType.UPDATE : OperationType.CREATE, 'workflows');
     }
   };
 
@@ -128,7 +128,7 @@ const Workflows = () => {
       setIsDeleteModalOpen(false);
       setTaskToDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `workflows/${taskToDelete}`);
+      handleApiError(error, OperationType.DELETE, `workflows/${taskToDelete}`);
     }
   };
 

@@ -21,7 +21,7 @@ import {
   Edit2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn, formatCurrency, handleFirestoreError, OperationType } from '../lib/utils';
+import { cn, formatCurrency, handleApiError, OperationType } from '../lib/utils';
 import { logAction } from '../lib/audit';
 import { toast } from 'sonner';
 import ConfirmModal from './ConfirmModal';
@@ -54,7 +54,7 @@ export default function Suppliers() {
       const items = await listSuppliers();
       setSuppliers(items);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'suppliers');
+      handleApiError(error, OperationType.GET, 'suppliers');
     } finally {
       setLoading(false);
     }
@@ -107,7 +107,7 @@ export default function Suppliers() {
         balance: 0
       });
     } catch (error) {
-      handleFirestoreError(error, isEditMode ? OperationType.UPDATE : OperationType.CREATE, 'suppliers');
+      handleApiError(error, isEditMode ? OperationType.UPDATE : OperationType.CREATE, 'suppliers');
     }
   };
 
@@ -138,7 +138,7 @@ export default function Suppliers() {
       setIsDeleteConfirmOpen(false);
       setSupplierToDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'suppliers');
+      handleApiError(error, OperationType.DELETE, 'suppliers');
     }
   };
 

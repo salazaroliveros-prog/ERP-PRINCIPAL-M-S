@@ -51,7 +51,7 @@ import {
   ShoppingBag,
   Package as PackageIcon
 } from 'lucide-react';
-import { formatCurrency, cn, handleFirestoreError, OperationType, getMitigationSuggestions } from '../lib/utils';
+import { formatCurrency, cn, handleApiError, OperationType, getMitigationSuggestions } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendNotification } from '../lib/notifications';
 import { logAction } from '../lib/audit';
@@ -145,7 +145,7 @@ export default function Dashboard() {
         if (!cancelled) setQuickBudgetItems(items);
       } catch (error) {
         if (!cancelled) {
-          handleFirestoreError(error, OperationType.GET, `projects/${selectedQuickProjectId}/budgetItems`);
+          handleApiError(error, OperationType.GET, `projects/${selectedQuickProjectId}/budgetItems`);
         }
       } finally {
         if (!cancelled) {
@@ -222,7 +222,7 @@ export default function Dashboard() {
 
       toast.success('Avance actualizado correctamente');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${selectedQuickProjectId}/budgetItems/${budgetItemId}`);
+      handleApiError(error, OperationType.WRITE, `projects/${selectedQuickProjectId}/budgetItems/${budgetItemId}`);
     }
   };
 
@@ -249,7 +249,7 @@ export default function Dashboard() {
         setRecentLogs([]);
       } catch (error) {
         if (!cancelled) {
-          handleFirestoreError(error, OperationType.GET, 'dashboard');
+          handleApiError(error, OperationType.GET, 'dashboard');
         }
       } finally {
         if (!cancelled) {

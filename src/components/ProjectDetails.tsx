@@ -73,7 +73,7 @@ import {
   ShieldAlert,
   Lightbulb
 } from 'lucide-react';
-import { formatCurrency, formatDate, cn, handleFirestoreError, OperationType, getMitigationSuggestions } from '../lib/utils';
+import { formatCurrency, formatDate, cn, handleApiError, OperationType, getMitigationSuggestions } from '../lib/utils';
 import { MARKET_DATA } from '../constants/apuData';
 import { drawLogo } from '../lib/pdfUtils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -677,7 +677,7 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
       setNewSubtask({ name: '', status: 'Pending', responsible: '', progress: 0 });
       toast.success('Subtarea añadida con éxito');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${projectId}/budgetItems/${selectedBudgetItem.id}`);
+      handleApiError(error, OperationType.WRITE, `projects/${projectId}/budgetItems/${selectedBudgetItem.id}`);
     }
   };
 

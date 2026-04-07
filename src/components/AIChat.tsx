@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Bot, Send, X, Minimize2, Maximize2, MessageSquare, Sparkles, AlertTriangle, TrendingUp, Wrench, Loader2, MoreVertical, History, Construction, DollarSign, Mic, MicOff, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn, handleFirestoreError, OperationType } from '../lib/utils';
+import { cn, handleApiError, OperationType } from '../lib/utils';
 import { getAIResponse } from '../lib/gemini';
 import { listProjects } from '../lib/projectsApi';
 import { listTransactions } from '../lib/financialsApi';
@@ -129,7 +129,7 @@ export default function AIChat() {
         risks
       };
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'multiple_collections');
+      handleApiError(error, OperationType.GET, 'multiple_collections');
       return null;
     }
   };

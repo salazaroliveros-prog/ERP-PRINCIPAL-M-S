@@ -30,7 +30,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
-import { formatCurrency, formatDate, cn, handleFirestoreError, OperationType } from '../lib/utils';
+import { formatCurrency, formatDate, cn, handleApiError, OperationType } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendNotification } from '../lib/notifications';
 import { logAction } from '../lib/audit';
@@ -90,7 +90,7 @@ export default function Inventory() {
     if (selectedItemDetails) {
       listInventoryTransactions({ materialId: selectedItemDetails.id, limit: 200 })
         .then(setItemTransactions)
-        .catch((error) => handleFirestoreError(error, OperationType.GET, 'inventoryTransactions'));
+        .catch((error) => handleApiError(error, OperationType.GET, 'inventoryTransactions'));
     }
   }, [selectedItemDetails]);
 
@@ -174,7 +174,7 @@ export default function Inventory() {
       const items = await listDeletedRecords();
       setDeletedRecords(items);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'deletedRecords');
+      handleApiError(error, OperationType.GET, 'deletedRecords');
     }
   }, []);
 
@@ -790,7 +790,7 @@ export default function Inventory() {
     try {
       await loadInventoryPage(false);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'inventory');
+      handleApiError(error, OperationType.GET, 'inventory');
     } finally {
       setIsLoadingMore(false);
     }
@@ -938,7 +938,7 @@ export default function Inventory() {
       });
       setValidationErrors({});
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'inventory');
+      handleApiError(error, OperationType.WRITE, 'inventory');
     }
   };
 
@@ -966,7 +966,7 @@ export default function Inventory() {
       toast.success('Material movido a la papelera');
       await logAction('Eliminación de Material', 'Inventario', `Material ${materialToDelete?.name || itemToDelete} eliminado`, 'delete', { materialId: itemToDelete });
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `inventory/${itemToDelete}`);
+      handleApiError(error, OperationType.DELETE, `inventory/${itemToDelete}`);
     }
   };
 
@@ -1009,7 +1009,7 @@ export default function Inventory() {
       toast.success(`Orden de compra generada y descontada del stock de requerimientos.`);
       await logAction('Creación de Orden de Compra', 'Inventario', `Orden de compra para ${selectedItemForPO.name} (${poQuantity} ${selectedItemForPO.unit})`, 'create', { materialId: selectedItemForPO.id });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'purchaseOrders');
+      handleApiError(error, OperationType.WRITE, 'purchaseOrders');
     }
   };
 
@@ -1049,7 +1049,7 @@ export default function Inventory() {
         await loadInventoryPage(true);
         toast.success(`Stock actualizado: ${material.name}`);
       } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, `inventory/${id}`);
+        handleApiError(error, OperationType.UPDATE, `inventory/${id}`);
       }
     }
   };
@@ -1355,7 +1355,7 @@ export default function Inventory() {
       setNewBatch({ quantity: 0, batchNumber: '', expirationDate: '', manufacturingDate: '', location: '', type: 'In', projectId: '', reason: '', materialId: '', price: 0, supplier: '' });
       toast.success(editingBatchId ? 'Lote actualizado exitosamente' : 'Lote registrado exitosamente');
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `inventory/${materialId}`);
+      handleApiError(error, OperationType.UPDATE, `inventory/${materialId}`);
     }
   };
 
@@ -1415,7 +1415,7 @@ export default function Inventory() {
       setIsBatchDeleteConfirmOpen(false);
       setItemToDeleteBatch(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `inventory/${materialId}/batches/${batchId}`);
+      handleApiError(error, OperationType.DELETE, `inventory/${materialId}/batches/${batchId}`);
     }
   };
 
@@ -1447,7 +1447,7 @@ export default function Inventory() {
       setIsTransactionDeleteConfirmOpen(false);
       setItemToDeleteTransaction(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `inventoryTransactions/${itemToDeleteTransaction}`);
+      handleApiError(error, OperationType.DELETE, `inventoryTransactions/${itemToDeleteTransaction}`);
     }
   };
 
@@ -1505,7 +1505,7 @@ export default function Inventory() {
       await loadDeletedRecords();
       toast.success('Registro restaurado exitosamente');
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `deletedRecords/${record.id}`);
+      handleApiError(error, OperationType.UPDATE, `deletedRecords/${record.id}`);
     }
   };
 
@@ -1515,7 +1515,7 @@ export default function Inventory() {
       await loadDeletedRecords();
       toast.success('Registro eliminado permanentemente');
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `deletedRecords/${recordId}`);
+      handleApiError(error, OperationType.DELETE, `deletedRecords/${recordId}`);
     }
   };
 
@@ -2958,7 +2958,7 @@ export default function Inventory() {
                   toast.success(`Se han generado ${shortageItems.length} órdenes de compra.`);
                   setIsShortageModalOpen(false);
                 } catch (error) {
-                  handleFirestoreError(error, OperationType.WRITE, 'purchaseOrders');
+                  handleApiError(error, OperationType.WRITE, 'purchaseOrders');
                 }
               }}
               className="flex-1 py-4 px-6 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-all shadow-lg shadow-rose-200 order-1 sm:order-2"

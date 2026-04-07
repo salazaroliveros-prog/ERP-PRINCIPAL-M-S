@@ -20,7 +20,7 @@ import {
   MessageCircle
 } from 'lucide-react';
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
-import { formatCurrency, formatDate, cn, handleFirestoreError, OperationType } from '../lib/utils';
+import { formatCurrency, formatDate, cn, handleApiError, OperationType } from '../lib/utils';
 import { logAction } from '../lib/audit';
 import { motion, AnimatePresence } from 'motion/react';
 import DatePicker from 'react-datepicker';
@@ -89,7 +89,7 @@ export default function Quotes() {
       const items = await listQuotes();
       setQuotes(items);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'quotes');
+      handleApiError(error, OperationType.GET, 'quotes');
     }
   }, []);
 
@@ -99,7 +99,7 @@ export default function Quotes() {
       setClients(clientItems);
       setProjects(projectItems);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'quotes/reference-data');
+      handleApiError(error, OperationType.GET, 'quotes/reference-data');
     }
   }, []);
 
@@ -112,7 +112,7 @@ export default function Quotes() {
     if (newQuote.projectId) {
       listProjectBudgetItemsDetailed(newQuote.projectId)
         .then((items) => setProjectBudgetItems(items as any[]))
-        .catch((error) => handleFirestoreError(error, OperationType.GET, `projects/${newQuote.projectId}/budgetItems`));
+        .catch((error) => handleApiError(error, OperationType.GET, `projects/${newQuote.projectId}/budgetItems`));
     } else {
       setProjectBudgetItems([]);
     }
@@ -308,7 +308,7 @@ export default function Quotes() {
       setEditingQuoteId(null);
       setNewQuote({ clientId: '', projectId: '', date: new Date(), notes: '', items: [{ description: '', quantity: 1, unitPrice: 0 }], status: 'Pending' });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, editingQuoteId ? `quotes/${editingQuoteId}` : 'quotes');
+      handleApiError(error, OperationType.WRITE, editingQuoteId ? `quotes/${editingQuoteId}` : 'quotes');
     }
   };
 
@@ -350,7 +350,7 @@ export default function Quotes() {
       toast.success('Cotización eliminada');
       await loadQuotes();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `quotes/${quoteToDelete}`);
+      handleApiError(error, OperationType.DELETE, `quotes/${quoteToDelete}`);
     }
   };
 

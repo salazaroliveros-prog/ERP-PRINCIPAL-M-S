@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
-import { formatCurrency, formatDate, cn, handleFirestoreError, OperationType } from '../lib/utils';
+import { formatCurrency, formatDate, cn, handleApiError, OperationType } from '../lib/utils';
 import { logAction } from '../lib/audit';
 import { toast } from 'sonner';
 import { sendNotification } from '../lib/notifications';
@@ -87,7 +87,7 @@ export default function Subcontracts() {
       const items = await listSubcontracts();
       setSubcontracts(items);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'subcontracts');
+      handleApiError(error, OperationType.GET, 'subcontracts');
     }
   }, []);
 
@@ -96,7 +96,7 @@ export default function Subcontracts() {
       const items = await listProjects();
       setProjects(items);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'projects');
+      handleApiError(error, OperationType.GET, 'projects');
     }
   }, []);
 
@@ -112,7 +112,7 @@ export default function Subcontracts() {
         const items = await listProjectBudgetItemsDetailed(newSub.projectId);
         if (!cancelled) setBudgetItems(items);
       } catch (error) {
-        if (!cancelled) handleFirestoreError(error, OperationType.GET, `projects/${newSub.projectId}/budgetItems`);
+        if (!cancelled) handleApiError(error, OperationType.GET, `projects/${newSub.projectId}/budgetItems`);
       }
     })();
 
@@ -208,7 +208,7 @@ export default function Subcontracts() {
       await logAction('Eliminación de Subcontrato', 'Subcontratos', `Subcontrato con ${sub?.contractor || subToDelete} eliminado`, 'delete', { subcontractId: subToDelete });
       await loadSubcontracts();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `subcontracts/${subToDelete}`);
+      handleApiError(error, OperationType.DELETE, `subcontracts/${subToDelete}`);
     }
   };
 
@@ -311,7 +311,7 @@ export default function Subcontracts() {
       setNewSub({ projectId: '', budgetItemId: '', contractor: '', service: '', startDate: '', endDate: '', total: 0, paid: 0, status: 'Active' });
       setCurrentStep(0);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'subcontracts');
+      handleApiError(error, OperationType.WRITE, 'subcontracts');
     }
   };
 
@@ -327,7 +327,7 @@ export default function Subcontracts() {
         const result = await listTransactions({ subcontractId: selectedSubDetails.id, limit: 200, offset: 0 });
         if (!cancelled) setSubTransactions(result.items);
       } catch (error) {
-        if (!cancelled) handleFirestoreError(error, OperationType.GET, `transactions (subcontract: ${selectedSubDetails.id})`);
+        if (!cancelled) handleApiError(error, OperationType.GET, `transactions (subcontract: ${selectedSubDetails.id})`);
       }
     })();
 
@@ -359,7 +359,7 @@ export default function Subcontracts() {
       await loadSubcontracts();
       toast.success('Subcontrato saldado correctamente');
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `subcontracts/${sub.id}`);
+      handleApiError(error, OperationType.UPDATE, `subcontracts/${sub.id}`);
     }
   };
 
@@ -395,7 +395,7 @@ export default function Subcontracts() {
       setPaymentAmount(0);
       toast.success('Pago registrado correctamente');
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `subcontracts/${selectedSubForPayment.id}`);
+      handleApiError(error, OperationType.UPDATE, `subcontracts/${selectedSubForPayment.id}`);
     }
   };
 

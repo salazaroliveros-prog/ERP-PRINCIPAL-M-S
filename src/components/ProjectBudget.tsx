@@ -32,7 +32,7 @@ import {
   User
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { formatCurrency, formatDate, cn, handleFirestoreError, OperationType } from '../lib/utils';
+import { formatCurrency, formatDate, cn, handleApiError, OperationType } from '../lib/utils';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { APU_TEMPLATES, MARKET_DATA, AREA_FACTORS } from '../constants/apuData';
 import { toast } from 'sonner';
@@ -238,7 +238,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
       toast.success('Cantidades calculadas automáticamente según el área del proyecto');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems`);
     } finally {
       setIsInitializing(false);
     }
@@ -332,7 +332,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       else toast.error('Presupuesto activado con desviaciones críticas');
 
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'projects');
+      handleApiError(error, OperationType.WRITE, 'projects');
     } finally {
       setIsValidating(false);
     }
@@ -346,7 +346,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       });
       toast.success('Presupuesto desbloqueado para edición');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'projects');
+      handleApiError(error, OperationType.WRITE, 'projects');
     }
   };
 
@@ -462,7 +462,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       });
       toast.success('Subtarea agregada correctamente');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
 
@@ -482,7 +482,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       });
       toast.success('Subtarea eliminada correctamente');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
 
@@ -502,7 +502,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         subtasks: updatedSubtasks
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
 
@@ -683,7 +683,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
       await loadBudgetItems();
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems`);
     } finally {
       setIsInitializing(false);
     }
@@ -696,7 +696,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       await reorderProjectBudgetItems(project.id, newOrder.map(item => item.id));
       await loadBudgetItems();
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/reorder`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/reorder`);
     }
   };
 
@@ -746,7 +746,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         typology: project.typology,
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
 
@@ -774,7 +774,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       setItemToDelete(null);
       setIsDeleteConfirmOpen(false);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `projects/${project.id}/budgetItems/${itemToDelete}`);
+      handleApiError(error, OperationType.DELETE, `projects/${project.id}/budgetItems/${itemToDelete}`);
     }
   };
 
@@ -821,7 +821,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
       await loadBudgetItems();
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/import`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/import`);
     }
   };
 
@@ -961,7 +961,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
 
@@ -972,7 +972,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         projectId: project.id
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
 
@@ -1033,7 +1033,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
       toast.success('Material agregado correctamente');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
 
@@ -1086,7 +1086,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
       toast.success('Material eliminado correctamente');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
 
@@ -1156,7 +1156,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
       toast.success('Mano de obra agregada correctamente');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
 
@@ -1218,7 +1218,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
       toast.success('Mano de obra eliminada correctamente');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
 
@@ -1311,7 +1311,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         subtasks: []
       });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems`);
     }
   };
 
@@ -1452,7 +1452,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       await loadBudgetItems();
       toast.success('Instalación sanitaria agregada al presupuesto');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `projects/${project.id}/budgetItems`);
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems`);
     }
   };
 

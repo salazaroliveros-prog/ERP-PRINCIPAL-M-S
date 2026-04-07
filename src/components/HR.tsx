@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
-import { cn, formatCurrency, handleFirestoreError, OperationType } from '../lib/utils';
+import { cn, formatCurrency, handleApiError, OperationType } from '../lib/utils';
 import { toast } from 'sonner';
 import ConfirmModal from './ConfirmModal';
 import { logAction } from '../lib/audit';
@@ -63,7 +63,7 @@ export default function HR() {
       const items = await listEmployees();
       setEmployees(items);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'employees');
+      handleApiError(error, OperationType.GET, 'employees');
     } finally {
       setLoading(false);
     }
@@ -112,7 +112,7 @@ export default function HR() {
       setIsModalOpen(false);
       resetForm();
     } catch (error) {
-      handleFirestoreError(error, isEditMode ? OperationType.UPDATE : OperationType.WRITE, 'employees');
+      handleApiError(error, isEditMode ? OperationType.UPDATE : OperationType.WRITE, 'employees');
     }
   };
 
@@ -159,7 +159,7 @@ export default function HR() {
       setIsDeleteConfirmOpen(false);
       setEmployeeToDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'employees');
+      handleApiError(error, OperationType.DELETE, 'employees');
     }
   };
 
@@ -215,7 +215,7 @@ export default function HR() {
       await logAction('Registro de Asistencia', 'RRHH', `Asistencia ${attendanceRecord.type} para ${emp?.name}`, 'create', { employeeId: attendanceRecord.employeeId });
       setIsAttendanceModalOpen(false);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'attendance');
+      handleApiError(error, OperationType.WRITE, 'attendance');
     }
   };
 
@@ -252,7 +252,7 @@ export default function HR() {
       await logAction('Generación de Datos', 'RRHH', 'Se generaron empleados de ejemplo', 'create');
       await loadEmployees();
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'employees');
+      handleApiError(error, OperationType.WRITE, 'employees');
     } finally {
       setIsSeeding(false);
     }

@@ -18,7 +18,7 @@ import {
   Edit3
 } from 'lucide-react';
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
-import { formatCurrency, cn, handleFirestoreError, OperationType } from '../lib/utils';
+import { formatCurrency, cn, handleApiError, OperationType } from '../lib/utils';
 import { logAction } from '../lib/audit';
 import { FormModal } from './FormModal';
 import { toast } from 'sonner';
@@ -68,7 +68,7 @@ export default function PurchaseOrders() {
       const items = await listPurchaseOrders();
       setPurchaseOrders(items);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'purchaseOrders');
+      handleApiError(error, OperationType.GET, 'purchaseOrders');
     } finally {
       setLoading(false);
     }
@@ -85,7 +85,7 @@ export default function PurchaseOrders() {
       setProjects(projectItems);
       setSuppliers(supplierItems);
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'purchaseOrders/reference-data');
+      handleApiError(error, OperationType.GET, 'purchaseOrders/reference-data');
     }
   }, []);
 
@@ -98,7 +98,7 @@ export default function PurchaseOrders() {
     if (newPO.projectId) {
       listProjectBudgetItemsDetailed(newPO.projectId)
         .then((items) => setBudgetItems(items as any[]))
-        .catch((error) => handleFirestoreError(error, OperationType.GET, `projects/${newPO.projectId}/budgetItems`));
+        .catch((error) => handleApiError(error, OperationType.GET, `projects/${newPO.projectId}/budgetItems`));
     } else {
       setBudgetItems([]);
     }
@@ -217,7 +217,7 @@ export default function PurchaseOrders() {
       setIsEditMode(false);
       setPoToEdit(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'purchaseOrders');
+      handleApiError(error, OperationType.WRITE, 'purchaseOrders');
     }
   };
 
@@ -296,7 +296,7 @@ export default function PurchaseOrders() {
 
       await Promise.all([loadPurchaseOrders(), loadReferenceData()]);
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `purchaseOrders/${id}`);
+      handleApiError(error, OperationType.UPDATE, `purchaseOrders/${id}`);
     }
   };
 
@@ -341,7 +341,7 @@ export default function PurchaseOrders() {
       toast.success('Orden de compra eliminada');
       await loadPurchaseOrders();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `purchaseOrders/${poToDelete}`);
+      handleApiError(error, OperationType.DELETE, `purchaseOrders/${poToDelete}`);
     }
   };
 

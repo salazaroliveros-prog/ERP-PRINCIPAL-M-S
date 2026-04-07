@@ -27,7 +27,7 @@ import {
   Download,
   Upload
 } from 'lucide-react';
-import { cn, handleFirestoreError, OperationType, formatDate } from '../lib/utils';
+import { cn, handleApiError, OperationType, formatDate } from '../lib/utils';
 import { logAction } from '../lib/audit';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -100,7 +100,7 @@ export default function Clients() {
         if (refreshed) setSelectedClient(refreshed);
       }
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, 'clients');
+      handleApiError(error, OperationType.GET, 'clients');
     }
   }, [selectedClient]);
 
@@ -135,7 +135,7 @@ export default function Clients() {
 
     listClientChats(selectedClient.id)
       .then(setChatMessages)
-      .catch((error) => handleFirestoreError(error, OperationType.GET, `clientChats/${selectedClient.id}`));
+      .catch((error) => handleApiError(error, OperationType.GET, `clientChats/${selectedClient.id}`));
   }, [selectedClient, isChatOpen, activeDetailTab, isDetailOpen]);
 
   useEffect(() => {
@@ -143,7 +143,7 @@ export default function Clients() {
 
     listClientInteractions(selectedClient.id)
       .then(setInteractionLogs)
-      .catch((error) => handleFirestoreError(error, OperationType.GET, `clients/${selectedClient.id}/interactions`));
+      .catch((error) => handleApiError(error, OperationType.GET, `clients/${selectedClient.id}/interactions`));
   }, [selectedClient, isDetailOpen, activeDetailTab]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -162,7 +162,7 @@ export default function Clients() {
 
       setNewMessage('');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'clientChats');
+      handleApiError(error, OperationType.WRITE, 'clientChats');
     }
   };
 
@@ -183,7 +183,7 @@ export default function Clients() {
       setIsLogModalOpen(false);
       setNewLog({ type: 'Call', notes: '', date: new Date().toISOString().split('T')[0] });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `clients/${selectedClient.id}/interactions`);
+      handleApiError(error, OperationType.WRITE, `clients/${selectedClient.id}/interactions`);
     }
   };
 
@@ -259,7 +259,7 @@ export default function Clients() {
         });
         await loadClients();
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `clients/${selectedClient.id}`);
+        handleApiError(error, OperationType.WRITE, `clients/${selectedClient.id}`);
       }
     }
     setIsChatOpen(false);
@@ -280,7 +280,7 @@ export default function Clients() {
       toast.success('Cliente eliminado con éxito');
       await logAction('Eliminación de Cliente', 'Clientes', `Cliente ${client?.name || clientToDelete} eliminado`, 'delete', { clientId: clientToDelete });
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `clients/${clientToDelete}`);
+      handleApiError(error, OperationType.DELETE, `clients/${clientToDelete}`);
     }
   };
 
@@ -344,7 +344,7 @@ export default function Clients() {
       setValidationErrors({});
       setCurrentStep(0);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'clients');
+      handleApiError(error, OperationType.WRITE, 'clients');
     } finally {
       setIsSubmitting(false);
     }

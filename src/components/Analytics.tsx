@@ -37,7 +37,7 @@ import {
   Legend
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn, formatCurrency, handleFirestoreError, OperationType } from '../lib/utils';
+import { cn, formatCurrency, handleApiError, OperationType } from '../lib/utils';
 import { toast } from 'sonner';
 import { listProjects } from '../lib/projectsApi';
 import { listTransactions } from '../lib/financialsApi';
@@ -71,7 +71,7 @@ export default function Analytics() {
         setTransactions(transactionsData.items);
         setRisks(risksData);
       } catch (error) {
-        handleFirestoreError(error, OperationType.GET, 'analytics');
+        handleApiError(error, OperationType.GET, 'analytics');
       } finally {
         if (!cancelled) {
           setLoading(false);
