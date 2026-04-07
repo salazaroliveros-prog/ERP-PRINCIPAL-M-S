@@ -96,6 +96,18 @@ Variables usadas por el verificador:
 En GitHub Actions, define el secret `VITE_API_BASE_URL` con la URL publica real del backend.
 Si hay autenticacion de despliegue en Vercel, el workflow fallara con `401 Authentication Required` hasta desactivarla o configurar bypass para automatizacion.
 
+## Pruebas locales completas (sin desplegar)
+
+Se agrego un smoke test integral para validar lectura/escritura por modulo contra PostgreSQL local:
+
+- Ejecutar local: `npm run smoke:local`
+- Script: `scripts/smoke-local.mjs`
+
+Tambien se agrego workflow CI con PostgreSQL temporal para validar el backend antes de publicar:
+
+- Workflow: `.github/workflows/local-smoke-test.yml`
+- Flujo: levantar Postgres -> migraciones -> arrancar backend -> ejecutar smoke test
+
 ## Flags de performance (frontend)
 
 Variables opcionales para ajustar comportamiento en runtime:
