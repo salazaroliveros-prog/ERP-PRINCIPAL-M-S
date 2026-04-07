@@ -249,4 +249,9 @@
     .rounded-3xl { border-radius: 1.25rem !important; }
     .rounded-2xl { border-radius: 1rem !important; }
   }
+
+  .recharts-responsive-container {
+    min-width: 0;
+    min-height: 220px;
+  }
 }

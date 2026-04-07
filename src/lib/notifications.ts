@@ -47,6 +47,8 @@ export const listenForNotifications = (onNewNotification: (n: Notification) => v
   const knownIds = new Set<string>();
   let stream: EventSource | null = null;
   let reconnectTimer: number | null = null;
+  let disableSseForSession = false;
+  let streamErrorCount = 0;
 
   const refreshByPolling = async () => {
     try {
@@ -68,7 +70,12 @@ export const listenForNotifications = (onNewNotification: (n: Notification) => v
   };
 
   const connectSse = () => {
-    if (!active || typeof window === 'undefined' || typeof window.EventSource === 'undefined') {
+    if (
+      !active ||
+      disableSseForSession ||
+      typeof window === 'undefined' ||
+      typeof window.EventSource === 'undefined'
+    ) {
       return;
     }
 
@@ -91,8 +98,14 @@ export const listenForNotifications = (onNewNotification: (n: Notification) => v
       };
 
       stream.onerror = () => {
+        streamErrorCount += 1;
         stream?.close();
         stream = null;
+
+        if (streamErrorCount >= 3) {
+          disableSseForSession = true;
+          return;
+        }
 
         if (!active || reconnectTimer !== null) return;
         reconnectTimer = window.setTimeout(() => {
@@ -106,14 +119,38 @@ export const listenForNotifications = (onNewNotification: (n: Notification) => v
     }
   };
 
+  const canUseSse = async () => {
+    if (disableSseForSession || typeof window === 'undefined') return false;
+
+    const controller = new AbortController();
+    try {
+      const response = await fetch(buildApiUrl('/api/notifications/stream'), {
+        method: 'GET',
+        headers: { Accept: 'text/event-stream' },
+        signal: controller.signal,
+      });
+      const contentType = response.headers.get('content-type') || '';
+      return response.ok && contentType.includes('text/event-stream');
+    } catch {
+      return false;
+    } finally {
+      controller.abort();
+    }
+  };
+
   // Prime known IDs to avoid toasting existing notifications on first load.
   listNotifications({ limit: 50, offset: 0 })
-    .then((response) => {
+    .then(async (response) => {
       if (!active) return;
       response.items.forEach((item) => {
         if (item.id) knownIds.add(item.id);
       });
-      connectSse();
+
+      if (await canUseSse()) {
+        connectSse();
+      } else {
+        disableSseForSession = true;
+      }
     })
     .catch((error) => {
       console.error('Error priming notifications listener:', error);
