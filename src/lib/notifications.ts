@@ -1,4 +1,4 @@
-import { requestJson } from './api';
+import { buildApiUrl, requestJson } from './api';
 import { toast } from 'sonner';
 
 export interface Notification {
@@ -45,20 +45,10 @@ export const markNotificationAsRead = async (id: string) => {
 export const listenForNotifications = (onNewNotification: (n: Notification) => void) => {
   let active = true;
   const knownIds = new Set<string>();
+  let stream: EventSource | null = null;
+  let reconnectTimer: number | null = null;
 
-  // Prime known ids to avoid toasting existing notifications on first load.
-  listNotifications({ limit: 50, offset: 0 })
-    .then((response) => {
-      if (!active) return;
-      response.items.forEach((item) => {
-        if (item.id) knownIds.add(item.id);
-      });
-    })
-    .catch((error) => {
-      console.error('Error priming notifications listener:', error);
-    });
-
-  const interval = window.setInterval(async () => {
+  const refreshByPolling = async () => {
     try {
       const response = await listNotifications({ limit: 20, offset: 0 });
       if (!active) return;
@@ -75,10 +65,73 @@ export const listenForNotifications = (onNewNotification: (n: Notification) => v
     } catch (error) {
       console.error('Error listening for notifications:', error);
     }
-  }, 8000);
+  };
+
+  const connectSse = () => {
+    if (!active || typeof window === 'undefined' || typeof window.EventSource === 'undefined') {
+      return;
+    }
+
+    try {
+      stream = new EventSource(buildApiUrl('/api/notifications/stream'));
+      stream.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data) as { event?: string; notification?: Notification };
+          const notification = payload?.notification;
+
+          if (payload?.event !== 'created' || !notification?.id || knownIds.has(notification.id)) {
+            return;
+          }
+
+          knownIds.add(notification.id);
+          onNewNotification(notification);
+        } catch (error) {
+          console.error('Error parsing notifications SSE message:', error);
+        }
+      };
+
+      stream.onerror = () => {
+        stream?.close();
+        stream = null;
+
+        if (!active || reconnectTimer !== null) return;
+        reconnectTimer = window.setTimeout(() => {
+          reconnectTimer = null;
+          void refreshByPolling();
+          connectSse();
+        }, 4000);
+      };
+    } catch (error) {
+      console.error('Error opening notifications SSE stream:', error);
+    }
+  };
+
+  // Prime known IDs to avoid toasting existing notifications on first load.
+  listNotifications({ limit: 50, offset: 0 })
+    .then((response) => {
+      if (!active) return;
+      response.items.forEach((item) => {
+        if (item.id) knownIds.add(item.id);
+      });
+      connectSse();
+    })
+    .catch((error) => {
+      console.error('Error priming notifications listener:', error);
+      connectSse();
+    });
+
+  const interval = window.setInterval(() => {
+    void refreshByPolling();
+  }, 15000);
 
   return () => {
     active = false;
+    if (reconnectTimer !== null) {
+      window.clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    stream?.close();
+    stream = null;
     window.clearInterval(interval);
   };
 };

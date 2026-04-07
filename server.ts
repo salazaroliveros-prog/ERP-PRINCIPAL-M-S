@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from "express";
+import type { Response } from "express";
 import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -834,6 +835,23 @@ function requireDatabase() {
 
 export async function createApp(options?: { includeFrontend?: boolean }) {
   const app = express();
+  const notificationStreams = new Set<Response>();
+
+  const publishNotificationEvent = (
+    eventType: 'created' | 'read',
+    notification: ReturnType<typeof mapNotification>
+  ) => {
+    if (notificationStreams.size === 0) return;
+
+    const payload = JSON.stringify({ event: eventType, notification });
+    for (const stream of notificationStreams) {
+      try {
+        stream.write(`data: ${payload}\n\n`);
+      } catch {
+        notificationStreams.delete(stream);
+      }
+    }
+  };
 
   const corsOrigins = (process.env.CORS_ORIGINS || "")
     .split(",")
@@ -848,6 +866,35 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   );
   app.use(express.json());
   app.use("/uploads", express.static(UPLOADS_PUBLIC_DIR));
+
+  app.get('/api/notifications/stream', (req, res) => {
+    if (!pool) {
+      return res.status(503).json({ error: 'DATABASE_URL no esta configurado' });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    res.write('retry: 4000\n\n');
+    notificationStreams.add(res);
+
+    const heartbeat = setInterval(() => {
+      if (!notificationStreams.has(res)) return;
+      try {
+        res.write(': keepalive\n\n');
+      } catch {
+        notificationStreams.delete(res);
+      }
+    }, 25000);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      notificationStreams.delete(res);
+    });
+  });
 
   app.post('/api/auth/login', async (req, res) => {
     try {
@@ -2001,7 +2048,9 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
         [title, body, normalizedType]
       );
 
-      return res.status(201).json(mapNotification(result.rows[0]));
+      const createdNotification = mapNotification(result.rows[0]);
+      publishNotificationEvent('created', createdNotification);
+      return res.status(201).json(createdNotification);
     } catch (error: any) {
       return res.status(500).json({ error: error?.message || 'No se pudo crear notificacion' });
     }
@@ -2029,7 +2078,9 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
         return res.status(404).json({ error: 'Notificacion no encontrada' });
       }
 
-      return res.json(mapNotification(updated.rows[0]));
+      const readNotification = mapNotification(updated.rows[0]);
+      publishNotificationEvent('read', readNotification);
+      return res.json(readNotification);
     } catch (error: any) {
       return res.status(500).json({ error: error?.message || 'No se pudo marcar la notificacion como leida' });
     }

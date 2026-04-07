@@ -13,28 +13,11 @@ export default defineConfig(({mode}) => {
       react(), 
       tailwindcss(),
       VitePWA({
+        injectRegister: 'script',
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+        manifest: false,
         workbox: {
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
-        },
-        manifest: {
-          name: 'WM_M&S Construction Manager',
-          short_name: 'WM_M&S',
-          description: 'Sistema de Gestión para Constructora WM_M&S',
-          theme_color: '#ea580c',
-          icons: [
-            {
-              src: 'pwa-192x192.png',
-              sizes: '192x192',
-              type: 'image/png'
-            },
-            {
-              src: 'pwa-512x512.png',
-              sizes: '512x512',
-              type: 'image/png'
-            }
-          ]
         }
       })
     ],

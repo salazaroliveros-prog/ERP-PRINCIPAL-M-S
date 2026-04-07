@@ -36,10 +36,19 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; user: a
     };
 
     refreshNotifications();
-    const refreshInterval = window.setInterval(refreshNotifications, 10000);
+    const refreshInterval = window.setInterval(refreshNotifications, 60000);
 
     // Also listen for NEW notifications specifically to show toast
     const unsubscribeNew = listenForNotifications((n) => {
+      setNotifications((prev) => {
+        if (n.id && prev.some((item) => item.id === n.id)) {
+          return prev;
+        }
+        return [n, ...prev];
+      });
+      if (!n.read) {
+        setUnreadCount((prev) => prev + 1);
+      }
       toast(n.title, {
         description: n.body,
         duration: 8000, // Longer duration for important alerts
@@ -48,7 +57,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; user: a
           onClick: () => markAsRead(n.id!)
         }
       });
-      refreshNotifications();
     });
 
     return () => {
