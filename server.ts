@@ -834,18 +834,6 @@ function requireDatabase() {
 
 let dbAvailabilityCache: { ok: boolean; checkedAt: number } = { ok: !!pool, checkedAt: 0 };
 
-const REQUIRED_SCHEMA_TABLES = [
-  'projects',
-  'clients',
-  'quotes',
-  'notifications',
-  'subcontracts',
-  'workflows',
-  'inventory_items',
-  'financial_transactions',
-  'safety_incidents',
-];
-
 async function isDatabaseAvailable() {
   if (!pool) return false;
   const now = Date.now();
@@ -855,20 +843,6 @@ async function isDatabaseAvailable() {
 
   try {
     await pool.query('select 1');
-
-    const schemaCheck = await pool.query<{ all_present: boolean }>(
-      `
-        select bool_and(to_regclass('public.' || t.name) is not null) as all_present
-        from unnest($1::text[]) as t(name)
-      `,
-      [REQUIRED_SCHEMA_TABLES]
-    );
-
-    if (!schemaCheck.rows[0]?.all_present) {
-      dbAvailabilityCache = { ok: false, checkedAt: now };
-      return false;
-    }
-
     dbAvailabilityCache = { ok: true, checkedAt: now };
     return true;
   } catch {
