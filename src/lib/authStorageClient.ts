@@ -1,4 +1,5 @@
 import { toast } from 'sonner';
+import { buildApiUrl } from './api';
 
 export interface UserProviderInfo {
   providerId: string;
@@ -104,7 +105,7 @@ export async function signInWithPopup(_auth: LocalAuth, _provider: GoogleAuthPro
 
   const photoURL = createDefaultAvatar(displayName);
   try {
-    const response = await fetch('/api/auth/login', {
+    const response = await fetch(buildApiUrl('/api/auth/login'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -186,7 +187,7 @@ export async function uploadBytes(fileRef: StorageReference, file: File) {
   payload.append('file', file);
   payload.append('path', fileRef.path);
 
-  const response = await fetch('/api/uploads', {
+  const response = await fetch(buildApiUrl('/api/uploads'), {
     method: 'POST',
     body: payload,
   });
@@ -263,7 +264,7 @@ const checkApiHealth = async () => {
   const timeout = window.setTimeout(() => controller.abort(), HEALTHCHECK_TIMEOUT_MS);
 
   try {
-    const response = await fetch('/api/health', {
+    const response = await fetch(buildApiUrl('/api/health'), {
       method: 'GET',
       cache: 'no-store',
       signal: controller.signal,
