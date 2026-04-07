@@ -81,6 +81,21 @@ Antes de publicar en produccion, valida:
    - GET /api/health debe responder status ok
    - La app debe crear/listar datos via API sin errores CORS
 
+## Verificacion automatica de produccion
+
+Se agrego un verificador automatico para comprobar endpoints criticos, preflight CORS y stream SSE:
+
+- Script local/CI: `npm run verify:prod`
+- Workflow GitHub Actions: `.github/workflows/verify-production.yml`
+
+Variables usadas por el verificador:
+
+- `API_BASE_URL` (o `VITE_API_BASE_URL`)
+- `FRONTEND_ORIGIN` (por defecto: `https://salazaroliveros-prog.github.io`)
+
+En GitHub Actions, define el secret `VITE_API_BASE_URL` con la URL publica real del backend.
+Si hay autenticacion de despliegue en Vercel, el workflow fallara con `401 Authentication Required` hasta desactivarla o configurar bypass para automatizacion.
+
 ## Flags de performance (frontend)
 
 Variables opcionales para ajustar comportamiento en runtime:
