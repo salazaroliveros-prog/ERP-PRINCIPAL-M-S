@@ -564,8 +564,7 @@ export default function Quotes() {
     // Clean phone number (remove non-digits)
     const cleanPhone = client.phone.replace(/\D/g, '');
     
-    // Construct WhatsApp message
-    const message = encodeURIComponent(
+    const whatsappMessage =
       `*Cotización #${quote.id.slice(-6).toUpperCase()} - CONSTRUCTORA WM_M&S*\n\n` +
       `Estimado(a) *${client.name}*,\n\n` +
       `Adjunto enviamos los detalles de la cotización solicitada.\n\n` +
@@ -573,8 +572,8 @@ export default function Quotes() {
       `*Fecha:* ${formatDate(quote.date)}\n` +
       `*Notas:* ${quote.notes || 'N/A'}\n\n` +
       `Quedamos a su disposición para cualquier duda.\n\n` +
-      `Atentamente,\n*CONSTRUCTORA WM_M&S*`
-    );
+      `Atentamente,\n*CONSTRUCTORA WM_M&S*`;
+    const message = encodeURIComponent(whatsappMessage);
 
     try {
       const doc = buildQuotePdf(quote, client);
@@ -589,7 +588,7 @@ export default function Quotes() {
       if (nav.share && nav.canShare?.({ files: [pdfFile] })) {
         await nav.share({
           title: `Cotizacion #${quote.id.slice(-6).toUpperCase()} - Constructora WM_M&S`,
-          text: decodeURIComponent(message),
+          text: whatsappMessage,
           files: [pdfFile],
         });
         toast.success('Cotizacion lista para enviar por WhatsApp con PDF adjunto');
@@ -597,7 +596,14 @@ export default function Quotes() {
         doc.save(fileName);
         const whatsappUrl = `https://wa.me/${cleanPhone}?text=${message}`;
         window.open(whatsappUrl, '_blank');
-        toast.success('Se descargo el PDF y se abrio WhatsApp. Adjunta el archivo al chat.');
+        if (navigator.clipboard?.writeText) {
+          try {
+            await navigator.clipboard.writeText(whatsappMessage.replace(/\*/g, ''));
+          } catch {
+            // Clipboard may fail in some browser contexts.
+          }
+        }
+        toast.success('Se descargo el PDF, se abrio WhatsApp y el mensaje quedo copiado. Adjunta el archivo al chat.');
       }
 
       if (quote.status === 'Pending') {
@@ -612,6 +618,36 @@ export default function Quotes() {
       toast.error('No se pudo preparar el envio por WhatsApp');
     } finally {
       setIsSending(null);
+    }
+  };
+
+  const handleCopyWhatsAppMessage = async (quote: any) => {
+    const client = clients.find(c => c.id === quote.clientId);
+    if (!client) {
+      toast.error('No se encontro el cliente de la cotizacion');
+      return;
+    }
+
+    const message =
+      `Cotización #${quote.id.slice(-6).toUpperCase()} - CONSTRUCTORA WM_M&S\n\n` +
+      `Estimado(a) ${client.name},\n\n` +
+      `Adjunto enviamos los detalles de la cotización solicitada.\n\n` +
+      `Total: ${formatCurrency(quote.total)}\n` +
+      `Fecha: ${formatDate(quote.date)}\n` +
+      `Notas: ${quote.notes || 'N/A'}\n\n` +
+      `Quedamos a su disposición para cualquier duda.\n\n` +
+      `Atentamente,\nCONSTRUCTORA WM_M&S`;
+
+    if (!navigator.clipboard?.writeText) {
+      toast.error('Tu navegador no permite copiar al portapapeles');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(message);
+      toast.success('Mensaje de WhatsApp copiado');
+    } catch {
+      toast.error('No se pudo copiar el mensaje');
     }
   };
 
@@ -752,6 +788,13 @@ export default function Quotes() {
                           title="Enviar por WhatsApp"
                         >
                           <MessageCircle size={14} className="sm:w-4 sm:h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleCopyWhatsAppMessage(quote)}
+                          className="p-1.5 sm:p-2 text-slate-400 dark:text-slate-500 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+                          title="Copiar mensaje de WhatsApp"
+                        >
+                          <Copy size={14} className="sm:w-4 sm:h-4" />
                         </button>
                         <button 
                           onClick={() => handleEditQuote(quote)}
