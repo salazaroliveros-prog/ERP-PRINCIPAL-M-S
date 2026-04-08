@@ -77,6 +77,31 @@ const EXPENSE_CATEGORIES = [
   'Otros'
 ];
 
+const ADMINISTRATIVE_EXPENSE_CATEGORIES = [
+  'Gastos Administrativos',
+  'Gastos Personales',
+  'Gastos del Hogar',
+  'Viáticos',
+  'Combustible',
+  'Pago de Luz',
+  'Renta',
+  'Internet',
+  'Plataformas TV',
+  'Gastos Oficina',
+  'Préstamos',
+  'Telefonía',
+  'Software y Suscripciones',
+  'Impuestos y Tasas',
+  'Servicios Profesionales',
+  'Papelería y Útiles',
+  'Mantenimiento Oficina'
+];
+
+const ALL_EXPENSE_CATEGORIES = Array.from(new Set([
+  ...EXPENSE_CATEGORIES,
+  ...ADMINISTRATIVE_EXPENSE_CATEGORIES,
+]));
+
 const INCOME_CATEGORIES = [
   'Venta de Inmueble',
   'Anticipo de Cliente',
@@ -107,7 +132,7 @@ export default function Financials() {
     projectId: '',
     budgetItemId: '',
     type: 'Expense',
-    category: EXPENSE_CATEGORIES[0],
+    category: ALL_EXPENSE_CATEGORIES[0],
     amount: '',
     date: new Date().toISOString().split('T')[0],
     description: ''
@@ -600,7 +625,7 @@ export default function Financials() {
   }, []);
 
   const deviationAnalysis = useMemo(() => {
-    const categories = EXPENSE_CATEGORIES;
+    const categories = ALL_EXPENSE_CATEGORIES;
     const analysis = categories.map(category => {
       const budgeted = allBudgetItems
         .filter(item => item.category === category)
@@ -713,6 +738,26 @@ export default function Financials() {
   const totalIncome = filteredTransactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpense = filteredTransactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + t.amount, 0);
   const balance = totalIncome - totalExpense;
+
+  const administrativeCategorySet = useMemo(() => new Set(ADMINISTRATIVE_EXPENSE_CATEGORIES), []);
+
+  const administrativeExpenseTotal = filteredTransactions
+    .filter(t => t.type === 'Expense' && administrativeCategorySet.has(t.category))
+    .reduce((acc, t) => acc + t.amount, 0);
+
+  const activeProjectIds = useMemo(() => new Set(
+    projects
+      .filter((p: any) => p.status === 'Active' || p.status === 'In Progress')
+      .map((p: any) => p.id)
+  ), [projects]);
+
+  const activeProjectsProfit = transactions
+    .filter(t => activeProjectIds.has(t.projectId))
+    .reduce((acc, t) => acc + (t.type === 'Income' ? t.amount : -t.amount), 0);
+
+  const adminExpenseVsProfit = activeProjectsProfit > 0
+    ? (administrativeExpenseTotal / activeProjectsProfit) * 100
+    : 0;
 
   // KPIs
   const profitMargin = totalIncome > 0 ? (balance / totalIncome) * 100 : 0;
@@ -833,7 +878,7 @@ export default function Financials() {
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6 mb-8">
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 hidden sm:block">
             <TrendingUp size={64} className="text-emerald-600" />
@@ -893,6 +938,27 @@ export default function Financials() {
             )}>{profitMargin.toFixed(1)}%</p>
             <span className="text-micro font-bold text-slate-400 dark:text-slate-500 uppercase">Sobre Ingresos</span>
           </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 hidden sm:block">
+            <Calculator size={64} className="text-violet-600" />
+          </div>
+          <div className="flex flex-col sm:flex-row items-center gap-3 mb-4">
+            <div className="p-2 bg-violet-100 dark:bg-violet-500/10 text-violet-600 rounded-lg">
+              <Calculator size={20} />
+            </div>
+            <p className="text-micro text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Rubro Gastos Administrativos</p>
+          </div>
+          <p className="text-2xl font-bold text-violet-600">{formatCurrency(administrativeExpenseTotal)}</p>
+          <p className={cn(
+            "mt-2 text-micro font-black uppercase tracking-wider",
+            adminExpenseVsProfit <= 40 ? "text-emerald-600" : adminExpenseVsProfit <= 70 ? "text-amber-600" : "text-rose-600"
+          )}>
+            {activeProjectsProfit > 0
+              ? `${adminExpenseVsProfit.toFixed(1)}% de utilidad activa`
+              : 'Sin utilidad activa para comparar'}
+          </p>
         </div>
       </div>
 
@@ -1541,7 +1607,7 @@ export default function Financials() {
                       setNewTransaction({
                         ...newTransaction, 
                         type,
-                        category: type === 'Income' ? INCOME_CATEGORIES[0] : EXPENSE_CATEGORIES[0]
+                        category: type === 'Income' ? INCOME_CATEGORIES[0] : ALL_EXPENSE_CATEGORIES[0]
                       });
                     }}
                   >
@@ -1570,7 +1636,7 @@ export default function Financials() {
                     value={newTransaction.category}
                     onChange={(e) => setNewTransaction({...newTransaction, category: e.target.value})}
                   >
-                    {(newTransaction.type === 'Income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(cat => (
+                    {(newTransaction.type === 'Income' ? INCOME_CATEGORIES : ALL_EXPENSE_CATEGORIES).map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </FormSelect>

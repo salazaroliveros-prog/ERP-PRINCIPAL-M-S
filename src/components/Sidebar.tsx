@@ -149,7 +149,7 @@ export const Sidebar = ({
   onInstall: () => void
 }) => {
   const { isDarkMode, toggleDarkMode } = useTheme();
-  const { notifications, unreadCount, markAllAsRead, markAsRead } = useNotifications();
+  const { notifications, unreadCount, markAllAsRead, markAsRead, setPanelOpen } = useNotifications();
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(initialNotificationsOpen);
   const location = useLocation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -164,10 +164,8 @@ export const Sidebar = ({
   }, [initialNotificationsOpen]);
 
   useEffect(() => {
-    if (isNotificationsOpen) {
-      markAllAsRead();
-    }
-  }, [isNotificationsOpen, markAllAsRead]);
+    setPanelOpen(isNotificationsOpen);
+  }, [isNotificationsOpen, setPanelOpen]);
 
   const isOperacionesActive = ["/projects", "/quotes", "/clients", "/safety", "/workflows", "/risks"].some(path => location.pathname.startsWith(path));
   const isLogisticaActive = ["/inventory", "/equipment", "/purchase-orders", "/suppliers"].some(path => location.pathname.startsWith(path));
