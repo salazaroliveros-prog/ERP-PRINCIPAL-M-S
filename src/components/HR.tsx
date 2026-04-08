@@ -18,7 +18,10 @@ import {
   Sparkles,
   Loader2,
   Edit2,
-  Trash2
+  Trash2,
+  FileSignature,
+  Send,
+  CheckCircle2
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
@@ -26,7 +29,26 @@ import { cn, formatCurrency, handleApiError, OperationType } from '../lib/utils'
 import { toast } from 'sonner';
 import ConfirmModal from './ConfirmModal';
 import { logAction } from '../lib/audit';
-import { createAttendance, createEmployee, deleteEmployee, listEmployees, updateEmployee } from '../lib/hrApi';
+import jsPDF from 'jspdf';
+import { ref, storage, uploadBytes, getDownloadURL } from '../lib/authStorageClient';
+import SignaturePad from './SignaturePad';
+import { createDocument } from '../lib/documentsApi';
+import {
+  createAttendance,
+  createEmployee,
+  createEmploymentContract,
+  createVacancy,
+  deleteEmployee,
+  deleteVacancy,
+  EmploymentContractRecord,
+  listEmployees,
+  listEmploymentContracts,
+  listVacancies,
+  updateEmployee,
+  updateEmploymentContract,
+  updateVacancy,
+  VacancyRecord,
+} from '../lib/hrApi';
 
 export default function HR() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -58,6 +80,29 @@ export default function HR() {
     joinDate: new Date().toISOString().split('T')[0]
   });
 
+  const [vacancies, setVacancies] = useState<VacancyRecord[]>([]);
+  const [contracts, setContracts] = useState<EmploymentContractRecord[]>([]);
+  const [vacancyForm, setVacancyForm] = useState({
+    id: '',
+    title: '',
+    department: 'Operaciones',
+    openings: '1',
+    status: 'Open' as 'Open' | 'Closed',
+    notes: '',
+  });
+  const [contractForm, setContractForm] = useState({
+    employeeId: '',
+    startDate: new Date().toISOString().slice(0, 10),
+    contractType: 'Tiempo indefinido',
+    companyName: 'WM_M&S Constructora',
+    ownerName: '',
+    ownerTitle: 'Representante Legal',
+    notes: '',
+  });
+  const [isSigningOwner, setIsSigningOwner] = useState(false);
+  const [ownerSignature, setOwnerSignature] = useState('');
+  const [selectedContractId, setSelectedContractId] = useState('');
+
   const loadEmployees = useCallback(async () => {
     try {
       const items = await listEmployees();
@@ -69,9 +114,199 @@ export default function HR() {
     }
   }, []);
 
+  const loadVacanciesAndContracts = useCallback(async () => {
+    try {
+      const [vacancyItems, contractItems] = await Promise.all([listVacancies(), listEmploymentContracts()]);
+      setVacancies(vacancyItems);
+      setContracts(contractItems);
+    } catch (error) {
+      handleApiError(error, OperationType.GET, 'rrhh');
+    }
+  }, []);
+
   useEffect(() => {
     loadEmployees();
   }, [loadEmployees]);
+
+  useEffect(() => {
+    loadVacanciesAndContracts();
+  }, [loadVacanciesAndContracts]);
+
+  const handleSubmitVacancy = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      if (vacancyForm.id) {
+        await updateVacancy(vacancyForm.id, {
+          title: vacancyForm.title,
+          department: vacancyForm.department,
+          openings: Number(vacancyForm.openings || 1),
+          status: vacancyForm.status,
+          notes: vacancyForm.notes,
+        });
+        toast.success('Vacante actualizada');
+      } else {
+        await createVacancy({
+          title: vacancyForm.title,
+          department: vacancyForm.department,
+          openings: Number(vacancyForm.openings || 1),
+          status: vacancyForm.status,
+          notes: vacancyForm.notes,
+        });
+        toast.success('Vacante creada');
+      }
+
+      setVacancyForm({
+        id: '',
+        title: '',
+        department: 'Operaciones',
+        openings: '1',
+        status: 'Open',
+        notes: '',
+      });
+      await loadVacanciesAndContracts();
+    } catch (error) {
+      handleApiError(error, vacancyForm.id ? OperationType.UPDATE : OperationType.WRITE, 'vacancies');
+    }
+  };
+
+  const handleCreateContract = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!contractForm.employeeId) {
+      toast.error('Selecciona un empleado para crear el contrato');
+      return;
+    }
+
+    try {
+      const contract = await createEmploymentContract(contractForm);
+      await logAction('Creación de Contrato', 'RRHH', `Contrato creado para ${contract.employeeName}`, 'create', {
+        contractId: contract.id,
+      });
+      toast.success('Contrato creado. Puedes enviarlo para firma móvil.');
+      setContractForm((prev) => ({ ...prev, employeeId: '', notes: '' }));
+      await loadVacanciesAndContracts();
+    } catch (error) {
+      handleApiError(error, OperationType.WRITE, 'contracts');
+    }
+  };
+
+  const handleSendForMobileSignature = async (contract: EmploymentContractRecord) => {
+    try {
+      await updateEmploymentContract(contract.id, {
+        status: 'sent',
+        sentAt: new Date().toISOString(),
+      } as any);
+      const url = `${window.location.origin}${window.location.pathname}#/hr/contract-sign/${contract.shareToken}`;
+      await navigator.clipboard.writeText(url);
+      toast.success('Enlace copiado. Envíalo al trabajador para firmar desde su móvil.');
+      await loadVacanciesAndContracts();
+    } catch (error) {
+      handleApiError(error, OperationType.UPDATE, 'contracts');
+    }
+  };
+
+  const buildContractPdf = (contract: EmploymentContractRecord, ownerSignDataUrl: string) => {
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const left = 48;
+    let y = 56;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('CONTRATO INDIVIDUAL DE TRABAJO', left, y);
+
+    y += 28;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    const body = [
+      `Empresa: ${contract.companyName}`,
+      `Representante: ${contract.ownerName} (${contract.ownerTitle})`,
+      `Trabajador: ${contract.employeeName}`,
+      `Cargo: ${contract.employeeRole} - Departamento: ${contract.employeeDepartment}`,
+      `Tipo de contrato: ${contract.contractType}`,
+      `Fecha de inicio: ${contract.startDate}`,
+      `Salario mensual: ${formatCurrency(contract.salary)}`,
+      '',
+      'CLAUSULAS BASICAS:',
+      '1. El trabajador prestara sus servicios personales para WM_M&S Constructora.',
+      '2. Se cumplira el horario y reglamento interno de la empresa.',
+      '3. El pago de salario sera mensual conforme a la normativa laboral aplicable.',
+      '4. Ambas partes aceptan los terminos del presente contrato.',
+    ];
+
+    body.forEach((line) => {
+      doc.text(line, left, y);
+      y += 18;
+    });
+
+    y += 20;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Firma del trabajador', left, y);
+    doc.text('Firma del empleador', 320, y);
+
+    y += 10;
+    if (contract.workerSignatureDataUrl) {
+      doc.addImage(contract.workerSignatureDataUrl, 'PNG', left, y, 180, 60);
+    }
+    doc.addImage(ownerSignDataUrl, 'PNG', 320, y, 180, 60);
+
+    return doc;
+  };
+
+  const handleFinalizeContract = async () => {
+    const contract = contracts.find((item) => item.id === selectedContractId);
+    if (!contract) {
+      toast.error('Selecciona un contrato para finalizar');
+      return;
+    }
+    if (!contract.workerSignatureDataUrl) {
+      toast.error('El trabajador aun no firma este contrato');
+      return;
+    }
+    if (!ownerSignature) {
+      toast.error('Debes capturar la firma del empleador');
+      return;
+    }
+
+    try {
+      const pdf = buildContractPdf(contract, ownerSignature);
+      const blob = pdf.output('blob');
+      const fileName = `contrato-${contract.employeeName.replace(/\s+/g, '-').toLowerCase()}-${contract.id}.pdf`;
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+      const fileRef = ref(storage, `contracts/${fileName}`);
+
+      await uploadBytes(fileRef, file);
+      const fileUrl = await getDownloadURL(fileRef);
+
+      await updateEmploymentContract(contract.id, {
+        ownerSignatureDataUrl: ownerSignature,
+        ownerSignedAt: new Date().toISOString(),
+        status: 'completed',
+        signedFileUrl: fileUrl,
+        signedFileName: fileName,
+      } as any);
+
+      await createDocument({
+        name: fileName,
+        type: 'pdf',
+        size: `${(blob.size / 1024).toFixed(1)} KB`,
+        folder: 'Legal',
+        author: 'RRHH',
+        fileUrl,
+        date: new Date().toISOString().slice(0, 10),
+      });
+
+      await logAction('Contrato firmado', 'RRHH', `Contrato firmado y archivado de ${contract.employeeName}`, 'update', {
+        contractId: contract.id,
+      });
+
+      toast.success('Contrato firmado por ambas partes y guardado en Archivos.');
+      setIsSigningOwner(false);
+      setSelectedContractId('');
+      setOwnerSignature('');
+      await loadVacanciesAndContracts();
+    } catch (error) {
+      handleApiError(error, OperationType.UPDATE, 'contracts');
+    }
+  };
 
   const filteredEmployees = useMemo(() => {
     return employees.filter(emp => 
@@ -262,14 +497,19 @@ export default function HR() {
     const total = employees.length;
     const monthlyPayroll = employees.reduce((acc, emp) => acc + (Number(emp.salary) || 0), 0);
     const onLeave = employees.filter(emp => emp.status === 'On Leave').length;
+    const activeVacancies = vacancies.filter((item) => item.status === 'Open').length;
+    const newVacancies = vacancies.filter((item) => {
+      const created = new Date(item.createdAt || '').getTime();
+      return Number.isFinite(created) && created >= Date.now() - 1000 * 60 * 60 * 24 * 7;
+    }).length;
     return {
       total,
       monthlyPayroll,
       onLeave,
-      activeVacancies: 5,
-      newVacancies: 3
+      activeVacancies,
+      newVacancies
     };
-  }, [employees]);
+  }, [employees, vacancies]);
 
   if (loading) {
     return (
@@ -561,6 +801,47 @@ export default function HR() {
             </motion.div>
           </div>
         )}
+
+        {isSigningOwner && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-100 dark:border-slate-800"
+            >
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h3 className="text-xl font-black text-slate-900 dark:text-white">Firma del Empleador</h3>
+                <button
+                  title="Cerrar firma"
+                  aria-label="Cerrar firma"
+                  onClick={() => {
+                    setIsSigningOwner(false);
+                    setOwnerSignature('');
+                    setSelectedContractId('');
+                  }}
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                >
+                  <X size={20} className="text-slate-500" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Firma para cerrar el contrato y generar el PDF final. Al confirmar se archivara automaticamente en Documentos.
+                </p>
+                <SignaturePad onChange={setOwnerSignature} />
+                <button
+                  type="button"
+                  onClick={handleFinalizeContract}
+                  className="w-full py-3 rounded-xl bg-primary text-white font-black uppercase tracking-widest"
+                >
+                  Firmar y Guardar Contrato
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* Stats Grid */}
@@ -786,6 +1067,248 @@ export default function HR() {
             <div className="absolute -right-4 -bottom-4 opacity-10">
               <CreditCard size={120} />
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white">Vacantes</h3>
+            <button
+              type="button"
+              onClick={() =>
+                setVacancyForm({
+                  id: '',
+                  title: '',
+                  department: 'Operaciones',
+                  openings: '1',
+                  status: 'Open',
+                  notes: '',
+                })
+              }
+              className="text-xs font-bold text-primary"
+            >
+              Nueva
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmitVacancy} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input
+              required
+              type="text"
+              placeholder="Cargo de vacante"
+              value={vacancyForm.title}
+              onChange={(e) => setVacancyForm((prev) => ({ ...prev, title: e.target.value }))}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            />
+            <input
+              required
+              type="text"
+              placeholder="Departamento"
+              value={vacancyForm.department}
+              onChange={(e) => setVacancyForm((prev) => ({ ...prev, department: e.target.value }))}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            />
+            <input
+              required
+              type="number"
+              min={1}
+              placeholder="Plazas"
+              value={vacancyForm.openings}
+              onChange={(e) => setVacancyForm((prev) => ({ ...prev, openings: e.target.value }))}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            />
+            <select
+              value={vacancyForm.status}
+              onChange={(e) =>
+                setVacancyForm((prev) => ({ ...prev, status: e.target.value as 'Open' | 'Closed' }))
+              }
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            >
+              <option value="Open">Abierta</option>
+              <option value="Closed">Cerrada</option>
+            </select>
+            <textarea
+              placeholder="Notas"
+              value={vacancyForm.notes}
+              onChange={(e) => setVacancyForm((prev) => ({ ...prev, notes: e.target.value }))}
+              className="md:col-span-2 px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+              rows={2}
+            />
+            <button className="md:col-span-2 py-2.5 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-widest">
+              {vacancyForm.id ? 'Actualizar Vacante' : 'Guardar Vacante'}
+            </button>
+          </form>
+
+          <div className="space-y-2">
+            {vacancies.length === 0 ? (
+              <p className="text-xs text-slate-500">No hay vacantes registradas.</p>
+            ) : (
+              vacancies.map((vacancy) => (
+                <div key={vacancy.id} className="p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">{vacancy.title}</p>
+                    <p className="text-[11px] text-slate-500">
+                      {vacancy.department} · {vacancy.openings} plaza(s) · {vacancy.status === 'Open' ? 'Abierta' : 'Cerrada'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVacancyForm({
+                          id: vacancy.id,
+                          title: vacancy.title,
+                          department: vacancy.department,
+                          openings: String(vacancy.openings),
+                          status: vacancy.status,
+                          notes: vacancy.notes || '',
+                        })
+                      }
+                      className="p-2 text-slate-500 hover:text-primary"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await deleteVacancy(vacancy.id);
+                          toast.success('Vacante eliminada');
+                          await loadVacanciesAndContracts();
+                        } catch (error) {
+                          handleApiError(error, OperationType.DELETE, 'vacancies');
+                        }
+                      }}
+                      className="p-2 text-slate-500 hover:text-rose-600"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-6 space-y-5">
+          <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white">Contratos Laborales</h3>
+
+          <form onSubmit={handleCreateContract} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <select
+              required
+              value={contractForm.employeeId}
+              onChange={(e) => setContractForm((prev) => ({ ...prev, employeeId: e.target.value }))}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            >
+              <option value="">Seleccionar empleado...</option>
+              {employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name} - {emp.role}
+                </option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={contractForm.startDate}
+              onChange={(e) => setContractForm((prev) => ({ ...prev, startDate: e.target.value }))}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Tipo de contrato"
+              value={contractForm.contractType}
+              onChange={(e) => setContractForm((prev) => ({ ...prev, contractType: e.target.value }))}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Empresa"
+              value={contractForm.companyName}
+              onChange={(e) => setContractForm((prev) => ({ ...prev, companyName: e.target.value }))}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            />
+            <input
+              required
+              type="text"
+              placeholder="Nombre del dueño o representante"
+              value={contractForm.ownerName}
+              onChange={(e) => setContractForm((prev) => ({ ...prev, ownerName: e.target.value }))}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            />
+            <input
+              required
+              type="text"
+              placeholder="Cargo del representante"
+              value={contractForm.ownerTitle}
+              onChange={(e) => setContractForm((prev) => ({ ...prev, ownerTitle: e.target.value }))}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            />
+            <textarea
+              placeholder="Notas del contrato"
+              value={contractForm.notes}
+              onChange={(e) => setContractForm((prev) => ({ ...prev, notes: e.target.value }))}
+              className="md:col-span-2 px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+              rows={2}
+            />
+            <button className="md:col-span-2 py-2.5 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2">
+              <FileSignature size={14} />
+              Crear Contrato
+            </button>
+          </form>
+
+          <div className="space-y-2 max-h-[360px] overflow-auto pr-1">
+            {contracts.length === 0 ? (
+              <p className="text-xs text-slate-500">Aun no hay contratos registrados.</p>
+            ) : (
+              contracts.map((contract) => (
+                <div key={contract.id} className="p-3 rounded-xl border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">{contract.employeeName}</p>
+                      <p className="text-[11px] text-slate-500">{contract.contractType} · Inicio {contract.startDate}</p>
+                    </div>
+                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-500">{contract.status}</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleSendForMobileSignature(contract)}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-[11px] font-bold text-slate-700 flex items-center gap-1"
+                    >
+                      <Send size={12} />
+                      Enviar Firma Móvil
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={contract.status !== 'worker_signed'}
+                      onClick={() => {
+                        setSelectedContractId(contract.id);
+                        setIsSigningOwner(true);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-[11px] font-bold text-slate-700 flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <CheckCircle2 size={12} />
+                      Firmar y Cerrar
+                    </button>
+
+                    {contract.signedFileUrl && (
+                      <a
+                        href={contract.signedFileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2.5 py-1.5 rounded-lg border border-emerald-300 text-[11px] font-bold text-emerald-700"
+                      >
+                        Ver PDF
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

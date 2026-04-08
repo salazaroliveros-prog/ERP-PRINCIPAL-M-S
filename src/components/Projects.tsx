@@ -50,6 +50,7 @@ import {
   APU_TEMPLATES,
   MARKET_DATA,
   buildBudgetSeedFromTemplate,
+  getAreaFactorByDescription,
 } from '../constants/apuData';
 import { formatCurrency, formatDate, cn, handleApiError, OperationType, getMitigationSuggestions } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -325,11 +326,11 @@ export default function Projects() {
 
   const validateField = (name: string, value: any) => {
     let error = '';
-    const mandatoryFields = ['name', 'location', 'projectManager', 'budget', 'area', 'startDate', 'endDate'];
+    const mandatoryFields = ['name', 'location', 'projectManager', 'area', 'startDate', 'endDate'];
     
     if (mandatoryFields.includes(name) && (!value && value !== 0)) {
       error = 'Este campo es obligatorio';
-    } else if ((name === 'budget' || name === 'spent' || name === 'area') && Number(value) < 0) {
+    } else if ((name === 'spent' || name === 'area') && Number(value) < 0) {
       error = 'El valor no puede ser negativo';
     } else if (name === 'physicalProgress' && (Number(value) < 0 || Number(value) > 100)) {
       error = 'Debe estar entre 0 y 100';
@@ -346,7 +347,7 @@ export default function Projects() {
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
-    const mandatoryFields = ['name', 'location', 'projectManager', 'budget', 'area', 'startDate', 'endDate'];
+    const mandatoryFields = ['name', 'location', 'projectManager', 'area', 'startDate', 'endDate'];
     
     mandatoryFields.forEach(field => {
       const value = (newProject as any)[field];
@@ -355,7 +356,6 @@ export default function Projects() {
       }
     });
 
-    if (newProject.budget && Number(newProject.budget) < 0) errors.budget = 'No puede ser negativo';
     if (newProject.spent && Number(newProject.spent) < 0) errors.spent = 'No puede ser negativo';
     if (newProject.area && Number(newProject.area) <= 0) errors.area = 'Debe ser mayor a cero';
     
@@ -559,13 +559,14 @@ export default function Projects() {
       }
       
       if (editingProject) {
-        const financialProgress = Number(newProject.budget) > 0 ? (Number(newProject.spent) / Number(newProject.budget)) * 100 : 0;
+        const effectiveBudget = Number(editingProject?.budget || 0);
+        const financialProgress = effectiveBudget > 0 ? (Number(newProject.spent) / effectiveBudget) * 100 : 0;
         await updateProject(editingProject.id, {
           name: newProject.name,
           location: newProject.location,
           projectManager: newProject.projectManager,
           status: newProject.status,
-          budget: Number(newProject.budget),
+          budget: effectiveBudget,
           spent: Number(newProject.spent),
           physicalProgress: Number(newProject.physicalProgress),
           financialProgress,
@@ -580,13 +581,13 @@ export default function Projects() {
         toast.success('Obra actualizada con éxito');
         await logAction('Edición de Proyecto', 'Proyectos', `Proyecto ${newProject.name} actualizado`, 'update', { projectId: editingProject.id });
       } else {
-        const financialProgress = Number(newProject.budget) > 0 ? (Number(newProject.spent) / Number(newProject.budget)) * 100 : 0;
+        const financialProgress = 0;
         const created = await createProject({
           name: newProject.name,
           location: newProject.location,
           projectManager: newProject.projectManager,
           status: newProject.status,
-          budget: Number(newProject.budget),
+          budget: 0,
           spent: Number(newProject.spent),
           physicalProgress: Number(newProject.physicalProgress),
           financialProgress,
@@ -607,14 +608,15 @@ export default function Projects() {
         
         for (let i = 0; i < templates.length; i++) {
           const template = templates[i];
-          const seed = buildBudgetSeedFromTemplate(template, 0, newProject.location);
+          const quantityForTemplate = Number(newProject.area || 0) * getAreaFactorByDescription(newProject.typology, template.description);
+          const seed = buildBudgetSeedFromTemplate(template, quantityForTemplate, newProject.location);
           totalBudget += seed.totalItemPrice;
 
           await createProjectBudgetItem(created.id, {
             description: template.description,
             category: 'General',
             unit: template.unit,
-            quantity: 0,
+            quantity: quantityForTemplate,
             materialCost: seed.materialCost,
             laborCost: seed.laborCost,
             indirectCost: seed.indirectCost,
@@ -630,6 +632,7 @@ export default function Projects() {
         }
 
         if (totalBudget > 0) {
+          const updatedFinancialProgress = totalBudget > 0 ? (Number(newProject.spent) / totalBudget) * 100 : 0;
           await updateProject(created.id, {
             name: newProject.name,
             location: newProject.location,
@@ -638,7 +641,7 @@ export default function Projects() {
             budget: totalBudget,
             spent: Number(newProject.spent),
             physicalProgress: Number(newProject.physicalProgress),
-            financialProgress,
+            financialProgress: updatedFinancialProgress,
             area: Number(newProject.area),
             startDate: newProject.startDate,
             endDate: newProject.endDate,
@@ -2377,7 +2380,6 @@ export default function Projects() {
                     if (currentStep === 1) {
                       const errors: any = {};
                       if (!newProject.area) errors.area = 'Obligatorio';
-                      if (!newProject.budget) errors.budget = 'Obligatorio';
                       if (Object.keys(errors).length > 0) {
                         setValidationErrors(errors);
                         toast.error('Complete los campos obligatorios');
@@ -2599,19 +2601,12 @@ export default function Projects() {
                     error={validationErrors.area}
                     placeholder="Ej: 150"
                   />
-                  <FormInput 
-                    label="Presupuesto (GTQ)"
-                    required
-                    type="number" 
-                    min="0"
-                    step="any"
-                    value={newProject.budget}
-                    onChange={(e) => {
-                      setNewProject({...newProject, budget: e.target.value});
-                      validateField('budget', e.target.value);
-                    }}
-                    error={validationErrors.budget}
-                  />
+                  <div className="md:col-span-2 p-4 rounded-2xl border border-dashed border-primary/30 bg-primary/5">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">Presupuesto del proyecto</p>
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                      Se determina automaticamente con el total del modulo de presupuesto (partidas APU). No se ingresa manualmente.
+                    </p>
+                  </div>
                   <FormInput 
                     label="Monto Ejecutado (GTQ)"
                     required

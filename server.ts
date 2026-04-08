@@ -248,6 +248,7 @@ interface DocumentRow {
   name: string;
   type: string;
   size: string | null;
+  file_url: string | null;
   folder: string;
   author: string | null;
   date: string;
@@ -293,6 +294,43 @@ interface AttendanceRow {
   type: string;
   timestamp: string;
   created_at: string;
+}
+
+interface VacancyRow {
+  id: string;
+  title: string;
+  department: string;
+  openings: number;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface EmploymentContractRow {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  employee_role: string;
+  employee_department: string;
+  salary: string | null;
+  start_date: string;
+  contract_type: string;
+  company_name: string;
+  owner_name: string;
+  owner_title: string;
+  status: string;
+  share_token: string;
+  sent_at: string | null;
+  worker_signed_at: string | null;
+  owner_signed_at: string | null;
+  worker_signature_data_url: string | null;
+  owner_signature_data_url: string | null;
+  signed_file_url: string | null;
+  signed_file_name: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 interface RiskRow {
@@ -902,6 +940,7 @@ function mapDocument(row: DocumentRow) {
     name: row.name,
     type: row.type,
     size: row.size || '',
+    fileUrl: row.file_url || null,
     folder: row.folder,
     author: row.author || 'Usuario',
     date: row.date,
@@ -955,6 +994,47 @@ function mapAttendance(row: AttendanceRow) {
     type: row.type,
     timestamp: row.timestamp,
     createdAt: row.created_at,
+  };
+}
+
+function mapVacancy(row: VacancyRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    department: row.department,
+    openings: Number(row.openings || 0),
+    status: row.status === 'Closed' ? 'Closed' : 'Open',
+    notes: row.notes || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapEmploymentContract(row: EmploymentContractRow) {
+  return {
+    id: row.id,
+    employeeId: row.employee_id,
+    employeeName: row.employee_name,
+    employeeRole: row.employee_role,
+    employeeDepartment: row.employee_department,
+    salary: Number(row.salary || 0),
+    startDate: row.start_date,
+    contractType: row.contract_type,
+    companyName: row.company_name,
+    ownerName: row.owner_name,
+    ownerTitle: row.owner_title,
+    status: row.status,
+    shareToken: row.share_token,
+    sentAt: row.sent_at,
+    workerSignedAt: row.worker_signed_at,
+    ownerSignedAt: row.owner_signed_at,
+    workerSignatureDataUrl: row.worker_signature_data_url,
+    ownerSignatureDataUrl: row.owner_signature_data_url,
+    signedFileUrl: row.signed_file_url,
+    signedFileName: row.signed_file_name,
+    notes: row.notes || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -1414,10 +1494,10 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       const location = String(body.location || '').trim();
       const projectManager = String(body.projectManager || '').trim();
       const status = String(body.status || 'Planning').trim();
-      const budget = Number(body.budget || 0);
       const spent = Number(body.spent || 0);
       const physicalProgress = Number(body.physicalProgress || 0);
-      const financialProgress = Number(body.financialProgress || 0);
+      const budget = 0;
+      const financialProgress = 0;
       const area = Number(body.area || 0);
       const startDate = String(body.startDate || '').trim();
       const endDate = String(body.endDate || '').trim();
@@ -1504,14 +1584,22 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
         return res.status(400).json({ error: 'projectId requerido' });
       }
 
+      const existingProject = await db.query<{ budget: string | null }>(
+        'select budget from projects where id = $1',
+        [projectId]
+      );
+      if (!existingProject.rows[0]) {
+        return res.status(404).json({ error: 'Proyecto no encontrado' });
+      }
+
       const name = String(body.name || '').trim();
       const location = String(body.location || '').trim();
       const projectManager = String(body.projectManager || '').trim();
       const status = String(body.status || 'Planning').trim();
-      const budget = Number(body.budget || 0);
+      const budget = Number(existingProject.rows[0].budget || 0);
       const spent = Number(body.spent || 0);
       const physicalProgress = Number(body.physicalProgress || 0);
-      const financialProgress = Number(body.financialProgress || 0);
+      const financialProgress = budget > 0 ? (spent / budget) * 100 : 0;
       const area = Number(body.area || 0);
       const startDate = String(body.startDate || '').trim();
       const endDate = String(body.endDate || '').trim();
@@ -4138,6 +4226,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             name,
             type,
             size,
+            file_url,
             folder,
             author,
             date::text,
@@ -4160,6 +4249,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       const name = String(req.body?.name || '').trim();
       const type = String(req.body?.type || '').trim();
       const size = String(req.body?.size || '').trim();
+      const fileUrl = String(req.body?.fileUrl || '').trim();
       const folder = String(req.body?.folder || 'General').trim() || 'General';
       const author = String(req.body?.author || 'Usuario').trim() || 'Usuario';
       const date = String(req.body?.date || '').trim();
@@ -4174,22 +4264,24 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             name,
             type,
             size,
+            file_url,
             folder,
             author,
             date
-          ) values ($1,$2,$3,$4,$5,$6::date)
+          ) values ($1,$2,$3,$4,$5,$6,$7::date)
           returning
             id,
             name,
             type,
             size,
+            file_url,
             folder,
             author,
             date::text,
             created_at,
             updated_at
         `,
-        [name, type, size || null, folder, author || null, date || new Date().toISOString().slice(0, 10)]
+        [name, type, size || null, fileUrl || null, folder, author || null, date || new Date().toISOString().slice(0, 10)]
       );
 
       return res.status(201).json(mapDocument(insert.rows[0]));
@@ -4214,6 +4306,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       if (req.body?.name !== undefined) addSet('name', String(req.body.name || '').trim());
       if (req.body?.type !== undefined) addSet('type', String(req.body.type || '').trim());
       if (req.body?.size !== undefined) addSet('size', String(req.body.size || '').trim() || null);
+      if (req.body?.fileUrl !== undefined) addSet('file_url', String(req.body.fileUrl || '').trim() || null);
       if (req.body?.folder !== undefined) addSet('folder', String(req.body.folder || '').trim() || 'General');
       if (req.body?.author !== undefined) addSet('author', String(req.body.author || '').trim() || null);
       if (req.body?.date !== undefined) {
@@ -4235,6 +4328,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             name,
             type,
             size,
+            file_url,
             folder,
             author,
             date::text,
@@ -4598,6 +4692,479 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       return res.status(201).json(mapAttendance(insert.rows[0]));
     } catch (error: any) {
       return res.status(500).json({ error: error?.message || 'No se pudo registrar asistencia' });
+    }
+  });
+
+  app.get('/api/vacancies', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const rows = await db.query<VacancyRow>(
+        `
+          select
+            id,
+            title,
+            department,
+            openings,
+            status,
+            notes,
+            created_at,
+            updated_at
+          from vacancies
+          order by created_at desc
+        `
+      );
+
+      return res.json({ items: rows.rows.map(mapVacancy) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener vacantes' });
+    }
+  });
+
+  app.post('/api/vacancies', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const title = String(req.body?.title || '').trim();
+      const department = String(req.body?.department || 'Operaciones').trim() || 'Operaciones';
+      const openings = Math.max(1, Number(req.body?.openings || 1));
+      const status = String(req.body?.status || 'Open').trim() === 'Closed' ? 'Closed' : 'Open';
+      const notes = String(req.body?.notes || '').trim();
+
+      if (!title) return res.status(400).json({ error: 'title es obligatorio' });
+
+      const insert = await db.query<VacancyRow>(
+        `
+          insert into vacancies (title, department, openings, status, notes)
+          values ($1,$2,$3,$4,$5)
+          returning
+            id,
+            title,
+            department,
+            openings,
+            status,
+            notes,
+            created_at,
+            updated_at
+        `,
+        [title, department, openings, status, notes || null]
+      );
+
+      return res.status(201).json(mapVacancy(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear vacante' });
+    }
+  });
+
+  app.patch('/api/vacancies/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.title !== undefined) addSet('title', String(req.body.title || '').trim());
+      if (req.body?.department !== undefined) {
+        addSet('department', String(req.body.department || 'Operaciones').trim() || 'Operaciones');
+      }
+      if (req.body?.openings !== undefined) addSet('openings', Math.max(1, Number(req.body.openings || 1)));
+      if (req.body?.status !== undefined) {
+        addSet('status', String(req.body.status || 'Open').trim() === 'Closed' ? 'Closed' : 'Open');
+      }
+      if (req.body?.notes !== undefined) addSet('notes', String(req.body.notes || '').trim() || null);
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<VacancyRow>(
+        `
+          update vacancies
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            title,
+            department,
+            openings,
+            status,
+            notes,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Vacante no encontrada' });
+      return res.json(mapVacancy(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar vacante' });
+    }
+  });
+
+  app.delete('/api/vacancies/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from vacancies where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Vacante no encontrada' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar vacante' });
+    }
+  });
+
+  app.get('/api/contracts', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const rows = await db.query<EmploymentContractRow>(
+        `
+          select
+            id,
+            employee_id,
+            employee_name,
+            employee_role,
+            employee_department,
+            salary,
+            start_date::text,
+            contract_type,
+            company_name,
+            owner_name,
+            owner_title,
+            status,
+            share_token,
+            sent_at::text,
+            worker_signed_at::text,
+            owner_signed_at::text,
+            worker_signature_data_url,
+            owner_signature_data_url,
+            signed_file_url,
+            signed_file_name,
+            notes,
+            created_at,
+            updated_at
+          from employment_contracts
+          order by created_at desc
+        `
+      );
+
+      return res.json({ items: rows.rows.map(mapEmploymentContract) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener contratos' });
+    }
+  });
+
+  app.post('/api/contracts', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const employeeId = String(req.body?.employeeId || '').trim();
+      const startDate = String(req.body?.startDate || '').trim() || new Date().toISOString().slice(0, 10);
+      const contractType = String(req.body?.contractType || 'Tiempo indefinido').trim() || 'Tiempo indefinido';
+      const companyName = String(req.body?.companyName || '').trim();
+      const ownerName = String(req.body?.ownerName || '').trim();
+      const ownerTitle = String(req.body?.ownerTitle || '').trim();
+      const notes = String(req.body?.notes || '').trim();
+
+      if (!employeeId || !companyName || !ownerName || !ownerTitle) {
+        return res.status(400).json({ error: 'employeeId, companyName, ownerName y ownerTitle son obligatorios' });
+      }
+
+      const employeeResult = await db.query<EmployeeRow>(
+        `
+          select
+            id,
+            name,
+            role,
+            department,
+            salary,
+            status,
+            join_date::text,
+            created_at,
+            updated_at
+          from employees
+          where id = $1
+          limit 1
+        `,
+        [employeeId]
+      );
+
+      const employee = employeeResult.rows[0];
+      if (!employee) return res.status(404).json({ error: 'Empleado no encontrado' });
+
+      const shareToken = randomUUID().replace(/-/g, '');
+
+      const insert = await db.query<EmploymentContractRow>(
+        `
+          insert into employment_contracts (
+            employee_id,
+            employee_name,
+            employee_role,
+            employee_department,
+            salary,
+            start_date,
+            contract_type,
+            company_name,
+            owner_name,
+            owner_title,
+            status,
+            share_token,
+            notes
+          ) values ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,$11,$12,$13)
+          returning
+            id,
+            employee_id,
+            employee_name,
+            employee_role,
+            employee_department,
+            salary,
+            start_date::text,
+            contract_type,
+            company_name,
+            owner_name,
+            owner_title,
+            status,
+            share_token,
+            sent_at::text,
+            worker_signed_at::text,
+            owner_signed_at::text,
+            worker_signature_data_url,
+            owner_signature_data_url,
+            signed_file_url,
+            signed_file_name,
+            notes,
+            created_at,
+            updated_at
+        `,
+        [
+          employee.id,
+          employee.name,
+          employee.role,
+          employee.department,
+          Number(employee.salary || 0),
+          startDate,
+          contractType,
+          companyName,
+          ownerName,
+          ownerTitle,
+          'draft',
+          shareToken,
+          notes || null,
+        ]
+      );
+
+      return res.status(201).json(mapEmploymentContract(insert.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear contrato' });
+    }
+  });
+
+  app.patch('/api/contracts/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.status !== undefined) addSet('status', String(req.body.status || 'draft').trim());
+      if (req.body?.ownerSignatureDataUrl !== undefined) {
+        addSet('owner_signature_data_url', String(req.body.ownerSignatureDataUrl || '').trim() || null);
+      }
+      if (req.body?.workerSignatureDataUrl !== undefined) {
+        addSet('worker_signature_data_url', String(req.body.workerSignatureDataUrl || '').trim() || null);
+      }
+      if (req.body?.signedFileUrl !== undefined) addSet('signed_file_url', String(req.body.signedFileUrl || '').trim() || null);
+      if (req.body?.signedFileName !== undefined) addSet('signed_file_name', String(req.body.signedFileName || '').trim() || null);
+      if (req.body?.notes !== undefined) addSet('notes', String(req.body.notes || '').trim() || null);
+      if (req.body?.sentAt !== undefined) {
+        values.push(req.body.sentAt ? String(req.body.sentAt) : null);
+        sets.push(`sent_at = $${values.length}::timestamptz`);
+      }
+      if (req.body?.workerSignedAt !== undefined) {
+        values.push(req.body.workerSignedAt ? String(req.body.workerSignedAt) : null);
+        sets.push(`worker_signed_at = $${values.length}::timestamptz`);
+      }
+      if (req.body?.ownerSignedAt !== undefined) {
+        values.push(req.body.ownerSignedAt ? String(req.body.ownerSignedAt) : null);
+        sets.push(`owner_signed_at = $${values.length}::timestamptz`);
+      }
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const updated = await db.query<EmploymentContractRow>(
+        `
+          update employment_contracts
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            employee_id,
+            employee_name,
+            employee_role,
+            employee_department,
+            salary,
+            start_date::text,
+            contract_type,
+            company_name,
+            owner_name,
+            owner_title,
+            status,
+            share_token,
+            sent_at::text,
+            worker_signed_at::text,
+            owner_signed_at::text,
+            worker_signature_data_url,
+            owner_signature_data_url,
+            signed_file_url,
+            signed_file_name,
+            notes,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Contrato no encontrado' });
+
+      if (
+        req.body?.signedFileUrl &&
+        req.body?.signedFileName
+      ) {
+        await db.query(
+          `
+            insert into documents (name, type, size, file_url, folder, author, date)
+            values ($1,$2,$3,$4,$5,$6,$7::date)
+          `,
+          [
+            String(req.body.signedFileName),
+            'pdf',
+            String(req.body.fileSize || ''),
+            String(req.body.signedFileUrl),
+            'Legal',
+            String(req.body.documentAuthor || 'RRHH'),
+            new Date().toISOString().slice(0, 10),
+          ]
+        );
+      }
+
+      return res.json(mapEmploymentContract(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar contrato' });
+    }
+  });
+
+  app.get('/api/contracts/sign/:token', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const token = String(req.params.token || '').trim();
+      if (!token) return res.status(400).json({ error: 'token requerido' });
+
+      const row = await db.query<EmploymentContractRow>(
+        `
+          select
+            id,
+            employee_id,
+            employee_name,
+            employee_role,
+            employee_department,
+            salary,
+            start_date::text,
+            contract_type,
+            company_name,
+            owner_name,
+            owner_title,
+            status,
+            share_token,
+            sent_at::text,
+            worker_signed_at::text,
+            owner_signed_at::text,
+            worker_signature_data_url,
+            owner_signature_data_url,
+            signed_file_url,
+            signed_file_name,
+            notes,
+            created_at,
+            updated_at
+          from employment_contracts
+          where share_token = $1
+          limit 1
+        `,
+        [token]
+      );
+
+      if (!row.rows[0]) return res.status(404).json({ error: 'Contrato no encontrado' });
+      return res.json(mapEmploymentContract(row.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo obtener contrato para firma' });
+    }
+  });
+
+  app.post('/api/contracts/sign/:token', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const token = String(req.params.token || '').trim();
+      const workerSignatureDataUrl = String(req.body?.workerSignatureDataUrl || '').trim();
+
+      if (!token || !workerSignatureDataUrl.startsWith('data:image/')) {
+        return res.status(400).json({ error: 'token y firma del trabajador son obligatorios' });
+      }
+
+      const updated = await db.query<EmploymentContractRow>(
+        `
+          update employment_contracts
+          set
+            worker_signature_data_url = $1,
+            worker_signed_at = now(),
+            status = 'worker_signed',
+            updated_at = now()
+          where share_token = $2
+          returning
+            id,
+            employee_id,
+            employee_name,
+            employee_role,
+            employee_department,
+            salary,
+            start_date::text,
+            contract_type,
+            company_name,
+            owner_name,
+            owner_title,
+            status,
+            share_token,
+            sent_at::text,
+            worker_signed_at::text,
+            owner_signed_at::text,
+            worker_signature_data_url,
+            owner_signature_data_url,
+            signed_file_url,
+            signed_file_name,
+            notes,
+            created_at,
+            updated_at
+        `,
+        [workerSignatureDataUrl, token]
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Contrato no encontrado' });
+      return res.json(mapEmploymentContract(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo registrar firma del trabajador' });
     }
   });
 

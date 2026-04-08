@@ -28,6 +28,61 @@ export interface AttendancePayload {
   timestamp: string;
 }
 
+export interface VacancyRecord {
+  id: string;
+  title: string;
+  department: string;
+  openings: number;
+  status: 'Open' | 'Closed';
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VacancyPayload {
+  title: string;
+  department: string;
+  openings: number;
+  status: 'Open' | 'Closed';
+  notes?: string;
+}
+
+export interface EmploymentContractRecord {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  employeeRole: string;
+  employeeDepartment: string;
+  salary: number;
+  startDate: string;
+  contractType: string;
+  companyName: string;
+  ownerName: string;
+  ownerTitle: string;
+  status: 'draft' | 'sent' | 'worker_signed' | 'completed';
+  shareToken: string;
+  sentAt: string | null;
+  workerSignedAt: string | null;
+  ownerSignedAt: string | null;
+  workerSignatureDataUrl: string | null;
+  ownerSignatureDataUrl: string | null;
+  signedFileUrl: string | null;
+  signedFileName: string | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmploymentContractPayload {
+  employeeId: string;
+  startDate: string;
+  contractType: string;
+  companyName: string;
+  ownerName: string;
+  ownerTitle: string;
+  notes?: string;
+}
+
 export async function listEmployees(): Promise<EmployeeRecord[]> {
   const response = await requestJson<{ items: EmployeeRecord[] }>('/api/employees');
   return response.items;
@@ -55,6 +110,67 @@ export async function deleteEmployee(id: string): Promise<void> {
 
 export async function createAttendance(payload: AttendancePayload): Promise<any> {
   return requestJson<any>('/api/attendance', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listVacancies(): Promise<VacancyRecord[]> {
+  const response = await requestJson<{ items: VacancyRecord[] }>('/api/vacancies');
+  return response.items;
+}
+
+export async function createVacancy(payload: VacancyPayload): Promise<VacancyRecord> {
+  return requestJson<VacancyRecord>('/api/vacancies', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateVacancy(id: string, payload: Partial<VacancyPayload>): Promise<VacancyRecord> {
+  return requestJson<VacancyRecord>(`/api/vacancies/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteVacancy(id: string): Promise<void> {
+  await requestJson<void>(`/api/vacancies/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function listEmploymentContracts(): Promise<EmploymentContractRecord[]> {
+  const response = await requestJson<{ items: EmploymentContractRecord[] }>('/api/contracts');
+  return response.items;
+}
+
+export async function createEmploymentContract(payload: EmploymentContractPayload): Promise<EmploymentContractRecord> {
+  return requestJson<EmploymentContractRecord>('/api/contracts', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateEmploymentContract(
+  id: string,
+  payload: Partial<EmploymentContractRecord>
+): Promise<EmploymentContractRecord> {
+  return requestJson<EmploymentContractRecord>(`/api/contracts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getContractForSigning(token: string): Promise<EmploymentContractRecord> {
+  return requestJson<EmploymentContractRecord>(`/api/contracts/sign/${encodeURIComponent(token)}`);
+}
+
+export async function submitWorkerContractSignature(
+  token: string,
+  payload: { workerSignatureDataUrl: string; workerName?: string }
+): Promise<EmploymentContractRecord> {
+  return requestJson<EmploymentContractRecord>(`/api/contracts/sign/${encodeURIComponent(token)}`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });

@@ -54,6 +54,7 @@ const Workflows = lazy(() => import('./components/Workflows'));
 const AuditLogs = lazy(() => import('./components/AuditLogs'));
 const RiskManagement = lazy(() => import('./components/RiskManagement'));
 const AIChat = lazy(() => import('./components/AIChat'));
+const HRContractSignPage = lazy(() => import('./components/HRContractSignPage'));
 const NotificationManager = lazy(() =>
   import('./components/NotificationManager').then((module) => ({ default: module.NotificationManager }))
 );
@@ -504,6 +505,22 @@ export default function App() {
       setDeferredPrompt(null);
     }
   };
+
+  const isPublicContractSignPage =
+    typeof window !== 'undefined' && window.location.hash.startsWith('#/hr/contract-sign/');
+
+  if (isPublicContractSignPage) {
+    return (
+      <ErrorBoundary>
+        <ThemeProvider>
+          <Toaster position="top-right" richColors closeButton />
+          <Suspense fallback={null}>
+            <HRContractSignPage />
+          </Suspense>
+        </ThemeProvider>
+      </ErrorBoundary>
+    );
+  }
 
   if (loading) {
     return (

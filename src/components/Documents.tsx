@@ -58,6 +58,7 @@ export default function Documents() {
     name: '',
     type: 'PDF',
     size: '',
+    fileUrl: '',
     folder: 'General',
     author: auth.currentUser?.displayName || auth.currentUser?.email || 'Usuario'
   });
@@ -139,6 +140,7 @@ export default function Documents() {
           name: newDoc.name,
           type: newDoc.type,
           size: newDoc.size,
+          fileUrl: newDoc.fileUrl,
           folder: newDoc.folder,
           author: newDoc.author,
         });
@@ -192,6 +194,7 @@ export default function Documents() {
       name: '',
       type: 'PDF',
       size: '',
+      fileUrl: '',
       folder: 'General',
       author: auth.currentUser?.displayName || auth.currentUser?.email || 'Usuario'
     });
@@ -204,6 +207,7 @@ export default function Documents() {
       name: d.name,
       type: d.type,
       size: d.size,
+      fileUrl: d.fileUrl || '',
       folder: d.folder,
       author: d.author
     });
@@ -229,6 +233,43 @@ export default function Documents() {
       setDocToDelete(null);
     } catch (error: any) {
       toast.error(error?.message || 'No se pudo eliminar el documento');
+    }
+  };
+
+  const openDocumentFile = (doc: any) => {
+    if (!doc.fileUrl) {
+      toast.info(`El documento ${doc.name} no tiene archivo adjunto`);
+      return;
+    }
+    window.open(doc.fileUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const downloadDocumentFile = (doc: any) => {
+    if (!doc.fileUrl) {
+      toast.info(`El documento ${doc.name} no tiene archivo descargable`);
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = doc.fileUrl;
+    link.download = doc.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Descargando ${doc.name}...`);
+  };
+
+  const shareDocumentFile = async (doc: any) => {
+    if (!doc.fileUrl) {
+      toast.info(`El documento ${doc.name} no tiene enlace para compartir`);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(doc.fileUrl);
+      toast.success(`Enlace copiado para ${doc.name}`);
+    } catch {
+      toast.error('No se pudo copiar el enlace');
     }
   };
 
@@ -539,7 +580,7 @@ export default function Documents() {
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button 
-                            onClick={() => toast.info(`Previsualizando ${doc.name}...`)}
+                            onClick={() => openDocumentFile(doc)}
                             className="p-2 text-slate-400 hover:text-primary transition-colors"
                             title="Ver"
                           >
@@ -553,14 +594,14 @@ export default function Documents() {
                             <Edit2 size={16} />
                           </button>
                           <button 
-                            onClick={() => toast.success(`Descargando ${doc.name}...`)}
+                            onClick={() => downloadDocumentFile(doc)}
                             className="p-2 text-slate-400 hover:text-primary transition-colors"
                             title="Descargar"
                           >
                             <Download size={16} />
                           </button>
                           <button 
-                            onClick={() => toast.info(`Enlace de compartir copiado para ${doc.name}`)}
+                            onClick={() => void shareDocumentFile(doc)}
                             className="p-2 text-slate-400 hover:text-primary transition-colors"
                             title="Compartir"
                           >

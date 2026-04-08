@@ -4,6 +4,7 @@ export interface DocumentPayload {
   name: string;
   type: string;
   size?: string;
+  fileUrl?: string;
   folder: string;
   author?: string;
   date?: string;
