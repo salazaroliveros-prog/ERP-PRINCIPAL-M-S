@@ -30,6 +30,7 @@ import { FormModal } from './FormModal';
 import { toast } from 'sonner';
 import { createTransaction, deleteTransactionById, listTransactions } from '../lib/financialsApi';
 import { listBudgetItems, listProjects } from '../lib/projectsApi';
+import { sendNotification } from '../lib/notifications';
 import { GoogleGenAI, Type } from "@google/genai";
 import { 
   AreaChart, 
@@ -121,6 +122,12 @@ const INCOME_CATEGORIES = [
   'Inversión Propia',
   'Otros'
 ];
+
+const FINANCE_ALERT_STORAGE_PREFIX = 'finance_traffic_light';
+
+function getDateKey(date: Date) {
+  return date.toISOString().split('T')[0];
+}
 
 export default function Financials() {
   const PAGE_SIZE = 50;
@@ -768,6 +775,14 @@ export default function Financials() {
     .filter(t => t.type === 'Expense' && personalCategorySet.has(t.category))
     .reduce((acc, t) => acc + t.amount, 0);
 
+  const administrativeExpenseTotalGlobal = transactions
+    .filter(t => t.type === 'Expense' && administrativeCategorySet.has(t.category))
+    .reduce((acc, t) => acc + t.amount, 0);
+
+  const personalExpenseTotalGlobal = transactions
+    .filter(t => t.type === 'Expense' && personalCategorySet.has(t.category))
+    .reduce((acc, t) => acc + t.amount, 0);
+
   const activeProjectIds = useMemo(() => new Set(
     projects
       .filter((p: any) => p.status === 'Active' || p.status === 'In Progress')
@@ -779,11 +794,11 @@ export default function Financials() {
     .reduce((acc, t) => acc + (t.type === 'Income' ? t.amount : -t.amount), 0);
 
   const adminExpenseVsProfit = activeProjectsProfit > 0
-    ? (administrativeExpenseTotal / activeProjectsProfit) * 100
+    ? (administrativeExpenseTotalGlobal / activeProjectsProfit) * 100
     : 0;
 
   const personalExpenseVsProfit = activeProjectsProfit > 0
-    ? (personalExpenseTotal / activeProjectsProfit) * 100
+    ? (personalExpenseTotalGlobal / activeProjectsProfit) * 100
     : 0;
 
   const getTrafficLightState = (ratio: number) => {
@@ -807,6 +822,50 @@ export default function Financials() {
 
   const adminTrafficLight = getTrafficLightState(adminExpenseVsProfit);
   const personalTrafficLight = getTrafficLightState(personalExpenseVsProfit);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (activeProjectsProfit <= 0) return;
+
+    const today = new Date();
+    const todayKey = getDateKey(today);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const twoDaysAgo = new Date(today);
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+    const yKey = getDateKey(yesterday);
+    const d2Key = getDateKey(twoDaysAgo);
+
+    const persistState = (scope: 'admin' | 'personal', state: 'green' | 'yellow' | 'red') => {
+      const stateKey = `${FINANCE_ALERT_STORAGE_PREFIX}_${scope}_state_${todayKey}`;
+      window.localStorage.setItem(stateKey, state);
+    };
+
+    const evaluateAlert = (scope: 'admin' | 'personal', ratio: number, label: string) => {
+      const state = ratio > 70 ? 'red' : ratio > 40 ? 'yellow' : 'green';
+      persistState(scope, state);
+
+      if (state !== 'red') return;
+
+      const yesterdayState = window.localStorage.getItem(`${FINANCE_ALERT_STORAGE_PREFIX}_${scope}_state_${yKey}`);
+      const twoDaysAgoState = window.localStorage.getItem(`${FINANCE_ALERT_STORAGE_PREFIX}_${scope}_state_${d2Key}`);
+      if (yesterdayState !== 'red' || twoDaysAgoState !== 'red') return;
+
+      const alertKey = `${FINANCE_ALERT_STORAGE_PREFIX}_${scope}_alert_${todayKey}`;
+      if (window.localStorage.getItem(alertKey)) return;
+
+      void sendNotification(
+        `Alerta: ${label} en rojo 3 días`,
+        `${label} representa ${ratio.toFixed(1)}% de la utilidad activa y permanece en rojo por 3 días consecutivos. Revisa gastos y ajusta presupuesto.` ,
+        'system'
+      );
+      window.localStorage.setItem(alertKey, '1');
+    };
+
+    evaluateAlert('admin', adminExpenseVsProfit, 'Gasto administrativo');
+    evaluateAlert('personal', personalExpenseVsProfit, 'Gasto personal');
+  }, [adminExpenseVsProfit, personalExpenseVsProfit, activeProjectsProfit]);
 
   // KPIs
   const profitMargin = totalIncome > 0 ? (balance / totalIncome) * 100 : 0;
@@ -999,7 +1058,7 @@ export default function Financials() {
             </div>
             <p className="text-micro text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Rubro Gastos Administrativos</p>
           </div>
-          <p className="text-2xl font-bold text-violet-600">{formatCurrency(administrativeExpenseTotal)}</p>
+          <p className="text-2xl font-bold text-violet-600">{formatCurrency(administrativeExpenseTotalGlobal)}</p>
           <p className={cn(
             "mt-2 text-micro font-black uppercase tracking-wider",
             adminExpenseVsProfit <= 40 ? "text-emerald-600" : adminExpenseVsProfit <= 70 ? "text-amber-600" : "text-rose-600"
