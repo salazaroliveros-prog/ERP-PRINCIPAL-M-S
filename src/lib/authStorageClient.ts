@@ -22,6 +22,36 @@ export interface User {
 type AuthStateCallback = (user: User | null) => void;
 
 const AUTH_STORAGE_KEY = 'erp_local_auth_user';
+const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
+let googleScriptPromise: Promise<void> | null = null;
+
+type GoogleTokenResponse = {
+  access_token?: string;
+  error?: string;
+  error_description?: string;
+};
+
+type GoogleTokenClient = {
+  requestAccessToken: (options?: { prompt?: string }) => void;
+};
+
+type GoogleOauth2Api = {
+  initTokenClient: (config: {
+    client_id: string;
+    scope: string;
+    callback: (response: GoogleTokenResponse) => void;
+    error_callback?: (error: { type?: string }) => void;
+    prompt?: string;
+  }) => GoogleTokenClient;
+};
+
+type WindowWithGoogle = Window & {
+  google?: {
+    accounts?: {
+      oauth2?: GoogleOauth2Api;
+    };
+  };
+};
 
 function createDefaultAvatar(name: string) {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff`;
@@ -82,28 +112,134 @@ export const auth = new LocalAuth();
 
 export class GoogleAuthProvider {}
 
-export async function signInWithPopup(_auth: LocalAuth, _provider: GoogleAuthProvider) {
-  const defaultEmail = auth.currentUser?.email || '';
-  const email = typeof window !== 'undefined'
-    ? window.prompt('Ingresa tu correo corporativo para iniciar sesion', defaultEmail)
-    : null;
-
-  if (!email || !email.trim()) {
-    const error = Object.assign(new Error('Inicio de sesion cancelado por el usuario'), {
-      code: 'auth/popup-closed-by-user',
+async function ensureGoogleIdentityClientLoaded() {
+  if (typeof window === 'undefined') {
+    throw Object.assign(new Error('Google Identity Services no está disponible en este entorno'), {
+      code: 'auth/operation-not-supported-in-this-environment',
     });
-    throw error;
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
+  const runtimeWindow = window as WindowWithGoogle;
+  if (runtimeWindow.google?.accounts?.oauth2) {
+    return;
+  }
+
+  if (!googleScriptPromise) {
+    googleScriptPromise = new Promise<void>((resolve, reject) => {
+      const existing = document.querySelector<HTMLScriptElement>(`script[src="${GOOGLE_GSI_SRC}"]`);
+      if (existing) {
+        existing.addEventListener('load', () => resolve(), { once: true });
+        existing.addEventListener('error', () => reject(new Error('No se pudo cargar Google Identity Services')), { once: true });
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = GOOGLE_GSI_SRC;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('No se pudo cargar Google Identity Services'));
+      document.head.appendChild(script);
+    });
+  }
+
+  await googleScriptPromise;
+}
+
+async function requestGoogleAccessToken() {
+  await ensureGoogleIdentityClientLoaded();
+
+  const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+  if (!clientId) {
+    throw Object.assign(new Error('Falta VITE_GOOGLE_CLIENT_ID para habilitar el selector de cuentas de Google'), {
+      code: 'auth/google-client-id-missing',
+    });
+  }
+
+  const runtimeWindow = window as WindowWithGoogle;
+  const oauth2 = runtimeWindow.google?.accounts?.oauth2;
+
+  if (!oauth2) {
+    throw Object.assign(new Error('Google Identity Services no está disponible'), {
+      code: 'auth/google-identity-unavailable',
+    });
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const tokenClient = oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'openid email profile',
+      prompt: 'select_account',
+      callback: (response) => {
+        if (response.error) {
+          reject(
+            Object.assign(new Error(response.error_description || response.error), {
+              code: `auth/${response.error}`,
+            })
+          );
+          return;
+        }
+
+        if (!response.access_token) {
+          reject(
+            Object.assign(new Error('Google no devolvió un token de acceso'), {
+              code: 'auth/missing-access-token',
+            })
+          );
+          return;
+        }
+
+        resolve(response.access_token);
+      },
+      error_callback: (error) => {
+        const code = error?.type === 'popup_closed' ? 'auth/popup-closed-by-user' : 'auth/cancelled-popup-request';
+        reject(Object.assign(new Error(error?.type || 'No se pudo abrir el selector de cuenta de Google'), { code }));
+      },
+    });
+
+    tokenClient.requestAccessToken({ prompt: 'select_account' });
+  });
+}
+
+async function fetchGoogleProfile(accessToken: string) {
+  const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw Object.assign(new Error('No se pudo leer el perfil de Google'), {
+      code: 'auth/profile-fetch-failed',
+    });
+  }
+
+  return response.json() as Promise<{
+    email?: string;
+    name?: string;
+    picture?: string;
+  }>;
+}
+
+export async function signInWithPopup(_auth: LocalAuth, _provider: GoogleAuthProvider) {
+  const accessToken = await requestGoogleAccessToken();
+  const profile = await fetchGoogleProfile(accessToken);
+
+  const normalizedEmail = String(profile.email || '').trim().toLowerCase();
+  if (!normalizedEmail) {
+    throw Object.assign(new Error('Google no devolvió un correo válido para iniciar sesión'), {
+      code: 'auth/missing-email',
+    });
+  }
+
   const inferredName = normalizedEmail.split('@')[0].replace(/[._-]+/g, ' ').trim() || 'Usuario';
-  const displayName = inferredName
+  const displayName = String(profile.name || '').trim() || inferredName
     .split(' ')
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-  const photoURL = createDefaultAvatar(displayName);
+  const photoURL = String(profile.picture || '').trim() || createDefaultAvatar(displayName);
   try {
     const response = await fetch(buildApiUrl('/api/auth/login'), {
       method: 'POST',

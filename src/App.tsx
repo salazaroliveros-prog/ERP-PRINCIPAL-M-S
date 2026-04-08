@@ -93,7 +93,11 @@ const Login = () => {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
     } catch (error: any) {
-      if (error.code === 'auth/cancelled-popup-request') {
+      if (error.code === 'auth/google-client-id-missing') {
+        toast.error('Configura Google Sign-In', {
+          description: 'Falta VITE_GOOGLE_CLIENT_ID en Vercel para abrir el selector de cuentas de Google.'
+        });
+      } else if (error.code === 'auth/cancelled-popup-request') {
         // Silent fail for cancelled popup
       } else if (error.code === 'auth/popup-closed-by-user') {
         toast.error('Inicio de sesión cancelado', {
