@@ -95,6 +95,42 @@ export const AREA_FACTORS: Record<string, Record<string, number>> = {
   }
 };
 
+const AUTO_AREA_ENABLED_TYPOLOGIES = ['RESIDENCIAL', 'COMERCIAL', 'INDUSTRIAL', 'CIVIL', 'PUBLICA'] as const;
+
+const DEFAULT_UNIT_AREA_FACTORS: Record<string, number> = {
+  m2: 1.0,
+  m3: 0.35,
+  m: 0.2,
+  kg: 12,
+  punto: 0.08,
+  unidad: 0.03,
+  set: 0.02,
+  global: 0.01,
+  ton: 0.002,
+  viaje: 0.001,
+  ha: 0.0001,
+  km: 0.00005,
+};
+
+function inferAreaFactorFromTemplate(template: APUTemplate) {
+  const normalizedUnit = String(template.unit || '').trim().toLowerCase();
+  const baseFactor = DEFAULT_UNIT_AREA_FACTORS[normalizedUnit] ?? 0.1;
+  const normalizedDescription = normalizeTemplateDescription(template.description);
+
+  // Keep heavy infrastructure items under control when no explicit factor exists.
+  if (
+    normalizedDescription.includes('transformador') ||
+    normalizedDescription.includes('elevador') ||
+    normalizedDescription.includes('planta electrica') ||
+    normalizedDescription.includes('pasarela') ||
+    normalizedDescription.includes('muelles de carga')
+  ) {
+    return Math.min(baseFactor, 0.005);
+  }
+
+  return baseFactor;
+}
+
 export const APU_TEMPLATES: Record<string, APUTemplate[]> = {
   RESIDENCIAL: [
     { description: "Limpieza y chapeo", unit: "m2", materials: [], labor: [{ role: "Peón", yield: 40, dailyRate: 125 }], indirectFactor: 0.20 },
@@ -313,6 +349,22 @@ Object.keys(APU_TEMPLATES).forEach(typology => {
   }
 });
 
+// Ensure all core typologies have automatic quantity factors for every default row.
+AUTO_AREA_ENABLED_TYPOLOGIES.forEach((typology) => {
+  const templates = APU_TEMPLATES[typology] || [];
+  const factorMap = AREA_FACTORS[typology] || {};
+
+  templates.forEach((template) => {
+    if (typeof factorMap[template.description] === 'number') {
+      return;
+    }
+
+    factorMap[template.description] = inferAreaFactorFromTemplate(template);
+  });
+
+  AREA_FACTORS[typology] = factorMap;
+});
+
 export function normalizeTemplateDescription(description: string) {
   return String(description || '')
     .replace(/\s+-\s+Fase\s+\d+$/i, '')
@@ -337,7 +389,16 @@ export function getAreaFactorByDescription(
     (key) => normalizeTemplateDescription(key) === normalized
   );
 
-  return factorKey ? factors[factorKey as keyof typeof factors] : undefined;
+  if (factorKey) {
+    return factors[factorKey as keyof typeof factors];
+  }
+
+  const template = findTemplateByDescription(typology, description);
+  if (template) {
+    return inferAreaFactorFromTemplate(template);
+  }
+
+  return undefined;
 }
 
 export function resolveLocationCostAdjustment(location?: string): LocationCostAdjustment {
