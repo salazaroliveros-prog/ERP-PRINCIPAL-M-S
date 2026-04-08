@@ -108,10 +108,10 @@ function isTestDataText(value: any) {
 
 const StatusBadge = ({ status }: { status: string }) => {
   const styles: any = {
-    'Planning': 'bg-blue-50 text-blue-600 border-blue-100',
-    'In Progress': 'bg-primary-light/50 text-primary border-primary-light',
-    'Completed': 'bg-emerald-50 text-emerald-600 border-emerald-100',
-    'On Hold': 'bg-rose-50 text-rose-600 border-rose-100',
+    'Planning': 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/40',
+    'In Progress': 'bg-primary-light/50 text-primary border-primary-light dark:bg-primary/20 dark:text-blue-300 dark:border-primary/40',
+    'Completed': 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40',
+    'On Hold': 'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40',
   };
   return (
     <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border", styles[status])}>
@@ -122,17 +122,17 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 const getTypologyColor = (typology: string) => {
   switch (typology?.toUpperCase()) {
-    case 'RESIDENCIAL': return 'text-emerald-600 bg-emerald-50 border-emerald-100';
-    case 'COMERCIAL': return 'text-blue-600 bg-blue-50 border-blue-100';
-    case 'INDUSTRIAL': return 'text-amber-600 bg-amber-50 border-amber-100';
-    case 'CIVIL': return 'text-indigo-600 bg-indigo-50 border-indigo-100';
-    case 'PUBLICA': return 'text-cyan-600 bg-cyan-50 border-cyan-100';
-    case 'SALUD': return 'text-rose-600 bg-rose-50 border-rose-100';
-    case 'EDUCACION': return 'text-orange-600 bg-orange-50 border-orange-100';
-    case 'DEPORTIVA': return 'text-lime-600 bg-lime-50 border-lime-100';
-    case 'INFRAESTRUCTURA': return 'text-slate-800 bg-slate-100 border-slate-200';
-    case 'TURISMO': return 'text-pink-600 bg-pink-50 border-pink-100';
-    default: return 'text-slate-600 bg-slate-50 border-slate-100';
+    case 'RESIDENCIAL': return 'text-emerald-600 bg-emerald-50 border-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40';
+    case 'COMERCIAL': return 'text-blue-600 bg-blue-50 border-blue-100 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/40';
+    case 'INDUSTRIAL': return 'text-amber-600 bg-amber-50 border-amber-100 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/40';
+    case 'CIVIL': return 'text-indigo-600 bg-indigo-50 border-indigo-100 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/40';
+    case 'PUBLICA': return 'text-cyan-600 bg-cyan-50 border-cyan-100 dark:bg-cyan-500/20 dark:text-cyan-300 dark:border-cyan-500/40';
+    case 'SALUD': return 'text-rose-600 bg-rose-50 border-rose-100 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40';
+    case 'EDUCACION': return 'text-orange-600 bg-orange-50 border-orange-100 dark:bg-orange-500/20 dark:text-orange-300 dark:border-orange-500/40';
+    case 'DEPORTIVA': return 'text-lime-600 bg-lime-50 border-lime-100 dark:bg-lime-500/20 dark:text-lime-300 dark:border-lime-500/40';
+    case 'INFRAESTRUCTURA': return 'text-slate-800 bg-slate-100 border-slate-200 dark:bg-slate-700/70 dark:text-slate-100 dark:border-slate-500/50';
+    case 'TURISMO': return 'text-pink-600 bg-pink-50 border-pink-100 dark:bg-pink-500/20 dark:text-pink-300 dark:border-pink-500/40';
+    default: return 'text-slate-600 bg-slate-50 border-slate-100 dark:bg-slate-700/70 dark:text-slate-200 dark:border-slate-500/50';
   }
 };
 
