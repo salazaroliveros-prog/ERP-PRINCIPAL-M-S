@@ -7,8 +7,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    // Relative base path keeps asset URLs valid on GitHub Pages project sites.
-    base: './',
+    // Absolute base path keeps a stable origin/path behavior on Vercel.
+    base: '/',
     plugins: [
       react(), 
       tailwindcss(),
@@ -17,7 +17,10 @@ export default defineConfig(({mode}) => {
         registerType: 'autoUpdate',
         manifest: false,
         workbox: {
+          cleanupOutdatedCaches: true,
+          clientsClaim: true,
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
+          skipWaiting: true,
         }
       })
     ],
