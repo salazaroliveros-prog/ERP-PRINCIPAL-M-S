@@ -8,6 +8,7 @@ import {
   Phone, 
   Mail, 
   MapPin, 
+  MessageCircle,
   Star, 
   ShieldCheck, 
   Clock,
@@ -220,6 +221,28 @@ export default function Suppliers() {
     window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
     await logAction('Acción Rápida: Visitar Proveedor', 'Proveedores', `Búsqueda de ubicación para ${quickSupplier.name}`, 'read', { supplierId: quickSupplier.id });
     toast.success('Abriendo ubicación del proveedor');
+  };
+
+  const handleQuickWhatsApp = async () => {
+    if (!quickSupplier) {
+      toast.error('No hay proveedor seleccionado');
+      return;
+    }
+
+    if (!quickSupplier.phone) {
+      toast.error('El proveedor no tiene teléfono registrado');
+      return;
+    }
+
+    const cleanPhone = String(quickSupplier.phone).replace(/\D/g, '');
+    const message = encodeURIComponent(
+      `Hola ${quickSupplier.contact || quickSupplier.name}, somos de Constructora WM_M&S. ` +
+      `Queremos coordinar información de ${quickSupplier.category || 'insumos'} y disponibilidad.`
+    );
+
+    window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
+    await logAction('Acción Rápida: WhatsApp Proveedor', 'Proveedores', `WhatsApp rápido a ${quickSupplier.name}`, 'read', { supplierId: quickSupplier.id });
+    toast.success('Abriendo WhatsApp del proveedor');
   };
 
   const handleQuickPay = async () => {
