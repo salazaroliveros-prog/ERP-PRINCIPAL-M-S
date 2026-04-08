@@ -60,7 +60,7 @@ export default function ConfirmModal({
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
                   <h3 className="text-lg sm:text-xl font-bold text-slate-900">{title}</h3>
-                  <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-full transition-colors">
+                  <button onClick={onClose} title="Cerrar" className="p-1 text-slate-400 hover:text-slate-600 rounded-full transition-colors">
                     <X size={18} className="sm:w-5 sm:h-5" />
                   </button>
                 </div>

@@ -451,12 +451,14 @@ export default function AIChat() {
                 </div>
                 <button 
                   onClick={() => setIsMinimized(!isMinimized)}
+                  title={isMinimized ? "Expandir" : "Minimizar"}
                   className="p-1.5 hover:bg-white/10 rounded-md transition-colors"
                 >
                   {isMinimized ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
                 </button>
                 <button 
                   onClick={() => setIsOpen(false)}
+                  title="Cerrar"
                   className="p-1.5 hover:bg-white/10 rounded-md transition-colors"
                 >
                   <X size={16} />
@@ -544,7 +546,7 @@ export default function AIChat() {
                     >
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Acciones Rápidas</h4>
-                        <button onClick={() => setShowQuickActions(false)} className="text-slate-400 hover:text-slate-600">
+                        <button onClick={() => setShowQuickActions(false)} className="text-slate-400 hover:text-slate-600" title="Cerrar acciones rápidas">
                           <X size={14} />
                         </button>
                       </div>

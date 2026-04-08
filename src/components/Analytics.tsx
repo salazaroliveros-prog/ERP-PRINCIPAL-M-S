@@ -42,6 +42,7 @@ import { toast } from 'sonner';
 import { listProjects } from '../lib/projectsApi';
 import { listTransactions } from '../lib/financialsApi';
 import { listRisks } from '../lib/risksApi';
+import './Analytics.css';
 
 export default function Analytics() {
   const [timeRange, setTimeRange] = useState('6m');
@@ -227,7 +228,7 @@ export default function Analytics() {
         }
       });
 
-      const result = JSON.parse(response.text);
+      const result = JSON.parse(response.text || '{}');
       setAiInsight(result.insights.join('\n\n'));
       toast.success('Análisis de IA completado');
     } catch (error) {
@@ -300,6 +301,7 @@ export default function Analytics() {
           <button 
             onClick={handleGenerateInsight}
             disabled={isGenerating}
+            title="Generar análisis con IA"
             className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] sm:text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50"
           >
             {isGenerating ? (
@@ -309,7 +311,7 @@ export default function Analytics() {
             )}
             IA
           </button>
-          <button className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-primary text-white rounded-xl text-[10px] sm:text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
+          <button title="Exportar datos" className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-primary text-white rounded-xl text-[10px] sm:text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
             <Download size={14} className="sm:w-4.5 sm:h-4.5" />
             Exportar
           </button>
@@ -326,6 +328,7 @@ export default function Analytics() {
           >
             <button 
               onClick={() => setAiInsight(null)}
+              title="Cerrar recomendaciones"
               className="absolute top-3 sm:top-4 right-3 sm:right-4 text-indigo-400 hover:text-indigo-600 transition-colors"
             >
               <X size={14} className="sm:w-4 sm:h-4" />
@@ -416,7 +419,7 @@ export default function Analytics() {
                 <Tooltip 
                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backgroundColor: '#fff' }}
                   itemStyle={{ fontSize: '12px', fontWeight: 700 }}
-                  formatter={(value: number) => [formatCurrency(value), ""]}
+                  formatter={(value) => [typeof value === 'number' ? formatCurrency(value) : value, ""]}
                 />
                 <Area type="monotone" dataKey="income" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorIncome)" name="Ingresos" />
                 <Area type="monotone" dataKey="expense" stroke="#f43f5e" strokeWidth={3} fill="transparent" name="Egresos" />
@@ -452,12 +455,7 @@ export default function Analytics() {
                     verticalAlign="bottom" 
                     align="center"
                     iconType="circle" 
-                    wrapperStyle={{ 
-                      fontSize: '9px', 
-                      fontWeight: 700, 
-                      textTransform: 'uppercase',
-                      paddingTop: '20px'
-                    }} 
+                    wrapperStyle={{ paddingTop: '20px' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -466,7 +464,7 @@ export default function Analytics() {
               {projectDistribution.slice(0, 4).map((item, i) => (
                 <div key={i} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800/50">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                    <div className="color-indicator" style={{ '--indicator-color': item.color } as React.CSSProperties} />
                     <span className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-tighter">{item.name}</span>
                   </div>
                   <span className="text-xs font-black text-slate-900 dark:text-white">{((item.value / projects.length) * 100).toFixed(1)}%</span>
