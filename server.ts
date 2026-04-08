@@ -98,6 +98,7 @@ interface BudgetItemRow {
   materials: any[] | null;
   labor: any[] | null;
   subtasks: any[] | null;
+  progress: string | null;
   sort_order: number | null;
   created_at: string | null;
   updated_at: string | null;
@@ -635,6 +636,7 @@ function mapBudgetItem(row: BudgetItemRow) {
     materials: Array.isArray(row.materials) ? row.materials : [],
     labor: Array.isArray(row.labor) ? row.labor : [],
     subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
+    progress: Number(row.progress || 0),
     total: Number(row.total_item_price || 0),
     order: row.sort_order || 0,
     createdAt: row.created_at || "",
@@ -1729,6 +1731,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             materials,
             labor,
             subtasks,
+            progress,
             sort_order,
             created_at,
             updated_at
@@ -1760,6 +1763,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       const labor = normalizeBudgetLabor(body.labor);
       const subtasks = Array.isArray(body.subtasks) ? body.subtasks : [];
       const order = Number(body.order || 0);
+      const progress = Math.max(0, Math.min(100, toFiniteNumber(body.progress, 0)));
 
       if (!projectId || !description) {
         return res.status(400).json({ error: 'projectId y description son obligatorios' });
@@ -1795,9 +1799,10 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             materials,
             labor,
             subtasks,
+            progress,
             sort_order
           )
-          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16::jsonb,$17::jsonb,$18)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16::jsonb,$17::jsonb,$18,$19)
           returning
             id,
             project_id,
@@ -1817,6 +1822,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             materials,
             labor,
             subtasks,
+            progress,
             sort_order,
             created_at,
             updated_at
@@ -1840,6 +1846,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           JSON.stringify(labor),
           JSON.stringify(subtasks),
           order,
+          progress,
         ]
       );
 
@@ -1884,6 +1891,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             materials,
             labor,
             subtasks,
+            progress,
             sort_order,
             created_at,
             updated_at
@@ -1918,6 +1926,9 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
         ? (Array.isArray(body.subtasks) ? body.subtasks : [])
         : existing.subtasks;
       const sortOrder = body.order !== undefined ? Number(body.order || 0) : existing.order;
+      const progress = body.progress !== undefined
+        ? Math.max(0, Math.min(100, toFiniteNumber(body.progress, existing.progress || 0)))
+        : Math.max(0, Math.min(100, toFiniteNumber(existing.progress, 0)));
 
       const materials = body.materials !== undefined
         ? normalizeBudgetMaterials(body.materials)
@@ -1963,9 +1974,10 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             materials = $14::jsonb,
             labor = $15::jsonb,
             subtasks = $16::jsonb,
-            sort_order = $17,
+            progress = $17,
+            sort_order = $18,
             updated_at = now()
-          where project_id = $18 and id = $19
+          where project_id = $19 and id = $20
           returning
             id,
             project_id,
@@ -1985,6 +1997,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             materials,
             labor,
             subtasks,
+            progress,
             sort_order,
             created_at,
             updated_at
@@ -2006,6 +2019,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           JSON.stringify(materials),
           JSON.stringify(labor),
           JSON.stringify(subtasks),
+          progress,
           sortOrder,
           projectId,
           itemId,
@@ -2606,6 +2620,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
               materials,
               labor,
               subtasks,
+              progress,
               sort_order,
               created_at,
               updated_at
@@ -2639,6 +2654,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             materials,
             labor,
             subtasks,
+            progress,
             sort_order,
             created_at,
             updated_at
