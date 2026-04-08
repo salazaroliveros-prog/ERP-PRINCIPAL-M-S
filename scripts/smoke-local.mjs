@@ -141,6 +141,16 @@ async function run() {
 
   if (created.projectId) {
     await callApi('list project budget items', 'GET', `/api/projects/${created.projectId}/budget-items`);
+
+    if (created.budgetItemId) {
+      await callApi(
+        'reject negative budget quantity',
+        'PATCH',
+        `/api/projects/${created.projectId}/budget-items/${created.budgetItemId}`,
+        { quantity: -1 },
+        [400]
+      );
+    }
   }
 
   const clientCreate = await callApi('create client', 'POST', '/api/clients', {

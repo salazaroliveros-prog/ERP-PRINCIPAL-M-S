@@ -587,6 +587,138 @@ function mapBudgetItem(row: BudgetItemRow) {
   };
 }
 
+class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+interface BudgetMaterialInput {
+  name: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+interface BudgetLaborInput {
+  role: string;
+  yield: number;
+  dailyRate: number;
+}
+
+interface BudgetComputationInput {
+  quantity: number;
+  indirectFactor: number;
+  materials: BudgetMaterialInput[];
+  labor: BudgetLaborInput[];
+  fallbackMaterialCost: number;
+  fallbackLaborCost: number;
+  fallbackEstimatedDays: number;
+}
+
+function toFiniteNumber(value: any, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toNonNegativeNumber(value: any, fieldName: string, fallback = 0) {
+  const parsed = toFiniteNumber(value, fallback);
+  if (parsed < 0) {
+    throw new ValidationError(`${fieldName} no puede ser negativo`);
+  }
+  return parsed;
+}
+
+function normalizeBudgetMaterials(input: any): BudgetMaterialInput[] {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .map((item) => {
+      const name = String(item?.name || '').trim();
+      const unit = String(item?.unit || '').trim();
+      const quantity = toNonNegativeNumber(item?.quantity, 'materials.quantity');
+      const unitPrice = toNonNegativeNumber(item?.unitPrice, 'materials.unitPrice');
+
+      if (!name) {
+        throw new ValidationError('Cada material debe tener nombre');
+      }
+
+      return {
+        name,
+        unit,
+        quantity,
+        unitPrice,
+      };
+    })
+    .filter((item) => item.name.length > 0);
+}
+
+function normalizeBudgetLabor(input: any): BudgetLaborInput[] {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .map((item) => {
+      const role = String(item?.role || '').trim();
+      const yieldValue = toFiniteNumber(item?.yield, 0);
+      const dailyRate = toNonNegativeNumber(item?.dailyRate, 'labor.dailyRate');
+
+      if (!role) {
+        throw new ValidationError('Cada rol de mano de obra debe tener nombre');
+      }
+
+      if (yieldValue <= 0) {
+        throw new ValidationError('labor.yield debe ser mayor que cero');
+      }
+
+      return {
+        role,
+        yield: yieldValue,
+        dailyRate,
+      };
+    })
+    .filter((item) => item.role.length > 0);
+}
+
+function computeBudgetMetrics(input: BudgetComputationInput) {
+  const quantity = toNonNegativeNumber(input.quantity, 'quantity');
+  const indirectFactor = toNonNegativeNumber(input.indirectFactor, 'indirectFactor', 0.2);
+
+  const materialCostFromList = input.materials.reduce((sum, m) => sum + (m.quantity * m.unitPrice), 0);
+  const laborCostFromList = input.labor.reduce((sum, l) => sum + (l.dailyRate / l.yield), 0);
+
+  const materialCost = input.materials.length > 0
+    ? materialCostFromList
+    : toNonNegativeNumber(input.fallbackMaterialCost, 'materialCost');
+
+  const laborCost = input.labor.length > 0
+    ? laborCostFromList
+    : toNonNegativeNumber(input.fallbackLaborCost, 'laborCost');
+
+  const directCost = materialCost + laborCost;
+  const indirectCost = directCost * indirectFactor;
+  const totalUnitPrice = directCost + indirectCost;
+  const totalItemPrice = quantity * totalUnitPrice;
+
+  let estimatedDays = 0;
+  if (input.labor.length > 0) {
+    estimatedDays = Math.max(...input.labor.map((l) => quantity / l.yield));
+  } else {
+    estimatedDays = toNonNegativeNumber(input.fallbackEstimatedDays, 'estimatedDays');
+  }
+
+  return {
+    quantity,
+    materialCost,
+    laborCost,
+    indirectCost,
+    totalUnitPrice,
+    totalItemPrice,
+    estimatedDays,
+    indirectFactor,
+  };
+}
+
 function mapInventoryItem(row: InventoryRow) {
   return {
     id: row.id,
@@ -1497,24 +1629,27 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       const description = String(body.description || '').trim();
       const category = String(body.category || '').trim();
       const unit = String(body.unit || '').trim();
-      const quantity = Number(body.quantity || 0);
-      const materialCost = Number(body.materialCost || 0);
-      const laborCost = Number(body.laborCost || 0);
-      const indirectCost = Number(body.indirectCost || 0);
-      const totalUnitPrice = Number(body.totalUnitPrice || 0);
-      const totalItemPrice = Number(body.totalItemPrice || body.total || 0);
-      const estimatedDays = Number(body.estimatedDays || 0);
       const notes = String(body.notes || '').trim();
       const materialDetails = String(body.materialDetails || '').trim();
-      const indirectFactor = Number(body.indirectFactor ?? 0.2);
-      const materials = Array.isArray(body.materials) ? body.materials : [];
-      const labor = Array.isArray(body.labor) ? body.labor : [];
+      const indirectFactor = toNonNegativeNumber(body.indirectFactor ?? 0.2, 'indirectFactor', 0.2);
+      const materials = normalizeBudgetMaterials(body.materials);
+      const labor = normalizeBudgetLabor(body.labor);
       const subtasks = Array.isArray(body.subtasks) ? body.subtasks : [];
       const order = Number(body.order || 0);
 
       if (!projectId || !description) {
         return res.status(400).json({ error: 'projectId y description son obligatorios' });
       }
+
+      const metrics = computeBudgetMetrics({
+        quantity: body.quantity,
+        indirectFactor,
+        materials,
+        labor,
+        fallbackMaterialCost: body.materialCost,
+        fallbackLaborCost: body.laborCost,
+        fallbackEstimatedDays: body.estimatedDays,
+      });
 
       const result = await db.query<BudgetItemRow>(
         `
@@ -1567,16 +1702,16 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           description,
           category || null,
           unit || null,
-          quantity,
-          materialCost,
-          laborCost,
-          indirectCost,
-          totalUnitPrice,
-          totalItemPrice,
-          estimatedDays,
+          metrics.quantity,
+          metrics.materialCost,
+          metrics.laborCost,
+          metrics.indirectCost,
+          metrics.totalUnitPrice,
+          metrics.totalItemPrice,
+          metrics.estimatedDays,
           notes || null,
           materialDetails || null,
-          indirectFactor,
+          metrics.indirectFactor,
           JSON.stringify(materials),
           JSON.stringify(labor),
           JSON.stringify(subtasks),
@@ -1586,6 +1721,9 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
 
       return res.status(201).json(mapBudgetItem(result.rows[0]));
     } catch (error: any) {
+      if (error instanceof ValidationError) {
+        return res.status(400).json({ error: error.message });
+      }
       return res.status(500).json({ error: error?.message || 'No se pudo crear partida' });
     }
   });
@@ -1601,48 +1739,109 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
         return res.status(400).json({ error: 'projectId e itemId son obligatorios' });
       }
 
-      const sets: string[] = [];
-      const values: any[] = [];
+      const existingResult = await db.query<BudgetItemRow>(
+        `
+          select
+            id,
+            project_id,
+            description,
+            category,
+            unit,
+            quantity,
+            material_cost,
+            labor_cost,
+            indirect_cost,
+            total_unit_price,
+            total_item_price,
+            estimated_days,
+            notes,
+            material_details,
+            indirect_factor,
+            materials,
+            labor,
+            subtasks,
+            sort_order,
+            created_at,
+            updated_at
+          from project_budget_items
+          where project_id = $1 and id = $2
+        `,
+        [projectId, itemId]
+      );
 
-      const addSet = (sqlName: string, value: any, json = false) => {
-        values.push(json ? JSON.stringify(value) : value);
-        const param = `$${values.length}`;
-        sets.push(json ? `${sqlName} = ${param}::jsonb` : `${sqlName} = ${param}`);
-      };
-
-      if (body.description !== undefined) addSet('description', String(body.description || '').trim());
-      if (body.category !== undefined) addSet('category', String(body.category || '').trim() || null);
-      if (body.unit !== undefined) addSet('unit', String(body.unit || '').trim() || null);
-      if (body.quantity !== undefined) addSet('quantity', Number(body.quantity || 0));
-      if (body.materialCost !== undefined) addSet('material_cost', Number(body.materialCost || 0));
-      if (body.laborCost !== undefined) addSet('labor_cost', Number(body.laborCost || 0));
-      if (body.indirectCost !== undefined) addSet('indirect_cost', Number(body.indirectCost || 0));
-      if (body.totalUnitPrice !== undefined) addSet('total_unit_price', Number(body.totalUnitPrice || 0));
-      if (body.totalItemPrice !== undefined || body.total !== undefined) {
-        addSet('total_item_price', Number(body.totalItemPrice || body.total || 0));
+      if (!existingResult.rows[0]) {
+        return res.status(404).json({ error: 'Partida no encontrada' });
       }
-      if (body.estimatedDays !== undefined) addSet('estimated_days', Number(body.estimatedDays || 0));
-      if (body.notes !== undefined) addSet('notes', String(body.notes || '').trim() || null);
-      if (body.materialDetails !== undefined) addSet('material_details', String(body.materialDetails || '').trim() || null);
-      if (body.indirectFactor !== undefined) addSet('indirect_factor', Number(body.indirectFactor ?? 0.2));
-      if (body.materials !== undefined) addSet('materials', Array.isArray(body.materials) ? body.materials : [], true);
-      if (body.labor !== undefined) addSet('labor', Array.isArray(body.labor) ? body.labor : [], true);
-      if (body.subtasks !== undefined) addSet('subtasks', Array.isArray(body.subtasks) ? body.subtasks : [], true);
-      if (body.order !== undefined) addSet('sort_order', Number(body.order || 0));
 
-      if (sets.length === 0) {
-        return res.status(400).json({ error: 'No hay campos para actualizar' });
+      const existing = mapBudgetItem(existingResult.rows[0]);
+
+      const description = body.description !== undefined
+        ? String(body.description || '').trim()
+        : existing.description;
+      const category = body.category !== undefined
+        ? String(body.category || '').trim() || null
+        : existing.category;
+      const unit = body.unit !== undefined
+        ? String(body.unit || '').trim() || null
+        : existing.unit;
+      const notes = body.notes !== undefined
+        ? String(body.notes || '').trim() || null
+        : existing.notes;
+      const materialDetails = body.materialDetails !== undefined
+        ? String(body.materialDetails || '').trim() || null
+        : existing.materialDetails;
+      const subtasks = body.subtasks !== undefined
+        ? (Array.isArray(body.subtasks) ? body.subtasks : [])
+        : existing.subtasks;
+      const sortOrder = body.order !== undefined ? Number(body.order || 0) : existing.order;
+
+      const materials = body.materials !== undefined
+        ? normalizeBudgetMaterials(body.materials)
+        : normalizeBudgetMaterials(existing.materials);
+      const labor = body.labor !== undefined
+        ? normalizeBudgetLabor(body.labor)
+        : normalizeBudgetLabor(existing.labor);
+      const indirectFactor = body.indirectFactor !== undefined
+        ? toNonNegativeNumber(body.indirectFactor, 'indirectFactor', existing.indirectFactor || 0.2)
+        : toNonNegativeNumber(existing.indirectFactor, 'indirectFactor', 0.2);
+
+      if (!description) {
+        return res.status(400).json({ error: 'description es obligatorio' });
       }
 
-      sets.push('updated_at = now()');
-      values.push(projectId);
-      values.push(itemId);
+      const metrics = computeBudgetMetrics({
+        quantity: body.quantity !== undefined ? body.quantity : existing.quantity,
+        indirectFactor,
+        materials,
+        labor,
+        fallbackMaterialCost: body.materialCost !== undefined ? body.materialCost : existing.materialCost,
+        fallbackLaborCost: body.laborCost !== undefined ? body.laborCost : existing.laborCost,
+        fallbackEstimatedDays: body.estimatedDays !== undefined ? body.estimatedDays : existing.estimatedDays,
+      });
 
       const result = await db.query<BudgetItemRow>(
         `
           update project_budget_items
-          set ${sets.join(', ')}
-          where project_id = $${values.length - 1} and id = $${values.length}
+          set
+            description = $1,
+            category = $2,
+            unit = $3,
+            quantity = $4,
+            material_cost = $5,
+            labor_cost = $6,
+            indirect_cost = $7,
+            total_unit_price = $8,
+            total_item_price = $9,
+            estimated_days = $10,
+            notes = $11,
+            material_details = $12,
+            indirect_factor = $13,
+            materials = $14::jsonb,
+            labor = $15::jsonb,
+            subtasks = $16::jsonb,
+            sort_order = $17,
+            updated_at = now()
+          where project_id = $18 and id = $19
           returning
             id,
             project_id,
@@ -1666,15 +1865,34 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             created_at,
             updated_at
         `,
-        values
+        [
+          description,
+          category,
+          unit,
+          metrics.quantity,
+          metrics.materialCost,
+          metrics.laborCost,
+          metrics.indirectCost,
+          metrics.totalUnitPrice,
+          metrics.totalItemPrice,
+          metrics.estimatedDays,
+          notes,
+          materialDetails,
+          metrics.indirectFactor,
+          JSON.stringify(materials),
+          JSON.stringify(labor),
+          JSON.stringify(subtasks),
+          sortOrder,
+          projectId,
+          itemId,
+        ]
       );
-
-      if (!result.rows[0]) {
-        return res.status(404).json({ error: 'Partida no encontrada' });
-      }
 
       return res.json(mapBudgetItem(result.rows[0]));
     } catch (error: any) {
+      if (error instanceof ValidationError) {
+        return res.status(400).json({ error: error.message });
+      }
       return res.status(500).json({ error: error?.message || 'No se pudo actualizar la partida' });
     }
   });
