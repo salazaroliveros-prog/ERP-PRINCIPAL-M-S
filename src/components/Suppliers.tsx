@@ -38,6 +38,7 @@ export default function Suppliers() {
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState<string | null>(null);
+  const [quickSupplierId, setQuickSupplierId] = useState<string>('');
   const [newSupplier, setNewSupplier] = useState({
     name: '',
     category: 'Materiales',
@@ -63,6 +64,12 @@ export default function Suppliers() {
   useEffect(() => {
     loadSuppliers();
   }, [loadSuppliers]);
+
+  useEffect(() => {
+    if (!quickSupplierId && suppliers.length > 0) {
+      setQuickSupplierId(suppliers[0].id);
+    }
+  }, [suppliers, quickSupplierId]);
 
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter(sup => 
@@ -156,6 +163,84 @@ export default function Suppliers() {
     ];
   }, [suppliers]);
 
+  const quickSupplier = useMemo(() => {
+    if (!quickSupplierId) return suppliers[0] || null;
+    return suppliers.find((sup) => sup.id === quickSupplierId) || suppliers[0] || null;
+  }, [suppliers, quickSupplierId]);
+
+  const openMailToSupplier = async (supplier: any, subject: string, body: string, actionName: string) => {
+    if (!supplier?.email) {
+      toast.error('El proveedor no tiene correo registrado');
+      return;
+    }
+
+    const mailToUrl = `mailto:${supplier.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailToUrl;
+    await logAction(actionName, 'Proveedores', `Acción rápida para ${supplier.name}`, 'read', { supplierId: supplier.id });
+    toast.success('Se abrió el correo para el proveedor');
+  };
+
+  const handleQuickQuote = async () => {
+    if (!quickSupplier) {
+      toast.error('No hay proveedor seleccionado');
+      return;
+    }
+
+    await openMailToSupplier(
+      quickSupplier,
+      `Solicitud de cotización - ${quickSupplier.category || 'Proveedor'}`,
+      `Estimado(a) ${quickSupplier.contact || quickSupplier.name},\n\nPor favor comparta una cotización actualizada para materiales/servicios de la categoría ${quickSupplier.category || 'general'}.\n\nGracias.`,
+      'Acción Rápida: Solicitar Cotización'
+    );
+  };
+
+  const handleQuickCall = async () => {
+    if (!quickSupplier) {
+      toast.error('No hay proveedor seleccionado');
+      return;
+    }
+
+    if (!quickSupplier.phone) {
+      toast.error('El proveedor no tiene teléfono registrado');
+      return;
+    }
+
+    const phoneDigits = String(quickSupplier.phone).replace(/\s+/g, '');
+    window.location.href = `tel:${phoneDigits}`;
+    await logAction('Acción Rápida: Llamar Proveedor', 'Proveedores', `Llamada rápida a ${quickSupplier.name}`, 'read', { supplierId: quickSupplier.id });
+  };
+
+  const handleQuickVisit = async () => {
+    if (!quickSupplier) {
+      toast.error('No hay proveedor seleccionado');
+      return;
+    }
+
+    const query = encodeURIComponent(`${quickSupplier.name} ${quickSupplier.contact || ''} Guatemala`);
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+    await logAction('Acción Rápida: Visitar Proveedor', 'Proveedores', `Búsqueda de ubicación para ${quickSupplier.name}`, 'read', { supplierId: quickSupplier.id });
+    toast.success('Abriendo ubicación del proveedor');
+  };
+
+  const handleQuickPay = async () => {
+    if (!quickSupplier) {
+      toast.error('No hay proveedor seleccionado');
+      return;
+    }
+
+    if (!quickSupplier.balance || quickSupplier.balance <= 0) {
+      toast.info('Este proveedor no tiene saldo pendiente');
+      return;
+    }
+
+    await openMailToSupplier(
+      quickSupplier,
+      `Programación de pago pendiente - ${quickSupplier.name}`,
+      `Estimado(a) ${quickSupplier.contact || quickSupplier.name},\n\nConfirmamos la programación del pago pendiente por ${formatCurrency(quickSupplier.balance)}.\n\nPor favor compartir confirmación y referencia bancaria.\n\nGracias.`,
+      'Acción Rápida: Gestionar Pago'
+    );
+  };
+
   return (
     <div className="space-y-8 pb-20">
       {/* Header */}
@@ -206,7 +291,7 @@ export default function Suppliers() {
                 <h3 className="text-xl font-black text-slate-900 dark:text-white">
                   {isEditMode ? 'Editar Proveedor' : 'Nuevo Proveedor'}
                 </h3>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                <button title="Cerrar" aria-label="Cerrar" onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
                   <X size={20} className="text-slate-500" />
                 </button>
               </div>
@@ -216,6 +301,7 @@ export default function Suppliers() {
                   <input
                     required
                     type="text"
+                    title="Nombre de la empresa"
                     value={newSupplier.name}
                     onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -225,6 +311,8 @@ export default function Suppliers() {
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Categoría</label>
                     <select
+                      title="Categoría del proveedor"
+                      aria-label="Categoría del proveedor"
                       value={newSupplier.category}
                       onChange={(e) => setNewSupplier({ ...newSupplier, category: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -240,6 +328,7 @@ export default function Suppliers() {
                     <input
                       required
                       type="text"
+                      title="Persona de contacto"
                       value={newSupplier.contact}
                       onChange={(e) => setNewSupplier({ ...newSupplier, contact: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -252,6 +341,7 @@ export default function Suppliers() {
                     <input
                       required
                       type="email"
+                      title="Correo electrónico"
                       value={newSupplier.email}
                       onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -262,6 +352,7 @@ export default function Suppliers() {
                     <input
                       required
                       type="tel"
+                      title="Teléfono"
                       value={newSupplier.phone}
                       onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -416,6 +507,8 @@ export default function Suppliers() {
                   <button 
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    title="Página anterior"
+                    aria-label="Página anterior"
                     className="p-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 hover:text-primary transition-colors disabled:opacity-50"
                   >
                     <ChevronLeft size={16} />
@@ -439,6 +532,8 @@ export default function Suppliers() {
                   <button 
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    title="Página siguiente"
+                    aria-label="Página siguiente"
                     className="p-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 hover:text-primary transition-colors disabled:opacity-50"
                   >
                     <ChevronRight size={16} />
@@ -454,21 +549,46 @@ export default function Suppliers() {
           {/* Quick Actions */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-4 sm:p-6">
             <h3 className="font-black text-[10px] sm:text-xs uppercase tracking-widest text-slate-900 dark:text-white mb-4 sm:mb-6">Acciones Rápidas</h3>
+            <div className="mb-3 sm:mb-4 space-y-1.5">
+              <label className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Proveedor objetivo</label>
+              <select
+                value={quickSupplierId}
+                onChange={(e) => setQuickSupplierId(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 font-bold"
+                title="Seleccionar proveedor para acciones rápidas"
+                aria-label="Seleccionar proveedor para acciones rápidas"
+              >
+                {suppliers.map((sup) => (
+                  <option key={sup.id} value={sup.id}>{sup.name}</option>
+                ))}
+              </select>
+            </div>
             <div className="grid grid-cols-2 gap-2 sm:gap-3">
               {[
-                { label: 'Cotizar', icon: Mail, color: 'bg-blue-50' },
-                { label: 'Llamar', icon: Phone, color: 'bg-emerald-50' },
-                { label: 'Visitar', icon: MapPin, color: 'bg-purple-50' },
-                { label: 'Pagar', icon: CreditCard, color: 'bg-rose-50' },
+                { label: 'Cotizar', icon: Mail, color: 'bg-blue-50 dark:bg-blue-500/10', onClick: handleQuickQuote },
+                { label: 'Llamar', icon: Phone, color: 'bg-emerald-50 dark:bg-emerald-500/10', onClick: handleQuickCall },
+                { label: 'Visitar', icon: MapPin, color: 'bg-purple-50 dark:bg-purple-500/10', onClick: handleQuickVisit },
+                { label: 'Pagar', icon: CreditCard, color: 'bg-rose-50 dark:bg-rose-500/10', onClick: handleQuickPay },
               ].map((action, i) => (
-                <button key={i} className="flex flex-col items-center gap-1.5 sm:gap-2 p-3 sm:p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-primary transition-all group">
+                <button
+                  key={i}
+                  onClick={action.onClick}
+                  disabled={!quickSupplier}
+                  title={`${action.label}${quickSupplier ? ` (${quickSupplier.name})` : ''}`}
+                  className="flex flex-col items-center gap-1.5 sm:gap-2 p-3 sm:p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-primary transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <div className={cn("p-1.5 sm:p-2 rounded-lg transition-colors", action.color, "group-hover:bg-primary group-hover:text-white")}>
                     <action.icon size={16} className="sm:w-[18px] sm:h-[18px]" />
                   </div>
-                  <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-primary">{action.label}</span>
+                  <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 group-hover:text-primary">{action.label}</span>
                 </button>
               ))}
             </div>
+            {quickSupplier && (
+              <p className="mt-3 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                Contacto: {quickSupplier.contact || 'N/A'} | Tel: {quickSupplier.phone || 'N/A'}
+              </p>
+            )}
           </div>
 
           {/* Supplier Performance */}
