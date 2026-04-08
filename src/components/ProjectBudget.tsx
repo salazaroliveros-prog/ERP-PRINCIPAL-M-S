@@ -280,13 +280,15 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         }
       });
 
-      const payload = Object.values(materialSummary).map((mat: any) => ({
-        name: mat.name,
-        unit: mat.unit,
-        totalQuantity: mat.totalQuantity,
-        unitPrice: mat.unitPrice,
-        category: mat.category,
-      }));
+      const payload = Object.values(materialSummary)
+        .filter((mat: any) => String(mat?.name || '').trim().length > 0 && Number(mat?.totalQuantity || 0) > 0)
+        .map((mat: any) => ({
+          name: mat.name,
+          unit: mat.unit,
+          totalQuantity: mat.totalQuantity,
+          unitPrice: mat.unitPrice,
+          category: mat.category,
+        }));
 
       if (payload.length === 0) {
         toast.info('No hay materiales presupuestados para sincronizar al inventario');
@@ -2047,6 +2049,10 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     return Object.values(explosion).sort((a, b) => b.total - a.total);
   }, [budgetItems, transactions, inventory]);
+
+  const syncableMaterialCount = useMemo(() => {
+    return materialExplosion.filter((m) => Number(m.quantity || 0) > 0).length;
+  }, [materialExplosion]);
 
   const filteredBudgetItems = useMemo(() => {
     return budgetItems.filter(item => 
@@ -4354,14 +4360,24 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
           fullVertical
           footer={
             <div className="flex justify-between items-center w-full">
-              <button 
-                onClick={syncToInventory}
-                disabled={isSyncing}
-                className="flex items-center gap-2 px-6 py-3 bg-primary text-white font-black rounded-2xl hover:bg-primary/90 transition-all shadow-lg disabled:opacity-50"
-              >
-                {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                Sincronizar con Inventario
-              </button>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={syncToInventory}
+                  disabled={isSyncing || syncableMaterialCount === 0}
+                  className="flex items-center gap-2 px-6 py-3 bg-primary text-white font-black rounded-2xl hover:bg-primary/90 transition-all shadow-lg disabled:opacity-50"
+                  title={
+                    syncableMaterialCount === 0
+                      ? 'No hay materiales válidos para sincronizar'
+                      : `Sincronizar ${syncableMaterialCount} material(es) con inventario`
+                  }
+                >
+                  {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  Sincronizar con Inventario
+                </button>
+                <span className="px-3 py-1.5 bg-primary/10 text-primary rounded-xl text-[10px] font-black uppercase tracking-widest border border-primary/20">
+                  {syncableMaterialCount} Material(es)
+                </span>
+              </div>
               <button 
                 onClick={() => setIsMaterialExplosionOpen(false)}
                 className="px-8 py-3 bg-slate-900 dark:bg-slate-700 text-white font-black rounded-2xl hover:bg-slate-800 dark:hover:bg-slate-600 transition-all shadow-lg"

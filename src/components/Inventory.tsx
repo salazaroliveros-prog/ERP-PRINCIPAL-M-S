@@ -760,7 +760,7 @@ export default function Inventory() {
     setIsSyncing(true);
     try {
       const projectName = projects.find(p => p.id === selectedProjectId)?.name || 'Proyecto';
-      const payload = projectMaterialSummary.map((budgeted: any) => ({
+      const payload = syncableProjectMaterials.map((budgeted: any) => ({
         name: budgeted.name,
         unit: budgeted.unit,
         totalQuantity: budgeted.budgeted,
@@ -778,7 +778,7 @@ export default function Inventory() {
         payload
       );
 
-      const addedCount = projectMaterialSummary.length;
+      const addedCount = payload.length;
       await loadInventoryPage(true, 0);
       
       if (addedCount > 0) {
@@ -856,6 +856,12 @@ export default function Inventory() {
       };
     });
   }, [projectBudgetItems, inventory]);
+
+  const syncableProjectMaterials = React.useMemo(() => {
+    return projectMaterialSummary.filter((item: any) =>
+      String(item?.name || '').trim().length > 0 && Number(item?.budgeted || 0) > 0
+    );
+  }, [projectMaterialSummary]);
 
   const openAddModal = () => {
     setEditingMaterialId(null);
@@ -2006,12 +2012,21 @@ export default function Inventory() {
             {selectedProjectId && (
               <button
                 onClick={syncProjectMaterials}
-                disabled={isSyncing}
+                disabled={isSyncing || syncableProjectMaterials.length === 0}
                 className="p-2 bg-primary/10 text-primary rounded-xl hover:bg-primary/20 transition-all border border-primary/20"
-                title="Sincronizar materiales del presupuesto"
+                title={
+                  syncableProjectMaterials.length === 0
+                    ? 'No hay materiales válidos para sincronizar'
+                    : `Sincronizar ${syncableProjectMaterials.length} material(es) del presupuesto`
+                }
               >
                 {isSyncing ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
               </button>
+            )}
+            {selectedProjectId && (
+              <span className="px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-black uppercase tracking-widest border border-primary/20">
+                {syncableProjectMaterials.length} Material(es)
+              </span>
             )}
           </div>
           <button 
