@@ -65,7 +65,34 @@ import ConfirmModal from './ConfirmModal';
 import ProjectBudget from './ProjectBudget';
 import { List, Map as MapIcon } from 'lucide-react';
 import { createBudgetItem, createProject, deleteProject, listProjectBudgetItemsDetailed, listProjects, updateProject } from '../lib/projectsApi';
-import { listClients } from '../lib/clientsApi';
+import { deleteClient, listClients } from '../lib/clientsApi';
+import { deleteQuoteRecord, listQuotes } from '../lib/quotesApi';
+import { deleteTransactionById, listTransactions } from '../lib/financialsApi';
+
+const TEST_PROJECT_PATTERNS = [
+  /^E2E\b/i,
+  /^TEST\b/i,
+  /^QA\b/i,
+  /^PRUEBA\b/i,
+  /\bDATOS?\s+DE\s+PRUEBA\b/i,
+];
+
+const TEST_DATA_TEXT_PATTERNS = [
+  /(?:^|[\s_-])(E2E|TEST|QA|PRUEBA)(?:$|[\s_-])/i,
+  /\bDATOS?\s+DE\s+PRUEBA\b/i,
+];
+
+function isTestProjectName(name: string) {
+  const normalized = String(name || '').trim();
+  if (!normalized) return false;
+  return TEST_PROJECT_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+function isTestDataText(value: any) {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  return TEST_DATA_TEXT_PATTERNS.some((pattern) => pattern.test(text));
+}
 
 const StatusBadge = ({ status }: { status: string }) => {
   const styles: any = {
@@ -147,6 +174,20 @@ const geocodeAddress = async (address: string) => {
 };
 
 export default function Projects() {
+    type CleanupCandidates = {
+      projects: any[];
+      clients: any[];
+      quotes: any[];
+      transactions: any[];
+    };
+
+  const EMPTY_CLEANUP_CANDIDATES: CleanupCandidates = {
+    projects: [],
+    clients: [],
+    quotes: [],
+    transactions: [],
+  };
+
   const [projects, setProjects] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
@@ -171,6 +212,9 @@ export default function Projects() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+  const [isCleanupConfirmOpen, setIsCleanupConfirmOpen] = useState(false);
+  const [cleanupCandidates, setCleanupCandidates] = useState<CleanupCandidates>(EMPTY_CLEANUP_CANDIDATES);
+  const [isCleaningTestData, setIsCleaningTestData] = useState(false);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [isCSVConfirmOpen, setIsCSVConfirmOpen] = useState(false);
@@ -949,6 +993,190 @@ export default function Projects() {
     }
   };
 
+  const scanCleanupCandidates = async (): Promise<CleanupCandidates> => {
+    const projectCandidates = projects.filter((project) => isTestProjectName(project.name));
+    const projectIdSet = new Set(projectCandidates.map((project) => project.id));
+
+    const [allClients, allQuotes] = await Promise.all([
+      listClients(),
+      listQuotes(),
+    ]);
+
+    const transactionItems: any[] = [];
+    let offset = 0;
+    const limit = 200;
+    let hasMore = true;
+
+    while (hasMore) {
+      const response = await listTransactions({ offset, limit });
+      transactionItems.push(...response.items);
+      hasMore = response.hasMore;
+      offset += response.items.length;
+    }
+
+    const clientCandidates = allClients.filter((client) =>
+      isTestDataText(client.name) ||
+      isTestDataText(client.company) ||
+      isTestDataText(client.email) ||
+      isTestDataText(client.contactPerson) ||
+      isTestDataText(client.contacto)
+    );
+
+    const quoteCandidates = allQuotes.filter((quote) => {
+      if (projectIdSet.has(quote.projectId)) return true;
+      if (isTestDataText(quote.notes)) return true;
+      if (Array.isArray(quote.items) && quote.items.some((item: any) => isTestDataText(item.description))) {
+        return true;
+      }
+      return false;
+    });
+
+    const transactionCandidates = transactionItems.filter((transaction) => {
+      if (projectIdSet.has(transaction.projectId)) return true;
+      if (isTestDataText(transaction.description)) return true;
+      if (isTestDataText(transaction.category)) return true;
+      return false;
+    });
+
+    return {
+      projects: projectCandidates,
+      clients: clientCandidates,
+      quotes: quoteCandidates,
+      transactions: transactionCandidates,
+    };
+  };
+
+  const requestCleanupTestProjects = async () => {
+    if (isCleaningTestData) return;
+
+    setIsCleaningTestData(true);
+    try {
+      const candidates = await scanCleanupCandidates();
+      const totalCandidates =
+        candidates.projects.length +
+        candidates.clients.length +
+        candidates.quotes.length +
+        candidates.transactions.length;
+
+      if (totalCandidates === 0) {
+        toast.info('No se encontraron datos de prueba para limpiar');
+        return;
+      }
+
+      setCleanupCandidates(candidates);
+      setIsCleanupConfirmOpen(true);
+    } catch {
+      toast.error('No se pudo preparar la limpieza de datos de prueba');
+    } finally {
+      setIsCleaningTestData(false);
+    }
+  };
+
+  const simulateCleanupTestProjects = async () => {
+    if (isCleaningTestData) return;
+
+    setIsCleaningTestData(true);
+    try {
+      const candidates = await scanCleanupCandidates();
+      const totalCandidates =
+        candidates.projects.length +
+        candidates.clients.length +
+        candidates.quotes.length +
+        candidates.transactions.length;
+
+      if (totalCandidates === 0) {
+        toast.info('Simulación: no se detectaron datos de prueba para limpiar');
+        return;
+      }
+
+      setCleanupCandidates(candidates);
+      toast.success(
+        `Simulación: ${totalCandidates} registro(s) detectados. Proyectos: ${candidates.projects.length}, Clientes: ${candidates.clients.length}, Cotizaciones: ${candidates.quotes.length}, Transacciones: ${candidates.transactions.length}.`
+      );
+    } catch {
+      toast.error('No se pudo ejecutar la simulación de limpieza');
+    } finally {
+      setIsCleaningTestData(false);
+    }
+  };
+
+  const confirmCleanupTestProjects = async () => {
+    const totalCandidates =
+      cleanupCandidates.projects.length +
+      cleanupCandidates.clients.length +
+      cleanupCandidates.quotes.length +
+      cleanupCandidates.transactions.length;
+
+    if (totalCandidates === 0) {
+      setIsCleanupConfirmOpen(false);
+      return;
+    }
+
+    setIsCleaningTestData(true);
+    let deleted = 0;
+    let failed = 0;
+
+    for (const transaction of cleanupCandidates.transactions) {
+      try {
+        await deleteTransactionById(transaction.id);
+        deleted += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
+    for (const quote of cleanupCandidates.quotes) {
+      try {
+        await deleteQuoteRecord(quote.id);
+        deleted += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
+    for (const project of cleanupCandidates.projects) {
+      try {
+        await deleteProject(project.id);
+        deleted += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
+    for (const client of cleanupCandidates.clients) {
+      try {
+        await deleteClient(client.id);
+        deleted += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
+    try {
+      await logAction(
+        'Limpieza de Datos de Prueba',
+        'Proyectos',
+        `Se eliminaron ${deleted} registro(s) de prueba (proyectos/clientes/cotizaciones/transacciones). Fallidos: ${failed}.`,
+        'delete',
+        { deleted, failed }
+      );
+    } catch {
+      // Logging errors should not block cleanup UX.
+    }
+
+    await loadProjectsFromApi();
+    setIsCleaningTestData(false);
+    setIsCleanupConfirmOpen(false);
+    setCleanupCandidates(EMPTY_CLEANUP_CANDIDATES);
+
+    if (deleted > 0) {
+      toast.success(`Limpieza completada: ${deleted} registro(s) de prueba eliminado(s)`);
+    }
+    if (failed > 0) {
+      toast.error(`${failed} proyecto(s) no se pudieron eliminar`);
+    }
+  };
+
   const filteredProjects = projects.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          p.location.toLowerCase().includes(searchTerm.toLowerCase());
@@ -1118,6 +1346,20 @@ export default function Projects() {
         onConfirm={confirmDeleteProject}
         title="Eliminar Proyecto"
         message="¿Estás seguro de que deseas eliminar este proyecto? Esta acción no se puede deshacer."
+      />
+
+      <ConfirmModal
+        isOpen={isCleanupConfirmOpen}
+        onClose={() => {
+          if (isCleaningTestData) return;
+          setIsCleanupConfirmOpen(false);
+        }}
+        onConfirm={confirmCleanupTestProjects}
+        title="Limpieza de Datos de Prueba"
+        message={`Se eliminarán ${cleanupCandidates.projects.length} proyecto(s), ${cleanupCandidates.clients.length} cliente(s), ${cleanupCandidates.quotes.length} cotización(es) y ${cleanupCandidates.transactions.length} transacción(es) de prueba detectados por patrón (E2E/TEST/QA/PRUEBA). Esta acción no afecta datos reales.`}
+        confirmText={isCleaningTestData ? 'Limpiando...' : 'Eliminar Datos de Prueba'}
+        cancelText="Cancelar"
+        variant="warning"
       />
 
       <FormModal
@@ -1296,6 +1538,26 @@ export default function Projects() {
               >
                 {isAuditing ? <Loader2 size={14} className="animate-spin" /> : <ShieldAlert size={14} className="sm:w-5 sm:h-5" />}
                 <span className="sm:text-sm">Auditoría</span>
+              </button>
+
+              <button
+                onClick={simulateCleanupTestProjects}
+                disabled={isCleaningTestData}
+                className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2.5 sm:py-4 bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-black rounded-xl sm:rounded-2xl hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-all border border-sky-100 dark:border-sky-500/20 shadow-sm whitespace-nowrap text-[10px] sm:text-xs uppercase tracking-widest"
+                title="Analiza datos de prueba sin eliminarlos"
+              >
+                <Info size={14} className="sm:w-5 sm:h-5" />
+                <span className="sm:text-sm">Simular Limpieza</span>
+              </button>
+
+              <button
+                onClick={requestCleanupTestProjects}
+                disabled={isCleaningTestData}
+                className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2.5 sm:py-4 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-black rounded-xl sm:rounded-2xl hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-all border border-rose-100 dark:border-rose-500/20 shadow-sm whitespace-nowrap text-[10px] sm:text-xs uppercase tracking-widest"
+                title="Elimina registros detectados como datos de prueba"
+              >
+                <Trash2 size={14} className="sm:w-5 sm:h-5" />
+                <span className="sm:text-sm">Limpieza Pruebas</span>
               </button>
 
               <div className="h-8 sm:h-10 w-px bg-slate-200 dark:bg-slate-800 mx-0.5 sm:mx-1 hidden xl:block" />

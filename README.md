@@ -125,6 +125,25 @@ Se agrego un smoke test integral para validar lectura/escritura por modulo contr
 - Ejecutar local: `npm run smoke:local`
 - Script: `scripts/smoke-local.mjs`
 
+Tambien se agrego una suite E2E (Playwright) enfocada en Proyectos + Presupuesto:
+
+- Instalar navegadores (una sola vez): `npx playwright install chromium`
+- Ejecutar toda la suite E2E: `npm run e2e`
+- Ejecutar solo Proyectos/Presupuesto: `npm run e2e:projects-budget`
+- Ejecutar en modo visible: `npm run e2e:headed`
+- Especificacion: `tests/e2e/projects-budget.spec.ts`
+
+## Limpieza de datos de prueba (Proyectos)
+
+En el modulo de Proyectos se agregaron los botones `Simular Limpieza` y `Limpieza Pruebas`.
+
+- Elimina datos de prueba relacionados: proyectos, clientes, cotizaciones y transacciones.
+- `Simular Limpieza` analiza y muestra cuantos registros serian eliminados, sin borrar nada.
+- Detecta registros por patrones de prueba en nombre/texto: `E2E`, `TEST`, `QA`, `PRUEBA`, o `DATOS DE PRUEBA`.
+- Tambien elimina cotizaciones/transacciones ligadas a proyectos de prueba detectados.
+- Requiere confirmacion antes de eliminar.
+- No afecta datos reales que no cumplan esos patrones.
+
 Tambien se agrego workflow CI con PostgreSQL temporal para validar el backend antes de publicar:
 
 - Workflow: `.github/workflows/local-smoke-test.yml`

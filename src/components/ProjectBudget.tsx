@@ -427,6 +427,59 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   const [materialSearch, setMaterialSearch] = useState("");
   const [showMaterialLibrary, setShowMaterialLibrary] = useState<string | null>(null); // itemId or 'new'
 
+  const sumProjectBudget = useCallback((items: any[]) => {
+    return items.reduce((sum, item) => sum + (item.totalItemPrice || 0), 0);
+  }, []);
+
+  const recalculateItemTotals = useCallback((item: any) => {
+    const safeMaterials = Array.isArray(item.materials) ? item.materials : [];
+    const safeLabor = Array.isArray(item.labor) ? item.labor : [];
+    const safeQuantity = Number.isFinite(Number(item.quantity)) ? Number(item.quantity) : 0;
+    const safeIndirectFactor = Number.isFinite(Number(item.indirectFactor))
+      ? Number(item.indirectFactor)
+      : 0.2;
+
+    const materialCost = safeMaterials.reduce(
+      (sum: number, m: any) => sum + ((Number(m.quantity) || 0) * (Number(m.unitPrice) || 0)),
+      0
+    );
+    const laborCost = safeLabor.reduce((sum: number, l: any) => {
+      const dailyRate = Number(l.dailyRate) || 0;
+      const yieldValue = Number(l.yield) || 0;
+      if (yieldValue <= 0) return sum;
+      return sum + (dailyRate / yieldValue);
+    }, 0);
+
+    const directCost = materialCost + laborCost;
+    const indirectCost = directCost * safeIndirectFactor;
+    const totalUnitPrice = directCost + indirectCost;
+    const totalItemPrice = safeQuantity * totalUnitPrice;
+
+    let estimatedDays = 0;
+    if (safeLabor.length > 0) {
+      const daysPerRole = safeLabor
+        .map((l: any) => {
+          const yieldValue = Number(l.yield) || 0;
+          if (yieldValue <= 0) return 0;
+          return safeQuantity / yieldValue;
+        })
+        .filter((days: number) => Number.isFinite(days));
+      estimatedDays = daysPerRole.length > 0 ? Math.max(...daysPerRole) : 0;
+    }
+
+    return {
+      ...item,
+      quantity: safeQuantity,
+      indirectFactor: safeIndirectFactor,
+      materialCost,
+      laborCost,
+      indirectCost,
+      totalUnitPrice,
+      totalItemPrice,
+      estimatedDays,
+    };
+  }, []);
+
   const addSubtaskToNewItem = () => {
     setNewItem({
       ...newItem,
@@ -451,6 +504,12 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     if (!item) return;
 
     const updatedSubtasks = [...(item.subtasks || []), subtask];
+    const updatedItems = budgetItems.map((budgetItem) =>
+      budgetItem.id === itemId
+        ? { ...budgetItem, subtasks: updatedSubtasks }
+        : budgetItem
+    );
+    setBudgetItems(updatedItems);
     
     if (editingItem?.id === itemId) {
       setEditingItem({ ...editingItem, subtasks: updatedSubtasks });
@@ -462,6 +521,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       });
       toast.success('Subtarea agregada correctamente');
     } catch (error) {
+      await loadBudgetItems();
       handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
@@ -471,6 +531,12 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     if (!item) return;
 
     const updatedSubtasks = (item.subtasks || []).filter((_: any, i: number) => i !== index);
+    const updatedItems = budgetItems.map((budgetItem) =>
+      budgetItem.id === itemId
+        ? { ...budgetItem, subtasks: updatedSubtasks }
+        : budgetItem
+    );
+    setBudgetItems(updatedItems);
     
     if (editingItem?.id === itemId) {
       setEditingItem({ ...editingItem, subtasks: updatedSubtasks });
@@ -482,6 +548,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       });
       toast.success('Subtarea eliminada correctamente');
     } catch (error) {
+      await loadBudgetItems();
       handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
@@ -492,6 +559,12 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     const updatedSubtasks = [...(item.subtasks || [])];
     updatedSubtasks[index] = { ...updatedSubtasks[index], [field]: value };
+    const updatedItems = budgetItems.map((budgetItem) =>
+      budgetItem.id === itemId
+        ? { ...budgetItem, subtasks: updatedSubtasks }
+        : budgetItem
+    );
+    setBudgetItems(updatedItems);
     
     if (editingItem?.id === itemId) {
       setEditingItem({ ...editingItem, subtasks: updatedSubtasks });
@@ -502,6 +575,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         subtasks: updatedSubtasks
       });
     } catch (error) {
+      await loadBudgetItems();
       handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
@@ -788,6 +862,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     if (!itemToDelete) return;
     try {
       await deleteProjectBudgetItem(project.id, itemToDelete);
+      const updatedItems = budgetItems.filter((i) => i.id !== itemToDelete);
+      setBudgetItems(updatedItems);
       
       const deletedItem = budgetItems.find(i => i.id === itemToDelete);
       await logAction(
@@ -798,11 +874,16 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         { projectId: project.id, itemId: itemToDelete }
       );
 
+      await patchProjectBudget({
+        budget: sumProjectBudget(updatedItems),
+        typology: project.typology,
+      });
+
       toast.success('Renglón eliminado correctamente');
-      await loadBudgetItems();
       setItemToDelete(null);
       setIsDeleteConfirmOpen(false);
     } catch (error) {
+      await loadBudgetItems();
       handleApiError(error, OperationType.DELETE, `projects/${project.id}/budgetItems/${itemToDelete}`);
     }
   };
@@ -926,48 +1007,31 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       updatedLabor[index] = { ...updatedLabor[index], [field]: newValue };
     }
 
-    // Recalculate costs
-    const materialCost = updatedMaterials.reduce((sum, m) => sum + (m.quantity * m.unitPrice), 0);
-    const laborCost = updatedLabor.reduce((sum, l) => sum + (l.dailyRate / l.yield), 0);
-    const directCost = materialCost + laborCost;
-    const indirectCost = directCost * (item.indirectFactor || 0.2);
-    const totalUnitPrice = directCost + indirectCost;
-    const totalItemPrice = item.quantity * totalUnitPrice;
-
-    // Recalculate estimated days
-    let estimatedDays = 0;
-    if (updatedLabor.length > 0) {
-      const daysPerRole = updatedLabor.map((l: any) => item.quantity / l.yield);
-      estimatedDays = Math.max(...daysPerRole);
-    }
-
-    const updatedItem = {
+    const recalculatedItem = recalculateItemTotals({
       ...item,
       materials: updatedMaterials,
       labor: updatedLabor,
-      materialCost,
-      laborCost,
-      indirectCost,
-      totalUnitPrice,
-      totalItemPrice,
-      estimatedDays,
-    };
+    });
+
+    const updatedItems = budgetItems.map((budgetItem) =>
+      budgetItem.id === itemId ? recalculatedItem : budgetItem
+    );
+    setBudgetItems(updatedItems);
 
     if (editingItem?.id === itemId) {
-      setEditingItem(updatedItem);
+      setEditingItem(recalculatedItem);
     }
 
     try {
       await patchBudgetItem(itemId, {
         materials: updatedMaterials,
         labor: updatedLabor,
-        materialCost,
-        laborCost,
-        indirectCost,
-        totalUnitPrice,
-        totalItemPrice,
-        estimatedDays,
-        projectId: project.id
+        materialCost: recalculatedItem.materialCost,
+        laborCost: recalculatedItem.laborCost,
+        indirectCost: recalculatedItem.indirectCost,
+        totalUnitPrice: recalculatedItem.totalUnitPrice,
+        totalItemPrice: recalculatedItem.totalItemPrice,
+        estimatedDays: recalculatedItem.estimatedDays,
       });
 
       await logAction(
@@ -979,17 +1043,13 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       );
 
       // Update project total budget
-      const newTotalBudget = budgetItems.reduce((sum, i) => {
-        if (i.id === itemId) return sum + totalItemPrice;
-        return sum + (i.totalItemPrice || 0);
-      }, 0);
-
       await patchProjectBudget({
-        budget: newTotalBudget,
+        budget: sumProjectBudget(updatedItems),
         typology: project.typology,
 
       });
     } catch (error) {
+      await loadBudgetItems();
       handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
@@ -1011,33 +1071,26 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     const updatedMaterials = [...item.materials, material];
     
-    // Recalculate costs
-    const materialCost = updatedMaterials.reduce((sum, m) => sum + (m.quantity * m.unitPrice), 0);
-    const laborCost = item.labor.reduce((sum, l) => sum + (l.dailyRate / l.yield), 0);
-    const directCost = materialCost + laborCost;
-    const indirectCost = directCost * (item.indirectFactor || 0.2);
-    const totalUnitPrice = directCost + indirectCost;
-    const totalItemPrice = item.quantity * totalUnitPrice;
-
-    const updatedItem = {
+    const recalculatedItem = recalculateItemTotals({
       ...item,
       materials: updatedMaterials,
-      materialCost,
-      totalUnitPrice,
-      totalItemPrice,
-    };
+    });
+
+    const updatedItems = budgetItems.map((budgetItem) =>
+      budgetItem.id === itemId ? recalculatedItem : budgetItem
+    );
+    setBudgetItems(updatedItems);
 
     if (editingItem?.id === itemId) {
-      setEditingItem(updatedItem);
+      setEditingItem(recalculatedItem);
     }
 
     try {
       await patchBudgetItem(itemId, {
         materials: updatedMaterials,
-        materialCost,
-        totalUnitPrice,
-        totalItemPrice,
-        projectId: project.id
+        materialCost: recalculatedItem.materialCost,
+        totalUnitPrice: recalculatedItem.totalUnitPrice,
+        totalItemPrice: recalculatedItem.totalItemPrice,
       });
 
       await logAction(
@@ -1049,19 +1102,15 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       );
 
       // Update project total budget
-      const newTotalBudget = budgetItems.reduce((sum, i) => {
-        if (i.id === itemId) return sum + totalItemPrice;
-        return sum + (i.totalItemPrice || 0);
-      }, 0);
-
       await patchProjectBudget({
-        budget: newTotalBudget,
+        budget: sumProjectBudget(updatedItems),
         typology: project.typology,
 
       });
 
       toast.success('Material agregado correctamente');
     } catch (error) {
+      await loadBudgetItems();
       handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
@@ -1072,49 +1121,37 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     const updatedMaterials = item.materials.filter((_: any, i: number) => i !== index);
     
-    // Recalculate costs
-    const materialCost = updatedMaterials.reduce((sum: number, m: any) => sum + (m.quantity * m.unitPrice), 0);
-    const laborCost = item.labor.reduce((sum: number, l: any) => sum + (l.dailyRate / l.yield), 0);
-    const directCost = materialCost + laborCost;
-    const indirectCost = directCost * (item.indirectFactor || 0.2);
-    const totalUnitPrice = directCost + indirectCost;
-    const totalItemPrice = item.quantity * totalUnitPrice;
-
-    const updatedItem = {
+    const recalculatedItem = recalculateItemTotals({
       ...item,
       materials: updatedMaterials,
-      materialCost,
-      totalUnitPrice,
-      totalItemPrice,
-    };
+    });
+
+    const updatedItems = budgetItems.map((budgetItem) =>
+      budgetItem.id === itemId ? recalculatedItem : budgetItem
+    );
+    setBudgetItems(updatedItems);
 
     if (editingItem?.id === itemId) {
-      setEditingItem(updatedItem);
+      setEditingItem(recalculatedItem);
     }
 
     try {
       await patchBudgetItem(itemId, {
         materials: updatedMaterials,
-        materialCost,
-        totalUnitPrice,
-        totalItemPrice,
-        projectId: project.id
+        materialCost: recalculatedItem.materialCost,
+        totalUnitPrice: recalculatedItem.totalUnitPrice,
+        totalItemPrice: recalculatedItem.totalItemPrice,
       });
 
-      // Update project total budget
-      const newTotalBudget = budgetItems.reduce((sum, i) => {
-        if (i.id === itemId) return sum + totalItemPrice;
-        return sum + (i.totalItemPrice || 0);
-      }, 0);
-
       await patchProjectBudget({
-        budget: newTotalBudget,
+        budget: sumProjectBudget(updatedItems),
         typology: project.typology,
 
       });
 
       toast.success('Material eliminado correctamente');
     } catch (error) {
+      await loadBudgetItems();
       handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
@@ -1125,42 +1162,27 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     const updatedLabor = [...item.labor, labor];
     
-    // Recalculate costs
-    const materialCost = item.materials.reduce((sum: number, m: any) => sum + (m.quantity * m.unitPrice), 0);
-    const laborCost = updatedLabor.reduce((sum: number, l: any) => sum + (l.dailyRate / l.yield), 0);
-    const directCost = materialCost + laborCost;
-    const indirectCost = directCost * (item.indirectFactor || 0.2);
-    const totalUnitPrice = directCost + indirectCost;
-    const totalItemPrice = item.quantity * totalUnitPrice;
-
-    // Recalculate estimated days
-    let estimatedDays = 0;
-    if (updatedLabor.length > 0) {
-      const daysPerRole = updatedLabor.map((l: any) => item.quantity / l.yield);
-      estimatedDays = Math.max(...daysPerRole);
-    }
-
-    const updatedItem = {
+    const recalculatedItem = recalculateItemTotals({
       ...item,
       labor: updatedLabor,
-      laborCost,
-      totalUnitPrice,
-      totalItemPrice,
-      estimatedDays,
-    };
+    });
+
+    const updatedItems = budgetItems.map((budgetItem) =>
+      budgetItem.id === itemId ? recalculatedItem : budgetItem
+    );
+    setBudgetItems(updatedItems);
 
     if (editingItem?.id === itemId) {
-      setEditingItem(updatedItem);
+      setEditingItem(recalculatedItem);
     }
 
     try {
       await patchBudgetItem(itemId, {
         labor: updatedLabor,
-        laborCost,
-        totalUnitPrice,
-        totalItemPrice,
-        estimatedDays,
-        projectId: project.id
+        laborCost: recalculatedItem.laborCost,
+        totalUnitPrice: recalculatedItem.totalUnitPrice,
+        totalItemPrice: recalculatedItem.totalItemPrice,
+        estimatedDays: recalculatedItem.estimatedDays,
       });
 
       await logAction(
@@ -1172,19 +1194,15 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       );
 
       // Update project total budget
-      const newTotalBudget = budgetItems.reduce((sum, i) => {
-        if (i.id === itemId) return sum + totalItemPrice;
-        return sum + (i.totalItemPrice || 0);
-      }, 0);
-
       await patchProjectBudget({
-        budget: newTotalBudget,
+        budget: sumProjectBudget(updatedItems),
         typology: project.typology,
 
       });
 
       toast.success('Mano de obra agregada correctamente');
     } catch (error) {
+      await loadBudgetItems();
       handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
@@ -1195,58 +1213,38 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     const updatedLabor = item.labor.filter((_: any, i: number) => i !== index);
     
-    // Recalculate costs
-    const materialCost = item.materials.reduce((sum: number, m: any) => sum + (m.quantity * m.unitPrice), 0);
-    const laborCost = updatedLabor.reduce((sum: number, l: any) => sum + (l.dailyRate / l.yield), 0);
-    const directCost = materialCost + laborCost;
-    const indirectCost = directCost * (item.indirectFactor || 0.2);
-    const totalUnitPrice = directCost + indirectCost;
-    const totalItemPrice = item.quantity * totalUnitPrice;
-
-    // Recalculate estimated days
-    let estimatedDays = 0;
-    if (updatedLabor.length > 0) {
-      const daysPerRole = updatedLabor.map((l: any) => item.quantity / l.yield);
-      estimatedDays = Math.max(...daysPerRole);
-    }
-
-    const updatedItem = {
+    const recalculatedItem = recalculateItemTotals({
       ...item,
       labor: updatedLabor,
-      laborCost,
-      totalUnitPrice,
-      totalItemPrice,
-      estimatedDays,
-    };
+    });
+
+    const updatedItems = budgetItems.map((budgetItem) =>
+      budgetItem.id === itemId ? recalculatedItem : budgetItem
+    );
+    setBudgetItems(updatedItems);
 
     if (editingItem?.id === itemId) {
-      setEditingItem(updatedItem);
+      setEditingItem(recalculatedItem);
     }
 
     try {
       await patchBudgetItem(itemId, {
         labor: updatedLabor,
-        laborCost,
-        totalUnitPrice,
-        totalItemPrice,
-        estimatedDays,
-        projectId: project.id
+        laborCost: recalculatedItem.laborCost,
+        totalUnitPrice: recalculatedItem.totalUnitPrice,
+        totalItemPrice: recalculatedItem.totalItemPrice,
+        estimatedDays: recalculatedItem.estimatedDays,
       });
 
-      // Update project total budget
-      const newTotalBudget = budgetItems.reduce((sum, i) => {
-        if (i.id === itemId) return sum + totalItemPrice;
-        return sum + (i.totalItemPrice || 0);
-      }, 0);
-
       await patchProjectBudget({
-        budget: newTotalBudget,
+        budget: sumProjectBudget(updatedItems),
         typology: project.typology,
 
       });
 
       toast.success('Mano de obra eliminada correctamente');
     } catch (error) {
+      await loadBudgetItems();
       handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems/${itemId}`);
     }
   };
