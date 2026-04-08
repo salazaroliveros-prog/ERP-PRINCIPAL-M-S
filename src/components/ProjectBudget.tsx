@@ -121,6 +121,27 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   const [isCostCalculatorOpen, setIsCostCalculatorOpen] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [isRepairingDefaultRows, setIsRepairingDefaultRows] = useState(false);
+  const [budgetStatus, setBudgetStatus] = useState(project.budgetStatus || 'Draft');
+  const [budgetValidatedAt, setBudgetValidatedAt] = useState<any>(project.budgetValidatedAt || null);
+  const [wasValidated, setWasValidated] = useState(
+    project.budgetStatus === 'Validated' || Boolean(project.budgetValidatedAt)
+  );
+
+  useEffect(() => {
+    setBudgetStatus(project.budgetStatus || 'Draft');
+    setBudgetValidatedAt(project.budgetValidatedAt || null);
+    if (project.budgetStatus === 'Validated' || Boolean(project.budgetValidatedAt)) {
+      setWasValidated(true);
+    }
+  }, [project.budgetStatus, project.budgetValidatedAt]);
+
+  const isBudgetLocked = budgetStatus === 'Validated';
+
+  const guardBudgetLocked = useCallback(() => {
+    if (!isBudgetLocked) return false;
+    toast.info('El presupuesto está validado y bloqueado. Use "Desbloquear" para editar.');
+    return true;
+  }, [isBudgetLocked]);
 
   const loadBudgetItems = useCallback(async () => {
     if (!project.id) return;
@@ -206,6 +227,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   }, [project.id]);
 
   const handleAutoCalculateQuantities = async () => {
+    if (guardBudgetLocked()) return;
+
     if (!project.area || project.area <= 0) {
       toast.error('El proyecto debe tener un área (m2) definida para auto-calcular cantidades');
       return;
@@ -344,6 +367,11 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         budget: totalBudget
       });
 
+      setBudgetStatus('Validated');
+      setBudgetValidatedAt(new Date().toISOString());
+      setWasValidated(true);
+      setEditingItem(null);
+
       // Sync materials to inventory automatically on validation
       await syncToInventory();
 
@@ -364,6 +392,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         budgetStatus: 'Draft',
         budgetValidatedAt: null,
       });
+      setBudgetStatus('Draft');
+      setBudgetValidatedAt(null);
       toast.success('Presupuesto desbloqueado para edición');
     } catch (error) {
       handleApiError(error, OperationType.WRITE, 'projects');
@@ -530,7 +560,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   }, []);
 
   const repairIncompleteDefaultRows = useCallback(async () => {
-    if (isRepairingDefaultRows || budgetItems.length === 0) {
+    if (isRepairingDefaultRows || budgetItems.length === 0 || isBudgetLocked) {
       return;
     }
 
@@ -635,6 +665,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     project.location,
     project.typology,
     sumProjectBudget,
+    isBudgetLocked,
   ]);
 
   const addSubtaskToNewItem = () => {
@@ -657,6 +688,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const addSubtaskToItem = async (itemId: string, subtask: any) => {
+    if (guardBudgetLocked()) return;
+
     const item = budgetItems.find(i => i.id === itemId);
     if (!item) return;
 
@@ -684,6 +717,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const removeSubtaskFromItem = async (itemId: string, index: number) => {
+    if (guardBudgetLocked()) return;
+
     const item = budgetItems.find(i => i.id === itemId);
     if (!item) return;
 
@@ -711,6 +746,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const updateSubtaskInItem = async (itemId: string, index: number, field: string, value: any) => {
+    if (guardBudgetLocked()) return;
+
     const item = budgetItems.find(i => i.id === itemId);
     if (!item) return;
 
@@ -888,6 +925,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const initializeBudget = async () => {
+    if (guardBudgetLocked()) return;
+
     setIsInitializing(true);
     try {
       const templates = APU_TEMPLATES[project.typology] || APU_TEMPLATES.RESIDENCIAL;
@@ -923,6 +962,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const handleReorder = async (newOrder: any[]) => {
+    if (guardBudgetLocked()) return;
+
     setBudgetItems(newOrder);
     
     try {
@@ -934,6 +975,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const updateQuantity = async (itemId: string, quantity: number) => {
+    if (guardBudgetLocked()) return;
+
     if (!Number.isFinite(quantity)) {
       return;
     }
@@ -1001,11 +1044,15 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const handleDeleteItem = (itemId: string) => {
+    if (guardBudgetLocked()) return;
+
     setItemToDelete(itemId);
     setIsDeleteConfirmOpen(true);
   };
 
   const confirmDeleteItem = async () => {
+    if (guardBudgetLocked()) return;
+
     if (!itemToDelete) return;
     try {
       await deleteProjectBudgetItem(project.id, itemToDelete);
@@ -1036,6 +1083,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const handleImportFromCalculator = async (items: any[]) => {
+    if (guardBudgetLocked()) return;
+
     try {
       const currentCount = budgetItems.length;
 
@@ -1117,6 +1166,10 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         }
       });
 
+      if (!response.text) {
+        throw new Error('No se recibieron sugerencias de IA');
+      }
+
       const suggestions = JSON.parse(response.text);
       toast.success('Sugerencias generadas con éxito');
       setNewItem(prev => ({
@@ -1134,6 +1187,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const updateItemYield = async (itemId: string, type: 'material' | 'labor', index: number, field: string, newValue: any) => {
+    if (guardBudgetLocked()) return;
+
     if (typeof newValue === 'number' && (isNaN(newValue) || newValue < 0)) {
       toast.error('El valor debe ser un número válido y no negativo');
       return;
@@ -1202,6 +1257,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const updateItemDetails = async (itemId: string, details: string) => {
+    if (guardBudgetLocked()) return;
+
     try {
       await patchBudgetItem(itemId, {
         materialDetails: details,
@@ -1213,6 +1270,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const addMaterialToItem = async (itemId: string, material: any) => {
+    if (guardBudgetLocked()) return;
+
     const item = budgetItems.find(i => i.id === itemId);
     if (!item) return;
 
@@ -1263,6 +1322,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const removeMaterialFromItem = async (itemId: string, index: number) => {
+    if (guardBudgetLocked()) return;
+
     const item = budgetItems.find(i => i.id === itemId);
     if (!item) return;
 
@@ -1304,6 +1365,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const addLaborToItem = async (itemId: string, labor: any) => {
+    if (guardBudgetLocked()) return;
+
     const item = budgetItems.find(i => i.id === itemId);
     if (!item) return;
 
@@ -1355,6 +1418,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const removeLaborFromItem = async (itemId: string, index: number) => {
+    if (guardBudgetLocked()) return;
+
     const item = budgetItems.find(i => i.id === itemId);
     if (!item) return;
 
@@ -1398,6 +1463,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (guardBudgetLocked()) return;
     
     // Validation
     if (!newItem.description.trim()) {
@@ -1591,6 +1657,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const addSanitaryInstallation = async () => {
+    if (guardBudgetLocked()) return;
+
     try {
       // Standard costs for sanitary installation
       const matCost = 120; 
@@ -1978,9 +2046,13 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     toast.success('Presupuesto detallado exportado a PDF');
   }, [project, budgetItems, totalBudget]);
 
+  const handleOpenCalculator = useCallback(() => {
+    if (guardBudgetLocked()) return;
+    setIsCostCalculatorOpen(true);
+  }, [guardBudgetLocked]);
+
   // Listen for AI Chat commands
   useEffect(() => {
-    const handleOpenCalculator = () => setIsCostCalculatorOpen(true);
     const handleGenerateReport = () => exportToPDF();
 
     window.addEventListener('OPEN_COST_CALCULATOR', handleOpenCalculator);
@@ -1990,7 +2062,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       window.removeEventListener('OPEN_COST_CALCULATOR', handleOpenCalculator);
       window.removeEventListener('GENERATE_BUDGET_REPORT', handleGenerateReport);
     };
-  }, [exportToPDF]);
+  }, [exportToPDF, handleOpenCalculator]);
 
   const totalRealCost = useMemo(() => {
     return transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
@@ -2098,7 +2170,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
             <div>
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <h2 className="text-sm sm:text-lg font-black tracking-tight leading-tight truncate max-w-[120px] sm:max-w-none">{project.name}</h2>
-                {project.budgetStatus === 'Validated' && (
+                {isBudgetLocked && (
                   <span className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-400/20 text-emerald-100 text-[7px] sm:text-[8px] font-black uppercase tracking-widest rounded-full border border-emerald-400/30">
                     <CheckCircle2 size={8} className="sm:w-2.5 sm:h-2.5" />
                     Validado
@@ -2208,7 +2280,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                 </div>
               </div>
               
-              {budgetItems.length > 0 && budgetItems.every(i => i.quantity === 0) && !isInitializing && project.budgetStatus !== 'Validated' && (
+              {budgetItems.length > 0 && budgetItems.every(i => i.quantity === 0) && !isInitializing && !isBudgetLocked && (
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -2240,7 +2312,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                 >
                   <button 
                     onClick={handleAutoCalculateQuantities}
-                    disabled={isInitializing || project.budgetStatus === 'Validated'}
+                    disabled={isInitializing || isBudgetLocked}
                     className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light hover:bg-primary-light transition-all text-left disabled:opacity-50"
                   >
                     <div className="p-1.5 sm:p-2 bg-amber-50 text-amber-600 rounded-lg">
@@ -2252,19 +2324,19 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                     </div>
                   </button>
                   <button 
-                    onClick={project.budgetStatus === 'Validated' ? handleUnlockBudget : handleValidateAndActivate}
+                    onClick={isBudgetLocked ? handleUnlockBudget : handleValidateAndActivate}
                     disabled={isValidating}
                     className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light hover:bg-primary-light transition-all text-left disabled:opacity-50"
                   >
                     <div className={cn(
                       "p-1.5 sm:p-2 rounded-lg",
-                      project.budgetStatus === 'Validated' ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
+                      isBudgetLocked ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
                     )}>
-                      {project.budgetStatus === 'Validated' ? <Edit3 size={16} className="sm:w-5 sm:h-5" /> : <CheckCircle2 size={16} className="sm:w-5 sm:h-5" />}
+                      {isBudgetLocked ? <Edit3 size={16} className="sm:w-5 sm:h-5" /> : <CheckCircle2 size={16} className="sm:w-5 sm:h-5" />}
                     </div>
                     <div>
                       <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">
-                        {project.budgetStatus === 'Validated' ? 'Desbloquear' : 'Validar'}
+                        {isBudgetLocked ? 'Desbloquear' : wasValidated ? 'Validar de nuevo' : 'Validar'}
                       </p>
                       <p className="hidden sm:block text-[10px] text-slate-500">Activar presupuesto</p>
                     </div>
@@ -2333,7 +2405,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
               )}
 
               {/* Summary Cards */}
-              {project.budgetStatus === 'Validated' && (
+              {isBudgetLocked && (
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -2355,9 +2427,9 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                   <div>
                     <h4 className="text-sm font-black uppercase tracking-wider mb-1">Presupuesto Validado</h4>
                     <p className="text-xs font-medium leading-relaxed">{project.budgetValidationMessage}</p>
-                    {project.budgetValidatedAt && (
+                    {budgetValidatedAt && (
                       <p className="text-[10px] opacity-60 mt-2 font-bold uppercase tracking-widest">
-                        Validado el: {formatDate(project.budgetValidatedAt.toDate?.()?.toISOString() || project.budgetValidatedAt)}
+                        Validado el: {formatDate(budgetValidatedAt.toDate?.()?.toISOString() || budgetValidatedAt)}
                       </p>
                     )}
                   </div>
@@ -3223,15 +3295,15 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
               </button>
               <button 
                 onClick={() => setIsAddItemModalOpen(true)}
-                disabled={project.budgetStatus === 'Validated'}
+                disabled={isBudgetLocked}
                 className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-primary text-white rounded-xl transition-all border border-primary/10 text-sm font-bold shadow-lg hover:bg-primary-hover active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus size={18} />
                 Agregar Renglón
               </button>
               <button 
-                onClick={() => setIsCostCalculatorOpen(true)}
-                disabled={project.budgetStatus === 'Validated'}
+                onClick={handleOpenCalculator}
+                disabled={isBudgetLocked}
                 className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-xl transition-all border border-blue-500 text-sm font-bold shadow-lg hover:bg-blue-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Calculator size={18} />
