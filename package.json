@@ -13,6 +13,8 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "smoke:local": "node scripts/smoke-local.mjs",
     "verify:prod": "node scripts/verify-production.mjs",
+    "verify:pwa": "node scripts/verify-pwa-icons.mjs",
+    "verify:pwa:prod": "node scripts/verify-pwa-icons.mjs https://salazaroliveros-prog.github.io/ERP-PRINCIPAL-M-S",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"

@@ -96,6 +96,28 @@ Variables usadas por el verificador:
 En GitHub Actions, define el secret `VITE_API_BASE_URL` con la URL publica real del backend.
 Si hay autenticacion de despliegue en Vercel, el workflow fallara con `401 Authentication Required` hasta desactivarla o configurar bypass para automatizacion.
 
+Se agrego tambien verificacion automatica de PWA en produccion (manifest + iconos de instalacion) despues del deploy de GitHub Pages:
+
+- Workflow GitHub Actions: `.github/workflows/verify-pwa-production.yml`
+- Script local/CI equivalente: `npm run verify:pwa:prod`
+
+## Checklist rapido: deploy + PWA (1 minuto)
+
+Despues de publicar frontend, ejecuta este flujo para validar icono de instalacion y manifest:
+
+1. Build local rapido:
+   - `npm run build`
+2. Verificacion local de PWA (manifest + iconos + content-type):
+   - PowerShell: `$env:APP_URL='http://127.0.0.1:4173'; npm run verify:pwa`
+   - Requiere tener preview activo: `node .\\node_modules\\vite\\bin\\vite.js preview --host 127.0.0.1 --port 4173`
+3. Verificacion en produccion (GitHub Pages):
+   - `npm run verify:pwa:prod`
+4. Resultado esperado:
+   - `RESULT PASSED`
+5. Si falla en produccion con 404 de iconos:
+   - El deploy de Pages aun no publico los assets nuevos.
+   - Espera que termine GitHub Actions y vuelve a correr `npm run verify:pwa:prod`.
+
 ## Pruebas locales completas (sin desplegar)
 
 Se agrego un smoke test integral para validar lectura/escritura por modulo contra PostgreSQL local:

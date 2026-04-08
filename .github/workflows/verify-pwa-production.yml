@@ -1,0 +1,55 @@
+name: Verify Production PWA
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Deploy Frontend to GitHub Pages
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  APP_URL: https://salazaroliveros-prog.github.io/ERP-PRINCIPAL-M-S
+
+jobs:
+  verify-pwa-production:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify PWA manifest and installation icons (with retries)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          max_attempts=10
+          delay_seconds=30
+
+          for attempt in $(seq 1 "$max_attempts"); do
+            echo "Attempt ${attempt}/${max_attempts}: verifying ${APP_URL}"
+
+            if node scripts/verify-pwa-icons.mjs "${APP_URL}"; then
+              echo "PWA verification passed on attempt ${attempt}."
+              exit 0
+            fi
+
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              echo "Verification failed, waiting ${delay_seconds}s for Pages propagation..."
+              sleep "$delay_seconds"
+            fi
+          done
+
+          echo "PWA verification failed after ${max_attempts} attempts."
+          exit 1

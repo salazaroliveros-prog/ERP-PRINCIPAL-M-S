@@ -1,6 +1,25 @@
 import { jsPDF } from 'jspdf';
 
+const sharedLogoImage = (() => {
+  if (typeof window === 'undefined') return null;
+  const image = new Image();
+  image.src = '/logo.svg';
+  return image;
+})();
+
 export const drawLogo = (doc: any, x: number, y: number, scale: number = 1) => {
+  const imageWidth = 42 * scale;
+  const imageHeight = 16 * scale;
+
+  if (sharedLogoImage && sharedLogoImage.complete) {
+    try {
+      doc.addImage(sharedLogoImage, 'SVG', x, y, imageWidth, imageHeight);
+      return;
+    } catch {
+      // Fall back to vector drawing if SVG image embedding is unavailable.
+    }
+  }
+
   // Orange Square for WM
   doc.setFillColor(212, 136, 6); // #D48806
   doc.rect(x, y, 22 * scale, 15 * scale, 'F');
