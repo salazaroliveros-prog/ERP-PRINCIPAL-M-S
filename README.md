@@ -96,6 +96,32 @@ Variables usadas por el verificador:
 En GitHub Actions, define el secret `VITE_API_BASE_URL` con la URL publica real del backend.
 Si hay autenticacion de despliegue en Vercel, el workflow fallara con `401 Authentication Required` hasta desactivarla o configurar bypass para automatizacion.
 
+## Checklist pegable: GitHub Pages + Vercel API
+
+Usa estos valores cuando el frontend vive en GitHub Pages y el backend en Vercel.
+
+Bloque recomendado para `.env` local:
+
+- `API_BASE_URL=https://erp-principal-m-s.vercel.app`
+- `FRONTEND_ORIGIN=https://salazaroliveros-prog.github.io`
+- `APP_URL=https://salazaroliveros-prog.github.io/ERP-PRINCIPAL-M-S`
+
+GitHub Actions (Settings > Secrets and variables > Actions):
+
+- `VITE_API_BASE_URL=https://erp-principal-m-s.vercel.app`
+- `VITE_GEMINI_API_KEY=...` (opcional)
+
+Vercel (Project Settings > Environment Variables):
+
+- `DATABASE_URL=postgresql://...`
+- `JWT_SECRET=...`
+- `CORS_ORIGINS=https://salazaroliveros-prog.github.io`
+
+Verificacion rapida:
+
+- `node -r dotenv/config scripts/verify-production.mjs dotenv_config_path=.env`
+- `node scripts/verify-pwa-icons.mjs https://salazaroliveros-prog.github.io/ERP-PRINCIPAL-M-S`
+
 Se agrego tambien verificacion automatica de PWA en produccion (manifest + iconos de instalacion) despues del deploy de GitHub Pages:
 
 - Workflow GitHub Actions: `.github/workflows/verify-pwa-production.yml`
