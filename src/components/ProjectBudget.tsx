@@ -34,7 +34,14 @@ import {
 import { GoogleGenAI, Type } from "@google/genai";
 import { formatCurrency, formatDate, cn, handleApiError, OperationType } from '../lib/utils';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
-import { APU_TEMPLATES, MARKET_DATA, AREA_FACTORS } from '../constants/apuData';
+import {
+  APU_TEMPLATES,
+  MARKET_DATA,
+  AREA_FACTORS,
+  buildBudgetSeedFromTemplate,
+  findTemplateByDescription,
+  getAreaFactorByDescription,
+} from '../constants/apuData';
 import { toast } from 'sonner';
 import { logAction } from '../lib/audit';
 import { drawLogo } from '../lib/pdfUtils';
@@ -113,6 +120,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCostCalculatorOpen, setIsCostCalculatorOpen] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
+  const [isRepairingDefaultRows, setIsRepairingDefaultRows] = useState(false);
 
   const loadBudgetItems = useCallback(async () => {
     if (!project.id) return;
@@ -214,7 +222,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       const recalculatedItems: any[] = [];
 
       for (const item of budgetItems) {
-        const factor = factors[item.description];
+        const factor = getAreaFactorByDescription(project.typology, item.description);
         const newQuantity = factor !== undefined ? project.area * factor : (Number(item.quantity) || 0);
         const recalculatedItem = recalculateItemTotals({ ...item, quantity: newQuantity });
 
@@ -512,6 +520,103 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     };
   }, []);
 
+  const repairIncompleteDefaultRows = useCallback(async () => {
+    if (isRepairingDefaultRows || budgetItems.length === 0) {
+      return;
+    }
+
+    const rowsToFix = budgetItems
+      .map((item) => {
+        const template = findTemplateByDescription(project.typology, item.description);
+        if (!template) {
+          return null;
+        }
+
+        const hasMaterials = Array.isArray(item.materials) && item.materials.length > 0;
+        const hasLabor = Array.isArray(item.labor) && item.labor.length > 0;
+        const hasUnitPrice = (Number(item.totalUnitPrice) || 0) > 0;
+        if (hasMaterials && hasLabor && hasUnitPrice) {
+          return null;
+        }
+
+        const seed = buildBudgetSeedFromTemplate(
+          template,
+          Number(item.quantity) || 0,
+          project.location
+        );
+
+        return {
+          id: item.id,
+          ...seed,
+        };
+      })
+      .filter(Boolean) as Array<{
+        id: string;
+        materials: any[];
+        labor: any[];
+        materialCost: number;
+        laborCost: number;
+        indirectFactor: number;
+        indirectCost: number;
+        totalUnitPrice: number;
+        totalItemPrice: number;
+        estimatedDays: number;
+      }>;
+
+    if (rowsToFix.length === 0) {
+      return;
+    }
+
+    setIsRepairingDefaultRows(true);
+    try {
+      for (const row of rowsToFix) {
+        await patchBudgetItem(row.id, {
+          materials: row.materials,
+          labor: row.labor,
+          materialCost: row.materialCost,
+          laborCost: row.laborCost,
+          indirectFactor: row.indirectFactor,
+          indirectCost: row.indirectCost,
+          totalUnitPrice: row.totalUnitPrice,
+          totalItemPrice: row.totalItemPrice,
+          estimatedDays: row.estimatedDays,
+        });
+      }
+
+      const mergedItems = budgetItems.map((item) => {
+        const fixed = rowsToFix.find((row) => row.id === item.id);
+        if (!fixed) return item;
+        return {
+          ...item,
+          ...fixed,
+        };
+      });
+
+      await patchProjectBudget({
+        budget: sumProjectBudget(mergedItems),
+        typology: project.typology,
+      });
+
+      await loadBudgetItems();
+      toast.success(`Se completaron costos y rendimientos automáticos en ${rowsToFix.length} renglón(es)`);
+    } catch (error) {
+      await loadBudgetItems();
+      handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems`);
+    } finally {
+      setIsRepairingDefaultRows(false);
+    }
+  }, [
+    budgetItems,
+    isRepairingDefaultRows,
+    loadBudgetItems,
+    patchBudgetItem,
+    patchProjectBudget,
+    project.id,
+    project.location,
+    project.typology,
+    sumProjectBudget,
+  ]);
+
   const addSubtaskToNewItem = () => {
     setNewItem({
       ...newItem,
@@ -677,6 +782,14 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     loadProjectTransactions();
   }, [loadProjectTransactions]);
 
+  useEffect(() => {
+    if (isLoading || isInitializing || budgetItems.length === 0) {
+      return;
+    }
+
+    void repairIncompleteDefaultRows();
+  }, [budgetItems, isInitializing, isLoading, repairIncompleteDefaultRows]);
+
   const handleExportMaterialSummary = () => {
     if (budgetItems.length === 0) {
       toast.error('No hay items en el presupuesto');
@@ -760,29 +873,23 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       const templates = APU_TEMPLATES[project.typology] || APU_TEMPLATES.RESIDENCIAL;
       for (let index = 0; index < templates.length; index += 1) {
         const template = templates[index];
-
-        // Calculate unit costs
-        const materialCost = template.materials.reduce((sum, m) => sum + (m.quantity * m.unitPrice), 0);
-        const laborCost = template.labor.reduce((sum, l) => sum + (l.dailyRate / l.yield), 0);
-        const directCost = materialCost + laborCost;
-        const indirectCost = directCost * template.indirectFactor;
-        const totalUnitPrice = directCost + indirectCost;
+        const seed = buildBudgetSeedFromTemplate(template, 0, project.location);
 
         await createProjectBudgetItem(project.id, {
           description: template.description,
           category: 'General',
           unit: template.unit,
           quantity: 0, // User will input this
-          materialCost,
-          laborCost,
-          indirectCost,
-          totalUnitPrice,
+          materialCost: seed.materialCost,
+          laborCost: seed.laborCost,
+          indirectCost: seed.indirectCost,
+          totalUnitPrice: seed.totalUnitPrice,
           totalItemPrice: 0,
           estimatedDays: 0,
           order: index + 1,
-          materials: template.materials,
-          labor: template.labor,
-          indirectFactor: template.indirectFactor,
+          materials: seed.materials,
+          labor: seed.labor,
+          indirectFactor: seed.indirectFactor,
           subtasks: [],
         });
       }

@@ -19,6 +19,12 @@ export interface APUTemplate {
   indirectFactor: number; // e.g., 0.25 for 25% admin + contingencies
 }
 
+export interface LocationCostAdjustment {
+  materialMultiplier: number;
+  laborMultiplier: number;
+  indirectDelta: number;
+}
+
 export const MARKET_DATA: Record<string, { pricePerM2: number, description: string }> = {
   'RESIDENCIAL': { pricePerM2: 4500, description: 'Vivienda estándar con acabados medios' },
   'COMERCIAL': { pricePerM2: 6500, description: 'Locales comerciales y oficinas' },
@@ -276,6 +282,22 @@ export const APU_TEMPLATES: Record<string, APUTemplate[]> = {
   ]
 };
 
+const LOCATION_COST_ADJUSTMENTS: Record<string, LocationCostAdjustment> = {
+  'GUATEMALA': { materialMultiplier: 1.0, laborMultiplier: 1.0, indirectDelta: 0 },
+  'MIXCO': { materialMultiplier: 1.01, laborMultiplier: 1.0, indirectDelta: 0 },
+  'VILLA NUEVA': { materialMultiplier: 1.01, laborMultiplier: 1.0, indirectDelta: 0 },
+  'SACATEPEQUEZ': { materialMultiplier: 1.03, laborMultiplier: 1.02, indirectDelta: 0.01 },
+  'CHIMALTENANGO': { materialMultiplier: 1.04, laborMultiplier: 1.03, indirectDelta: 0.01 },
+  'ESCUINTLA': { materialMultiplier: 1.05, laborMultiplier: 1.04, indirectDelta: 0.01 },
+  'QUETZALTENANGO': { materialMultiplier: 1.06, laborMultiplier: 1.05, indirectDelta: 0.015 },
+  'HUEHUETENANGO': { materialMultiplier: 1.08, laborMultiplier: 1.06, indirectDelta: 0.02 },
+  'ALTA VERAPAZ': { materialMultiplier: 1.08, laborMultiplier: 1.06, indirectDelta: 0.02 },
+  'PETEN': { materialMultiplier: 1.1, laborMultiplier: 1.08, indirectDelta: 0.025 },
+  'IZABAL': { materialMultiplier: 1.09, laborMultiplier: 1.07, indirectDelta: 0.02 },
+  'JUTIAPA': { materialMultiplier: 1.06, laborMultiplier: 1.05, indirectDelta: 0.015 },
+  'ZACAPA': { materialMultiplier: 1.07, laborMultiplier: 1.06, indirectDelta: 0.02 },
+};
+
 // Helper to ensure each typology has at least 30 items by padding with variations if needed
 Object.keys(APU_TEMPLATES).forEach(typology => {
   const currentItems = APU_TEMPLATES[typology];
@@ -290,3 +312,126 @@ Object.keys(APU_TEMPLATES).forEach(typology => {
     }
   }
 });
+
+export function normalizeTemplateDescription(description: string) {
+  return String(description || '')
+    .replace(/\s+-\s+Fase\s+\d+$/i, '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+export function getAreaFactorByDescription(
+  typology: string,
+  description: string
+) {
+  const factors = AREA_FACTORS[typology as keyof typeof AREA_FACTORS] || {};
+  const normalized = normalizeTemplateDescription(description);
+  const directValue = factors[description as keyof typeof factors];
+  if (typeof directValue === 'number') {
+    return directValue;
+  }
+
+  const factorKey = Object.keys(factors).find(
+    (key) => normalizeTemplateDescription(key) === normalized
+  );
+
+  return factorKey ? factors[factorKey as keyof typeof factors] : undefined;
+}
+
+export function resolveLocationCostAdjustment(location?: string): LocationCostAdjustment {
+  const normalized = String(location || '').toUpperCase();
+
+  const matchedKey = Object.keys(LOCATION_COST_ADJUSTMENTS).find((key) =>
+    normalized.includes(key)
+  );
+
+  if (!matchedKey) {
+    return { materialMultiplier: 1, laborMultiplier: 1, indirectDelta: 0 };
+  }
+
+  return LOCATION_COST_ADJUSTMENTS[matchedKey];
+}
+
+export function findTemplateByDescription(
+  typology: string,
+  description: string
+): APUTemplate | undefined {
+  const normalized = normalizeTemplateDescription(description);
+  const templates = APU_TEMPLATES[typology as keyof typeof APU_TEMPLATES] || [];
+
+  const direct = templates.find(
+    (template) => normalizeTemplateDescription(template.description) === normalized
+  );
+  if (direct) return direct;
+
+  const allTemplates = Object.values(APU_TEMPLATES).flat();
+  return allTemplates.find(
+    (template) => normalizeTemplateDescription(template.description) === normalized
+  );
+}
+
+export function buildBudgetSeedFromTemplate(
+  template: APUTemplate,
+  quantity: number,
+  location?: string
+) {
+  const safeQuantity = Number.isFinite(Number(quantity)) ? Math.max(0, Number(quantity)) : 0;
+  const adjustment = resolveLocationCostAdjustment(location);
+
+  const materials = template.materials.map((material) => ({
+    ...material,
+    unitPrice: Number((material.unitPrice * adjustment.materialMultiplier).toFixed(4)),
+  }));
+
+  const labor = template.labor.map((laborRole) => ({
+    ...laborRole,
+    dailyRate: Number((laborRole.dailyRate * adjustment.laborMultiplier).toFixed(4)),
+  }));
+
+  const materialCost = materials.reduce(
+    (sum, material) => sum + (Number(material.quantity) || 0) * (Number(material.unitPrice) || 0),
+    0
+  );
+  const laborCost = labor.reduce((sum, laborRole) => {
+    const dailyRate = Number(laborRole.dailyRate) || 0;
+    const yieldValue = Number(laborRole.yield) || 0;
+    if (yieldValue <= 0) return sum;
+    return sum + dailyRate / yieldValue;
+  }, 0);
+
+  const directCost = materialCost + laborCost;
+  const indirectFactor = Math.max(
+    0,
+    Number((template.indirectFactor + adjustment.indirectDelta).toFixed(4))
+  );
+  const indirectCost = directCost * indirectFactor;
+  const totalUnitPrice = directCost + indirectCost;
+  const totalItemPrice = safeQuantity * totalUnitPrice;
+
+  let estimatedDays = 0;
+  if (labor.length > 0) {
+    const daysPerRole = labor
+      .map((laborRole) => {
+        const yieldValue = Number(laborRole.yield) || 0;
+        if (yieldValue <= 0) return 0;
+        return safeQuantity / yieldValue;
+      })
+      .filter((value) => Number.isFinite(value));
+
+    estimatedDays = daysPerRole.length > 0 ? Math.max(...daysPerRole) : 0;
+  }
+
+  return {
+    materials,
+    labor,
+    materialCost,
+    laborCost,
+    indirectFactor,
+    indirectCost,
+    totalUnitPrice,
+    totalItemPrice,
+    estimatedDays,
+  };
+}

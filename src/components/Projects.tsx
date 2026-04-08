@@ -46,7 +46,11 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
-import { APU_TEMPLATES, MARKET_DATA, AREA_FACTORS } from '../constants/apuData';
+import {
+  APU_TEMPLATES,
+  MARKET_DATA,
+  buildBudgetSeedFromTemplate,
+} from '../constants/apuData';
 import { formatCurrency, formatDate, cn, handleApiError, OperationType, getMitigationSuggestions } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import ProjectDetails from './ProjectDetails';
@@ -64,7 +68,15 @@ import "react-datepicker/dist/react-datepicker.css";
 import ConfirmModal from './ConfirmModal';
 import ProjectBudget from './ProjectBudget';
 import { List, Map as MapIcon } from 'lucide-react';
-import { createBudgetItem, createProject, deleteProject, listProjectBudgetItemsDetailed, listProjects, updateProject } from '../lib/projectsApi';
+import {
+  createProject,
+  createProjectBudgetItem,
+  deleteProject,
+  deleteProjectBudgetItem,
+  listProjectBudgetItemsDetailed,
+  listProjects,
+  updateProject,
+} from '../lib/projectsApi';
 import { deleteClient, listClients } from '../lib/clientsApi';
 import { deleteQuoteRecord, listQuotes } from '../lib/quotesApi';
 import { deleteTransactionById, listTransactions } from '../lib/financialsApi';
@@ -578,35 +590,29 @@ export default function Projects() {
         
         // Initialize budget items based on typology
         const templates = APU_TEMPLATES[newProject.typology as keyof typeof APU_TEMPLATES] || [];
-        const factors = AREA_FACTORS[newProject.typology as keyof typeof AREA_FACTORS] || {};
         let totalBudget = 0;
         
         for (let i = 0; i < templates.length; i++) {
           const template = templates[i];
-          const materialCost = template.materials.reduce((sum, m) => sum + (m.quantity * m.unitPrice), 0);
-          const laborCost = template.labor.reduce((sum, l) => sum + (l.dailyRate / l.yield), 0);
-          const directCost = materialCost + laborCost;
-          const indirectCost = directCost * template.indirectFactor;
-          const totalUnitPrice = directCost + indirectCost;
-          
-          // Use area factor if available, otherwise default to 1
-          const factor = factors[template.description] || 0;
-          const quantity = factor > 0 ? Number(newProject.area) * factor : 1;
-          
-          const totalItemPrice = quantity * totalUnitPrice;
-          totalBudget += totalItemPrice;
+          const seed = buildBudgetSeedFromTemplate(template, 0, newProject.location);
+          totalBudget += seed.totalItemPrice;
 
-          let estimatedDays = 0;
-          if (template.labor.length > 0) {
-            const daysPerRole = template.labor.map(l => l.yield > 0 ? quantity / l.yield : 0);
-            estimatedDays = Math.max(...daysPerRole);
-          }
-
-          await createBudgetItem(created.id, {
+          await createProjectBudgetItem(created.id, {
             description: template.description,
             category: 'General',
-            totalItemPrice,
+            unit: template.unit,
+            quantity: 0,
+            materialCost: seed.materialCost,
+            laborCost: seed.laborCost,
+            indirectCost: seed.indirectCost,
+            totalUnitPrice: seed.totalUnitPrice,
+            totalItemPrice: seed.totalItemPrice,
+            estimatedDays: seed.estimatedDays,
             order: i + 1,
+            materials: seed.materials,
+            labor: seed.labor,
+            indirectFactor: seed.indirectFactor,
+            subtasks: [],
           });
         }
 
@@ -1136,6 +1142,16 @@ export default function Projects() {
 
     for (const project of cleanupCandidates.projects) {
       try {
+        const budgetItems = await listProjectBudgetItemsDetailed(project.id);
+        for (const budgetItem of budgetItems) {
+          try {
+            await deleteProjectBudgetItem(project.id, budgetItem.id);
+            deleted += 1;
+          } catch {
+            failed += 1;
+          }
+        }
+
         await deleteProject(project.id);
         deleted += 1;
       } catch {

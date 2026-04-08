@@ -6,9 +6,15 @@ type ProjectRecord = {
 };
 
 type BudgetItemRecord = {
+  id: string;
   description: string;
   quantity: number;
+  totalUnitPrice: number;
   totalItemPrice: number;
+  materialCost: number;
+  laborCost: number;
+  materials?: Array<{ name: string; quantity: number; unitPrice: number }>;
+  labor?: Array<{ role: string; yield: number; dailyRate: number }>;
 };
 
 function seedLocalAuth() {
@@ -150,6 +156,22 @@ test('crea una obra desde el flujo UI por pasos', async ({ page, baseURL, reques
 
   const project = await waitForProjectByName(request, projectName);
   expect(project).toBeTruthy();
+
+  const budgetResponse = await request.get(`/api/projects/${project.id}/budget-items`);
+  expect(budgetResponse.ok()).toBeTruthy();
+  const budgetBody = (await budgetResponse.json()) as { items: BudgetItemRecord[] };
+
+  expect(budgetBody.items.length).toBeGreaterThan(0);
+  expect(budgetBody.items.every((item) => Number(item.quantity) === 0)).toBe(true);
+
+  const seededRow = budgetBody.items.find(
+    (item) =>
+      Number(item.totalUnitPrice) > 0 &&
+      (Number(item.materialCost) > 0 || Number(item.laborCost) > 0) &&
+      ((Array.isArray(item.materials) && item.materials.length > 0) ||
+        (Array.isArray(item.labor) && item.labor.length > 0))
+  );
+  expect(seededRow).toBeTruthy();
 });
 
 test('agrega renglon de presupuesto y persiste calculos en API', async ({ page, baseURL, request }) => {
