@@ -760,16 +760,22 @@ export default function Inventory() {
     setIsSyncing(true);
     try {
       const projectName = projects.find(p => p.id === selectedProjectId)?.name || 'Proyecto';
+      const payload = projectMaterialSummary.map((budgeted: any) => ({
+        name: budgeted.name,
+        unit: budgeted.unit,
+        totalQuantity: budgeted.budgeted,
+        unitPrice: budgeted.unitPrice || 0,
+        category: 'Material de Obra',
+      }));
+
+      if (payload.length === 0) {
+        toast.info('No hay materiales en el presupuesto para sincronizar al almacén.');
+        return;
+      }
 
       await syncInventoryFromBudget(
         selectedProjectId,
-        projectMaterialSummary.map((budgeted: any) => ({
-          name: budgeted.name,
-          unit: budgeted.unit,
-          totalQuantity: budgeted.budgeted,
-          unitPrice: budgeted.unitPrice || 0,
-          category: 'Material de Obra',
-        }))
+        payload
       );
 
       const addedCount = projectMaterialSummary.length;

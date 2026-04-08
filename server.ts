@@ -2880,8 +2880,12 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       const projectId = String(req.body?.projectId || '').trim();
       const items = Array.isArray(req.body?.items) ? req.body.items : [];
 
-      if (!projectId || items.length === 0) {
-        return res.status(400).json({ error: 'projectId e items son obligatorios' });
+      if (!projectId) {
+        return res.status(400).json({ error: 'projectId es obligatorio' });
+      }
+
+      if (items.length === 0) {
+        return res.json({ synced: 0 });
       }
 
       await db.query('begin');

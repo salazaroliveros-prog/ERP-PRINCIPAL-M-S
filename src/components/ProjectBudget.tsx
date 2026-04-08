@@ -280,15 +280,22 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         }
       });
 
+      const payload = Object.values(materialSummary).map((mat: any) => ({
+        name: mat.name,
+        unit: mat.unit,
+        totalQuantity: mat.totalQuantity,
+        unitPrice: mat.unitPrice,
+        category: mat.category,
+      }));
+
+      if (payload.length === 0) {
+        toast.info('No hay materiales presupuestados para sincronizar al inventario');
+        return;
+      }
+
       await syncInventoryFromBudget(
         project.id,
-        Object.values(materialSummary).map((mat: any) => ({
-          name: mat.name,
-          unit: mat.unit,
-          totalQuantity: mat.totalQuantity,
-          unitPrice: mat.unitPrice,
-          category: mat.category,
-        }))
+        payload
       );
 
       await loadProjectInventory();
