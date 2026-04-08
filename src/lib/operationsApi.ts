@@ -77,6 +77,11 @@ export interface CreatePurchaseOrderInput {
   notes?: string;
   status?: string;
   date?: string;
+  datePaid?: string | null;
+  paymentMethod?: string | null;
+  paymentReference?: string | null;
+  stockApplied?: boolean;
+  budgetApplied?: boolean;
 }
 
 export interface PurchaseOrderItem {
@@ -94,6 +99,11 @@ export interface PurchaseOrderItem {
   status: string;
   date: string;
   dateReceived?: string | null;
+  datePaid?: string | null;
+  paymentMethod?: string | null;
+  paymentReference?: string | null;
+  stockApplied?: boolean;
+  budgetApplied?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -243,6 +253,7 @@ export async function listPurchaseOrders(params: {
 export async function updatePurchaseOrder(id: string, payload: Partial<CreatePurchaseOrderInput> & {
   status?: string;
   dateReceived?: string | null;
+  datePaid?: string | null;
 }): Promise<PurchaseOrderItem> {
   return requestJson<PurchaseOrderItem>(`/api/purchase-orders/${id}`, {
     method: 'PATCH',

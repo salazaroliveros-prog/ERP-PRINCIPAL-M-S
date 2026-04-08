@@ -35,7 +35,7 @@ import {
   updatePurchaseOrder,
 } from '../lib/operationsApi';
 import { listProjects, listProjectBudgetItemsDetailed, updateProjectBudgetItem } from '../lib/projectsApi';
-import { listSuppliers } from '../lib/suppliersApi';
+import { createSupplierPayment, listSuppliers, updateSupplier } from '../lib/suppliersApi';
 import { createTransaction } from '../lib/financialsApi';
 
 export default function PurchaseOrders() {
@@ -257,18 +257,15 @@ export default function PurchaseOrders() {
           date: new Date().toISOString().split('T')[0],
         });
 
-        // Deduct from stock as requested by user (Stock represents remaining requirement)
-        await adjustInventoryStock(material.id, { delta: -Number(newPO.quantity) });
-
         await logAction(
           'Creación de Orden de Compra',
           'Compras',
-          `Nueva orden de compra para ${material.name} (${newPO.quantity} ${material.unit}) - Proveedor: ${newPO.supplier}. Se descontó del stock de requerimientos.`,
+          `Nueva orden de compra para ${material.name} (${newPO.quantity} ${material.unit}) - Proveedor: ${newPO.supplier}.`,
           'create',
           { projectId: newPO.projectId, poId: created.id }
         );
 
-        toast.success('Orden de compra creada y stock de requerimientos actualizado');
+        toast.success('Orden de compra creada');
       }
 
       await Promise.all([loadPurchaseOrders(), loadReferenceData()]);
@@ -287,46 +284,72 @@ export default function PurchaseOrders() {
       const po = purchaseOrders.find(p => p.id === id);
       if (!po) return;
 
-      await updatePurchaseOrder(id, {
-        status,
-        ...(status === 'Completed' ? { dateReceived: new Date().toISOString().split('T')[0] } : { dateReceived: null })
-      });
-
-      await logAction(
-        'Actualización de Orden de Compra',
-        'Compras',
-        `Orden de compra #${id.slice(-6).toUpperCase()} cambió a estado: ${status}`,
-        'update',
-        { projectId: po.projectId, poId: id }
-      );
-
-      // Handle stock adjustments based on status
-      if (status === 'Cancelled') {
-        // Return to stock if cancelled (since it was deducted on creation)
-        if (po.materialId) {
-          await adjustInventoryStock(po.materialId, { delta: Number(po.quantity || 0) });
+      if (status === 'Paid') {
+        if (po.status !== 'Completed' && po.status !== 'Pending') {
+          toast.error('Solo se puede pagar una orden pendiente o recibida');
+          return;
         }
-      } else if (status === 'Completed') {
-        // Update Project Budget Material Tracking and Recalculate Costs
-        if (po.projectId && po.budgetItemId && po.materialName) {
+        if (!po.supplierId) {
+          toast.error('La orden no tiene proveedor vinculado');
+          return;
+        }
+
+        const reference = window.prompt('Referencia de pago (opcional):', '') || '';
+        const methodInput = (window.prompt('Metodo de pago: paypal o banrural_virtual', 'banrural_virtual') || 'banrural_virtual').trim().toLowerCase();
+        const method = methodInput === 'paypal' ? 'paypal' : 'banrural_virtual';
+
+        await createSupplierPayment({
+          supplierId: po.supplierId,
+          purchaseOrderId: po.id,
+          amount: Number(po.estimatedCost || 0),
+          paymentMethod: method,
+          paymentReference: reference,
+          paidAt: new Date().toISOString().slice(0, 10),
+          notes: `Pago de orden ${po.id}`,
+        });
+
+        if (method === 'paypal') {
+          window.open('https://www.paypal.com/signin', '_blank');
+        } else {
+          window.open('https://www.banrural.com.gt', '_blank');
+        }
+
+        if (!po.stockApplied && po.materialId) {
+          const invMaterial = inventory.find((item) => item.id === po.materialId);
+          const currentStock = Number(invMaterial?.stock || 0);
+          const minStock = Number(invMaterial?.minStock || 0);
+          const projectedStock = currentStock - Number(po.quantity || 0);
+
+          if (projectedStock <= minStock) {
+            await sendNotification(
+              'Stock bajo por consumo confirmado',
+              `${po.materialName} quedara en ${projectedStock.toFixed(2)} ${po.unit || ''} tras pagar/confirmar la orden. Minimo configurado: ${minStock.toFixed(2)}.`,
+              'inventory'
+            );
+          }
+
+          await adjustInventoryStock(po.materialId, { delta: -Number(po.quantity || 0) });
+          await updatePurchaseOrder(id, { stockApplied: true });
+        }
+
+        if (!po.budgetApplied && po.projectId && po.budgetItemId && po.materialName) {
           const budgetItemsForProject = await listProjectBudgetItemsDetailed(po.projectId);
           const budgetItemData = budgetItemsForProject.find((b: any) => b.id === po.budgetItemId);
 
           if (budgetItemData) {
-            const actualUnitPrice = po.estimatedCost / po.quantity;
+            const actualUnitPrice = po.quantity ? (Number(po.estimatedCost || 0) / Number(po.quantity || 1)) : 0;
 
             const updatedMaterials = (budgetItemData.materials || []).map((m: any) => {
               if (m.name.toLowerCase() === po.materialName.toLowerCase()) {
                 return {
                   ...m,
-                  purchasedQuantity: (m.purchasedQuantity || 0) + po.quantity,
-                  unitPrice: actualUnitPrice // Update with actual purchase price
+                  purchasedQuantity: (m.purchasedQuantity || 0) + Number(po.quantity || 0),
+                  unitPrice: actualUnitPrice,
                 };
               }
               return m;
             });
 
-            // Recalculate costs
             const materialCost = updatedMaterials.reduce((sum: number, m: any) => sum + (m.quantity * m.unitPrice), 0);
             const laborCost = (budgetItemData.labor || []).reduce((sum: number, l: any) => sum + (l.dailyRate / l.yield), 0);
             const directCost = materialCost + laborCost;
@@ -341,17 +364,51 @@ export default function PurchaseOrders() {
               totalItemPrice,
             });
 
-            // Record financial transaction
             await createTransaction({
               projectId: po.projectId,
               budgetItemId: po.budgetItemId,
-              amount: po.estimatedCost,
+              amount: Number(po.estimatedCost || 0),
               type: 'Expense',
               category: 'Materiales',
-              description: `Compra de ${po.materialName} (Orden #${po.id.slice(0, 5)})`,
+              description: `Compra pagada de ${po.materialName} (Orden #${po.id.slice(0, 5)})`,
               date: new Date().toISOString().slice(0, 10),
             });
+
+            await updatePurchaseOrder(id, { budgetApplied: true });
           }
+        }
+
+        await logAction(
+          'Pago de Orden de Compra',
+          'Compras',
+          `Orden de compra #${id.slice(-6).toUpperCase()} pagada por ${formatCurrency(Number(po.estimatedCost || 0))}`,
+          'update',
+          { projectId: po.projectId, poId: id, paymentMethod: method }
+        );
+
+        await Promise.all([loadPurchaseOrders(), loadReferenceData()]);
+        return;
+      }
+
+      await updatePurchaseOrder(id, {
+        status,
+        ...(status === 'Completed' ? { dateReceived: new Date().toISOString().split('T')[0] } : { dateReceived: null })
+      });
+
+      await logAction(
+        'Actualización de Orden de Compra',
+        'Compras',
+        `Orden de compra #${id.slice(-6).toUpperCase()} cambió a estado: ${status}`,
+        'update',
+        { projectId: po.projectId, poId: id }
+      );
+
+      if (status === 'Cancelled' && po.status !== 'Paid' && po.supplierId && Number(po.estimatedCost || 0) > 0) {
+        const supplier = suppliers.find((s) => s.id === po.supplierId);
+        if (supplier) {
+          await updateSupplier(supplier.id, {
+            balance: Math.max(0, Number(supplier.balance || 0) - Number(po.estimatedCost || 0)),
+          });
         }
       }
 
@@ -386,6 +443,16 @@ export default function PurchaseOrders() {
     if (!poToDelete) return;
     try {
       const po = purchaseOrders.find(p => p.id === poToDelete);
+
+      if (po && po.status !== 'Paid' && po.supplierId && Number(po.estimatedCost || 0) > 0) {
+        const supplier = suppliers.find((s) => s.id === po.supplierId);
+        if (supplier) {
+          await updateSupplier(supplier.id, {
+            balance: Math.max(0, Number(supplier.balance || 0) - Number(po.estimatedCost || 0)),
+          });
+        }
+      }
+
       await deletePurchaseOrder(poToDelete);
       
       if (po) {
@@ -447,7 +514,7 @@ export default function PurchaseOrders() {
           </div>
           <div>
             <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Completadas</p>
-            <p className="text-2xl font-bold text-slate-900">{purchaseOrders.filter(po => po.status === 'Completed').length}</p>
+            <p className="text-2xl font-bold text-slate-900">{purchaseOrders.filter(po => po.status === 'Completed' || po.status === 'Paid').length}</p>
           </div>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
@@ -494,7 +561,7 @@ export default function PurchaseOrders() {
                 <div className={cn(
                   "p-3 rounded-xl",
                   po.status === 'Pending' ? "bg-primary-light dark:bg-primary/20 text-primary" :
-                  po.status === 'Completed' ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600" :
+                  po.status === 'Completed' || po.status === 'Paid' ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600" :
                   "bg-rose-50 dark:bg-rose-500/10 text-rose-600"
                 )}>
                   <ShoppingBag size={24} />
@@ -508,14 +575,19 @@ export default function PurchaseOrders() {
                     <span className={cn(
                       "px-2 py-0.5 rounded-full font-bold uppercase tracking-wider text-[10px]",
                       po.status === 'Pending' ? "bg-primary-light dark:bg-primary/20 text-primary" :
-                      po.status === 'Completed' ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400" :
+                      po.status === 'Completed' || po.status === 'Paid' ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400" :
                       "bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400"
                     )}>
-                      {po.status === 'Pending' ? 'Pendiente' : po.status === 'Completed' ? 'Recibido' : 'Cancelado'}
+                      {po.status === 'Pending' ? 'Pendiente' : po.status === 'Completed' ? 'Recibido' : po.status === 'Paid' ? 'Pagado' : 'Cancelado'}
                     </span>
                     {po.status === 'Completed' && po.dateReceived && (
                       <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full">
                         Recibido: {po.dateReceived}
+                      </span>
+                    )}
+                    {po.status === 'Paid' && po.datePaid && (
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                        Pagado: {po.datePaid}
                       </span>
                     )}
                   </div>
@@ -607,6 +679,15 @@ export default function PurchaseOrders() {
                         Recibir Pedido
                       </button>
                     </>
+                  )}
+                  {po.status === 'Completed' && (
+                    <button
+                      onClick={() => handleUpdateStatus(po.id, 'Paid')}
+                      className="flex items-center gap-2 px-6 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg bg-blue-600 text-white hover:bg-blue-700"
+                    >
+                      <CheckCircle2 size={18} />
+                      Pagar Orden
+                    </button>
                   )}
                 </div>
               </div>

@@ -26,7 +26,7 @@ import { cn, formatCurrency, handleApiError, OperationType } from '../lib/utils'
 import { logAction } from '../lib/audit';
 import { toast } from 'sonner';
 import ConfirmModal from './ConfirmModal';
-import { createSupplier, deleteSupplier, listSuppliers, updateSupplier } from '../lib/suppliersApi';
+import { createSupplier, createSupplierPayment, deleteSupplier, listSupplierPayments, listSuppliers, updateSupplier } from '../lib/suppliersApi';
 
 export default function Suppliers() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -40,6 +40,10 @@ export default function Suppliers() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState<string | null>(null);
   const [quickSupplierId, setQuickSupplierId] = useState<string>('');
+  const [supplierPayments, setSupplierPayments] = useState<any[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentDateFrom, setPaymentDateFrom] = useState('');
+  const [paymentDateTo, setPaymentDateTo] = useState('');
   const [newSupplier, setNewSupplier] = useState({
     name: '',
     category: 'Materiales',
@@ -169,6 +173,88 @@ export default function Suppliers() {
     return suppliers.find((sup) => sup.id === quickSupplierId) || suppliers[0] || null;
   }, [suppliers, quickSupplierId]);
 
+  const filteredSupplierPayments = useMemo(() => {
+    return supplierPayments.filter((pay) => {
+      const paidAt = String(pay?.paidAt || '').slice(0, 10);
+      if (!paidAt) return true;
+      if (paymentDateFrom && paidAt < paymentDateFrom) return false;
+      if (paymentDateTo && paidAt > paymentDateTo) return false;
+      return true;
+    });
+  }, [supplierPayments, paymentDateFrom, paymentDateTo]);
+
+  const exportSupplierPaymentsCsv = () => {
+    if (!quickSupplier) {
+      toast.error('No hay proveedor seleccionado');
+      return;
+    }
+
+    if (filteredSupplierPayments.length === 0) {
+      toast.info('No hay pagos para exportar en el rango seleccionado');
+      return;
+    }
+
+    const escapeCsv = (value: unknown) => {
+      const text = String(value ?? '');
+      if (text.includes('"') || text.includes(',') || text.includes('\n')) {
+        return `"${text.replace(/"/g, '""')}"`;
+      }
+      return text;
+    };
+
+    const headers = ['proveedor', 'fecha_pago', 'monto', 'metodo', 'referencia', 'orden_compra', 'notas'];
+    const rows = filteredSupplierPayments.map((pay) => [
+      quickSupplier.name,
+      pay.paidAt || '',
+      Number(pay.amount || 0).toFixed(2),
+      String(pay.paymentMethod || ''),
+      String(pay.paymentReference || ''),
+      String(pay.purchaseOrderId || ''),
+      String(pay.notes || ''),
+    ]);
+
+    const csvContent = [headers, ...rows].map((row) => row.map(escapeCsv).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeSupplierName = String(quickSupplier.name || 'proveedor').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const stamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `pagos_${safeSupplierName}_${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success('CSV exportado correctamente');
+  };
+
+  useEffect(() => {
+    if (!quickSupplier?.id) {
+      setSupplierPayments([]);
+      return;
+    }
+
+    let cancelled = false;
+    setPaymentsLoading(true);
+    listSupplierPayments({ supplierId: quickSupplier.id })
+      .then((items) => {
+        if (cancelled) return;
+        setSupplierPayments(items);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        handleApiError(error, OperationType.GET, 'supplier-payments');
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setPaymentsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [quickSupplier?.id]);
+
   const openMailToSupplier = async (supplier: any, subject: string, body: string, actionName: string) => {
     if (!supplier?.email) {
       toast.error('El proveedor no tiene correo registrado');
@@ -256,12 +342,38 @@ export default function Suppliers() {
       return;
     }
 
-    await openMailToSupplier(
-      quickSupplier,
-      `Programación de pago pendiente - ${quickSupplier.name}`,
-      `Estimado(a) ${quickSupplier.contact || quickSupplier.name},\n\nConfirmamos la programación del pago pendiente por ${formatCurrency(quickSupplier.balance)}.\n\nPor favor compartir confirmación y referencia bancaria.\n\nGracias.`,
-      'Acción Rápida: Gestionar Pago'
-    );
+    const amountRaw = window.prompt('Monto a pagar', String(Number(quickSupplier.balance || 0).toFixed(2)));
+    if (!amountRaw) return;
+    const amount = Number(amountRaw);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Monto inválido');
+      return;
+    }
+
+    const methodRaw = (window.prompt('Metodo de pago: paypal o banrural_virtual', 'banrural_virtual') || 'banrural_virtual').trim().toLowerCase();
+    const paymentMethod = methodRaw === 'paypal' ? 'paypal' : 'banrural_virtual';
+    const paymentReference = window.prompt('Referencia de pago (opcional)', '') || '';
+
+    await createSupplierPayment({
+      supplierId: quickSupplier.id,
+      amount,
+      paymentMethod,
+      paymentReference,
+      notes: `Pago rapido desde Proveedores para ${quickSupplier.name}`,
+      paidAt: new Date().toISOString().slice(0, 10),
+    });
+
+    if (paymentMethod === 'paypal') {
+      window.open('https://www.paypal.com/signin', '_blank');
+    } else {
+      window.open('https://www.banrural.com.gt', '_blank');
+    }
+
+    await loadSuppliers();
+    const latestPayments = await listSupplierPayments({ supplierId: quickSupplier.id });
+    setSupplierPayments(latestPayments);
+    await logAction('Acción Rápida: Gestionar Pago', 'Proveedores', `Pago registrado para ${quickSupplier.name} por ${formatCurrency(amount)}`, 'update', { supplierId: quickSupplier.id, paymentMethod });
+    toast.success('Pago registrado correctamente');
   };
 
   return (
@@ -639,6 +751,87 @@ export default function Suppliers() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-[10px] sm:text-xs uppercase tracking-widest text-slate-900 dark:text-white">Historial de Pagos</h3>
+              {quickSupplier && (
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate max-w-[140px]" title={quickSupplier.name}>
+                  {quickSupplier.name}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+              <input
+                type="date"
+                value={paymentDateFrom}
+                onChange={(e) => setPaymentDateFrom(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 font-bold"
+                title="Fecha desde"
+                aria-label="Fecha desde"
+              />
+              <input
+                type="date"
+                value={paymentDateTo}
+                onChange={(e) => setPaymentDateTo(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-300 font-bold"
+                title="Fecha hasta"
+                aria-label="Fecha hasta"
+              />
+            </div>
+
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={exportSupplierPaymentsCsv}
+                className="flex-1 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                title="Exportar pagos a CSV"
+              >
+                Exportar CSV
+              </button>
+              <button
+                onClick={() => {
+                  setPaymentDateFrom('');
+                  setPaymentDateTo('');
+                }}
+                className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                title="Limpiar filtros de fecha"
+              >
+                Limpiar
+              </button>
+            </div>
+
+            {paymentsLoading ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400">Cargando pagos...</p>
+            ) : filteredSupplierPayments.length === 0 ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400">Sin pagos registrados para este proveedor.</p>
+            ) : (
+              <>
+                <div className="mb-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Total pagado</p>
+                  <p className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+                    {formatCurrency(filteredSupplierPayments.reduce((sum, pay) => sum + Number(pay.amount || 0), 0))}
+                  </p>
+                </div>
+                <div className="space-y-2 max-h-72 overflow-auto pr-1">
+                  {filteredSupplierPayments.slice(0, 12).map((pay) => (
+                    <div key={pay.id} className="p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950/60">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">{formatCurrency(Number(pay.amount || 0))}</p>
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300">
+                          {String(pay.paymentMethod || '').replace('_', ' ')}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Fecha: {pay.paidAt || 'N/A'}</p>
+                      {pay.paymentReference && (
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">Ref: {pay.paymentReference}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

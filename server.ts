@@ -173,8 +173,25 @@ interface PurchaseOrderRow {
   status: string;
   order_date: string;
   date_received: string | null;
+  date_paid: string | null;
+  payment_method: string | null;
+  payment_reference: string | null;
+  stock_applied: boolean;
+  budget_applied: boolean;
   created_at: string;
   updated_at: string;
+}
+
+interface SupplierPaymentRow {
+  id: string;
+  supplier_id: string;
+  purchase_order_id: string | null;
+  amount: string;
+  payment_method: string;
+  payment_reference: string | null;
+  notes: string | null;
+  paid_at: string;
+  created_at: string;
 }
 
 interface ClientRow {
@@ -782,8 +799,27 @@ function mapPurchaseOrder(row: PurchaseOrderRow) {
     status: row.status,
     date: row.order_date,
     dateReceived: row.date_received || null,
+    datePaid: row.date_paid || null,
+    paymentMethod: row.payment_method || null,
+    paymentReference: row.payment_reference || null,
+    stockApplied: Boolean(row.stock_applied),
+    budgetApplied: Boolean(row.budget_applied),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapSupplierPayment(row: SupplierPaymentRow) {
+  return {
+    id: row.id,
+    supplierId: row.supplier_id,
+    purchaseOrderId: row.purchase_order_id || null,
+    amount: Number(row.amount || 0),
+    paymentMethod: row.payment_method,
+    paymentReference: row.payment_reference || '',
+    notes: row.notes || '',
+    paidAt: row.paid_at,
+    createdAt: row.created_at,
   };
 }
 
@@ -3234,6 +3270,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             status,
             order_date::text,
             date_received::text,
+            date_paid::text,
+            payment_method,
+            payment_reference,
+            stock_applied,
+            budget_applied,
             created_at,
             updated_at
           from purchase_orders
@@ -3284,8 +3325,13 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             notes,
             status,
             order_date,
-            date_received
-          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::date,$13::date)
+            date_received,
+            date_paid,
+            payment_method,
+            payment_reference,
+            stock_applied,
+            budget_applied
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::date,$13::date,$14::date,$15,$16,$17,$18)
           returning
             id,
             project_id,
@@ -3301,6 +3347,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             status,
             order_date::text,
             date_received::text,
+            date_paid::text,
+            payment_method,
+            payment_reference,
+            stock_applied,
+            budget_applied,
             created_at,
             updated_at
         `,
@@ -3318,8 +3369,26 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           status,
           date || new Date().toISOString().slice(0, 10),
           status === 'Completed' ? new Date().toISOString().slice(0, 10) : null,
+          status === 'Paid' ? new Date().toISOString().slice(0, 10) : null,
+          req.body?.paymentMethod ? String(req.body.paymentMethod).trim() : null,
+          req.body?.paymentReference ? String(req.body.paymentReference).trim() : null,
+          false,
+          false,
         ]
       );
+
+      if (supplierId && Number.isFinite(estimatedCost) && estimatedCost > 0) {
+        await db.query(
+          `
+            update suppliers
+            set balance = coalesce(balance, 0) + $1,
+                last_order = $2::date,
+                updated_at = now()
+            where id = $3
+          `,
+          [estimatedCost, date || new Date().toISOString().slice(0, 10), supplierId]
+        );
+      }
 
       return res.status(201).json(mapPurchaseOrder(insert.rows[0]));
     } catch (error: any) {
@@ -3359,6 +3428,14 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
         values.push(req.body.dateReceived ? String(req.body.dateReceived) : null);
         sets.push(`date_received = $${values.length}::date`);
       }
+      if (req.body?.datePaid !== undefined) {
+        values.push(req.body.datePaid ? String(req.body.datePaid) : null);
+        sets.push(`date_paid = $${values.length}::date`);
+      }
+      if (req.body?.paymentMethod !== undefined) addSet('payment_method', String(req.body.paymentMethod || '').trim() || null);
+      if (req.body?.paymentReference !== undefined) addSet('payment_reference', String(req.body.paymentReference || '').trim() || null);
+      if (req.body?.stockApplied !== undefined) addSet('stock_applied', Boolean(req.body.stockApplied));
+      if (req.body?.budgetApplied !== undefined) addSet('budget_applied', Boolean(req.body.budgetApplied));
 
       if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
       sets.push('updated_at = now()');
@@ -3384,6 +3461,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             status,
             order_date::text,
             date_received::text,
+            date_paid::text,
+            payment_method,
+            payment_reference,
+            stock_applied,
+            budget_applied,
             created_at,
             updated_at
         `,
@@ -3408,6 +3490,161 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       return res.status(204).send();
     } catch (error: any) {
       return res.status(500).json({ error: error?.message || 'No se pudo eliminar orden de compra' });
+    }
+  });
+
+  app.get('/api/supplier-payments', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const supplierId = String(req.query.supplierId || '').trim();
+      const purchaseOrderId = String(req.query.purchaseOrderId || '').trim();
+
+      const where: string[] = [];
+      const values: any[] = [];
+      if (supplierId) {
+        values.push(supplierId);
+        where.push(`supplier_id = $${values.length}`);
+      }
+      if (purchaseOrderId) {
+        values.push(purchaseOrderId);
+        where.push(`purchase_order_id = $${values.length}`);
+      }
+      const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : '';
+
+      const rows = await db.query<SupplierPaymentRow>(
+        `
+          select
+            id,
+            supplier_id,
+            purchase_order_id,
+            amount,
+            payment_method,
+            payment_reference,
+            notes,
+            paid_at::text,
+            created_at
+          from supplier_payments
+          ${whereClause}
+          order by created_at desc
+        `,
+        values
+      );
+
+      return res.json({ items: rows.rows.map(mapSupplierPayment) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener pagos a proveedores' });
+    }
+  });
+
+  app.post('/api/supplier-payments', async (req, res) => {
+    const db = requireDatabase();
+    const client = await db.connect();
+    try {
+      const supplierId = String(req.body?.supplierId || '').trim();
+      const purchaseOrderId = req.body?.purchaseOrderId ? String(req.body.purchaseOrderId).trim() : null;
+      const amount = Number(req.body?.amount || 0);
+      const paymentMethod = String(req.body?.paymentMethod || '').trim();
+      const paymentReference = req.body?.paymentReference ? String(req.body.paymentReference).trim() : null;
+      const notes = req.body?.notes ? String(req.body.notes).trim() : null;
+      const paidAt = String(req.body?.paidAt || '').trim() || new Date().toISOString().slice(0, 10);
+
+      if (!supplierId || !Number.isFinite(amount) || amount <= 0 || !paymentMethod) {
+        return res.status(400).json({ error: 'supplierId, amount y paymentMethod son obligatorios' });
+      }
+
+      await client.query('begin');
+
+      const supplierResult = await client.query<SupplierRow>(
+        `
+          select
+            id,
+            name,
+            category,
+            contact,
+            email,
+            phone,
+            rating,
+            status,
+            balance,
+            last_order,
+            created_at,
+            updated_at
+          from suppliers
+          where id = $1
+          for update
+        `,
+        [supplierId]
+      );
+
+      if (!supplierResult.rows[0]) {
+        await client.query('rollback');
+        return res.status(404).json({ error: 'Proveedor no encontrado' });
+      }
+
+      const currentBalance = Number(supplierResult.rows[0].balance || 0);
+      const nextBalance = Math.max(0, currentBalance - amount);
+
+      const paymentInsert = await client.query<SupplierPaymentRow>(
+        `
+          insert into supplier_payments (
+            supplier_id,
+            purchase_order_id,
+            amount,
+            payment_method,
+            payment_reference,
+            notes,
+            paid_at
+          ) values ($1,$2,$3,$4,$5,$6,$7::date)
+          returning
+            id,
+            supplier_id,
+            purchase_order_id,
+            amount,
+            payment_method,
+            payment_reference,
+            notes,
+            paid_at::text,
+            created_at
+        `,
+        [supplierId, purchaseOrderId, amount, paymentMethod, paymentReference, notes, paidAt]
+      );
+
+      await client.query(
+        `
+          update suppliers
+          set balance = $1,
+              updated_at = now()
+          where id = $2
+        `,
+        [nextBalance, supplierId]
+      );
+
+      if (purchaseOrderId) {
+        await client.query(
+          `
+            update purchase_orders
+            set status = 'Paid',
+                date_paid = $1::date,
+                payment_method = $2,
+                payment_reference = $3,
+                updated_at = now()
+            where id = $4
+          `,
+          [paidAt, paymentMethod, paymentReference, purchaseOrderId]
+        );
+      }
+
+      await client.query('commit');
+      return res.status(201).json({ payment: mapSupplierPayment(paymentInsert.rows[0]), supplierBalance: nextBalance });
+    } catch (error: any) {
+      try {
+        await client.query('rollback');
+      } catch {
+        // ignore rollback errors
+      }
+      return res.status(500).json({ error: error?.message || 'No se pudo registrar pago a proveedor' });
+    } finally {
+      client.release();
     }
   });
 
