@@ -96,6 +96,27 @@
     background: linear-gradient(135deg, #ecfeff, #ffffff);
   }
 
+  /* Keep typology card styling readable in dark mode. */
+  .dark .theme-residencial {
+    background: linear-gradient(to bottom right, #052e16, #0f172a);
+  }
+
+  .dark .theme-comercial {
+    background: linear-gradient(to bottom right, #172554, #0f172a);
+  }
+
+  .dark .theme-industrial {
+    background: repeating-linear-gradient(45deg, #422006, #422006 10px, #0f172a 10px, #0f172a 20px);
+  }
+
+  .dark .theme-civil {
+    background: radial-gradient(circle at top right, #312e81, #0f172a);
+  }
+
+  .dark .theme-publica {
+    background: linear-gradient(135deg, #083344, #0f172a);
+  }
+
   /* Custom Scrollbar */
   .custom-scrollbar::-webkit-scrollbar,
   .table-container::-webkit-scrollbar,
