@@ -537,10 +537,12 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         const hasMaterials = Array.isArray(item.materials) && item.materials.length >= expectedMaterials;
         const hasLabor = Array.isArray(item.labor) && item.labor.length >= expectedLabor;
         const hasUnitPrice = (Number(item.totalUnitPrice) || 0) > 0;
+        const hasUnit = String(item.unit || '').trim().length > 0;
         const isComplete =
           (!expectedMaterials || hasMaterials) &&
           (!expectedLabor || hasLabor) &&
-          hasUnitPrice;
+          hasUnitPrice &&
+          hasUnit;
         if (isComplete) {
           return null;
         }
@@ -553,11 +555,13 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
         return {
           id: item.id,
+          unit: template.unit,
           ...seed,
         };
       })
       .filter(Boolean) as Array<{
         id: string;
+        unit: string;
         materials: any[];
         labor: any[];
         materialCost: number;
@@ -577,6 +581,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     try {
       for (const row of rowsToFix) {
         await patchBudgetItem(row.id, {
+          unit: row.unit,
           materials: row.materials,
           labor: row.labor,
           materialCost: row.materialCost,
