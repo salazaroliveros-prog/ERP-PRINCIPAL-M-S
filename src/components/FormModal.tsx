@@ -109,18 +109,21 @@ export const FormModal = ({
                 <div className="flex items-center gap-1 ml-1 pl-1 border-l border-slate-200 dark:border-slate-700">
                   <button 
                     onClick={() => transformComponentRef.current?.zoomIn()}
+                    title="Acercar"
                     className="p-2 text-slate-400 hover:text-primary hover:bg-white dark:hover:bg-slate-900 rounded-lg transition-all"
                   >
                     <ZoomIn size={18} />
                   </button>
                   <button 
                     onClick={() => transformComponentRef.current?.zoomOut()}
+                    title="Alejar"
                     className="p-2 text-slate-400 hover:text-primary hover:bg-white dark:hover:bg-slate-900 rounded-lg transition-all"
                   >
                     <ZoomOut size={18} />
                   </button>
                   <button 
                     onClick={() => transformComponentRef.current?.resetTransform()}
+                    title="Restablecer zoom"
                     className="p-2 text-slate-400 hover:text-primary hover:bg-white dark:hover:bg-slate-900 rounded-lg transition-all"
                   >
                     <RotateCcw size={18} />
@@ -138,6 +141,7 @@ export const FormModal = ({
             </button>
             <button
               onClick={onClose}
+              title="Cerrar"
               className="p-1.5 md:p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg md:rounded-xl transition-all"
             >
               <X size={18} className="md:w-5 md:h-5" />

@@ -1604,6 +1604,7 @@ export default function Projects() {
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">Estado</label>
                   <select 
+                    title="Filtrar por estado"
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none text-slate-900 dark:text-white"
                     value={filters.status}
                     onChange={(e) => setFilters({...filters, status: e.target.value})}
@@ -1641,6 +1642,7 @@ export default function Projects() {
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-1">Tipología</label>
                   <select 
+                    title="Filtrar por tipología"
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none text-slate-900 dark:text-white"
                     value={filters.typology}
                     onChange={(e) => setFilters({...filters, typology: e.target.value})}
@@ -1684,6 +1686,7 @@ export default function Projects() {
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Ordenar por</label>
                   <div className="flex gap-2">
                     <select 
+                      title="Ordenar proyectos"
                       className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none text-slate-900 dark:text-white"
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value)}
@@ -1694,6 +1697,7 @@ export default function Projects() {
                     </select>
                     <button 
                       onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                      title="Cambiar sentido de orden"
                       className="p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                     >
                       {sortOrder === 'asc' ? <TrendingUp size={18} className="text-primary" /> : <TrendingUp size={18} className="text-primary rotate-180" />}
@@ -1714,6 +1718,7 @@ export default function Projects() {
                         endDate: null
                       });
                     }}
+                    title="Limpiar filtros"
                     className="text-xs font-bold text-slate-400 hover:text-primary transition-colors flex items-center gap-1"
                   >
                     <X size={14} />
@@ -1791,12 +1796,14 @@ export default function Projects() {
                       </button>
                       <button 
                         onClick={() => { setEditingProject(project); setNewProject(project); setIsModalOpen(true); }}
+                        title="Editar"
                         className="p-2 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg text-blue-600 transition-colors"
                       >
                         <Edit2 size={18} />
                       </button>
                       <button 
                         onClick={() => handleDeleteProject(project.id)}
+                        title="Eliminar"
                         className="p-2 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg text-rose-600 transition-colors"
                       >
                         <Trash2 size={18} />
@@ -1918,7 +1925,6 @@ export default function Projects() {
                             strokeWidth="5"
                             fill="transparent"
                             className="text-slate-100 dark:text-slate-800"
-                            style={{ cx: '50%', cy: '50%', r: '42.5%' }}
                           />
                           <motion.circle
                             cx="24"
@@ -1932,7 +1938,6 @@ export default function Projects() {
                             animate={{ strokeDashoffset: 125.6 - (125.6 * (project.physicalProgress || 0)) / 100 }}
                             className="text-primary"
                             strokeLinecap="round"
-                            style={{ cx: '50%', cy: '50%', r: '42.5%' }}
                           />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -1976,12 +1981,12 @@ export default function Projects() {
                             <p className="text-[10px] sm:text-lg font-black text-emerald-600 dark:text-emerald-400 leading-none">
                               {project.budget > 0 ? `${((project.spent / project.budget) * 100).toFixed(1)}%` : '0%'}
                             </p>
-                            <div className="flex-1 h-1 sm:h-2 bg-emerald-100 dark:bg-emerald-500/20 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-emerald-500" 
-                                style={{ width: `${Math.min((project.spent / project.budget) * 100, 100)}%` }} 
-                              />
-                            </div>
+                            <progress
+                              className="flex-1 h-1 sm:h-2 [&::-webkit-progress-bar]:bg-emerald-100 dark:[&::-webkit-progress-bar]:bg-emerald-500/20 [&::-webkit-progress-value]:bg-emerald-500 [&::-moz-progress-bar]:bg-emerald-500 rounded-full overflow-hidden"
+                              value={Math.min((project.spent / project.budget) * 100, 100) || 0}
+                              max={100}
+                              title="Progreso financiero"
+                            />
                           </div>
                         </div>
                       </div>
@@ -2136,12 +2141,12 @@ export default function Projects() {
                       <td className="px-3 sm:px-6 py-2 sm:py-4">
                         <div className="flex flex-col">
                           <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">{formatCurrency(project.budget)}</span>
-                          <div className="w-16 sm:w-24 h-1 sm:h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full mt-1 overflow-hidden">
-                            <div 
-                              className="h-full bg-primary" 
-                              style={{ width: `${Math.min((project.spent / project.budget) * 100, 100)}%` }} 
-                            />
-                          </div>
+                          <progress
+                            className="w-16 sm:w-24 h-1 sm:h-1.5 mt-1 [&::-webkit-progress-bar]:bg-slate-100 dark:[&::-webkit-progress-bar]:bg-slate-800 [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary rounded-full overflow-hidden"
+                            value={Math.min((project.spent / project.budget) * 100, 100) || 0}
+                            max={100}
+                            title="Progreso de presupuesto"
+                          />
                         </div>
                       </td>
                       <td className="px-3 sm:px-6 py-2 sm:py-4">
@@ -2169,6 +2174,7 @@ export default function Projects() {
                           </button>
                           <button 
                             onClick={() => setSelectedProjectId(project.id)}
+                            title="Ver detalles"
                             className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-700 transition-all whitespace-nowrap"
                           >
                             <Eye size={12} className="sm:w-3.5 sm:h-3.5" />
@@ -2176,12 +2182,14 @@ export default function Projects() {
                           </button>
                           <button 
                             onClick={() => handleEditProject(project)}
+                            title="Editar"
                             className="p-1.5 sm:p-2 text-slate-400 dark:text-slate-500 hover:text-primary dark:hover:text-primary transition-colors"
                           >
                             <Edit2 size={14} className="sm:w-[18px] sm:h-[18px]" />
                           </button>
                           <button 
                             onClick={() => handleDeleteProject(project.id)}
+                            title="Eliminar"
                             className="p-1.5 sm:p-2 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                           >
                             <Trash2 size={14} className="sm:w-[18px] sm:h-[18px]" />
@@ -2207,6 +2215,7 @@ export default function Projects() {
             <div className="flex items-center gap-2">
               <label className="text-micro font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Por página:</label>
               <select 
+                title="Cantidad de proyectos por página"
                 className="px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold outline-none text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/20 transition-all"
                 value={itemsPerPage}
                 onChange={(e) => setItemsPerPage(Number(e.target.value))}
@@ -2223,6 +2232,7 @@ export default function Projects() {
               <button 
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                title="Página anterior"
                 className="p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
               >
                 <ChevronRight size={20} className="rotate-180" />
@@ -2272,6 +2282,7 @@ export default function Projects() {
               <button 
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                title="Página siguiente"
                 className="p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
               >
                 <ChevronRight size={20} />
@@ -2728,7 +2739,7 @@ export default function Projects() {
           >
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-primary text-white">
               <h2 className="text-xl font-bold">Enviar Informe</h2>
-              <button onClick={() => setIsEmailModalOpen(false)} className="p-2 hover:bg-primary-hover rounded-full transition-colors">
+              <button onClick={() => setIsEmailModalOpen(false)} title="Cerrar" className="p-2 hover:bg-primary-hover rounded-full transition-colors">
                 <X size={24} />
               </button>
             </div>

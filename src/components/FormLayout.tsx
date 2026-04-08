@@ -51,9 +51,11 @@ export const StepForm = ({
         <div className="flex items-center justify-between relative">
           {/* Progress Line */}
           <div className="absolute top-5 left-0 w-full h-0.5 bg-slate-100 dark:bg-slate-800 -z-10" />
-          <div 
-            className="absolute top-5 left-0 h-0.5 bg-primary transition-all duration-500 -z-10" 
-            style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }}
+          <progress
+            className="absolute top-5 left-0 w-full h-0.5 -z-10 [&::-webkit-progress-bar]:bg-transparent [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary"
+            value={currentStep}
+            max={Math.max(steps.length - 1, 1)}
+            title="Progreso del formulario"
           />
 
           {steps.map((step, idx) => {

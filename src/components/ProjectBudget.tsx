@@ -1965,6 +1965,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
             </button>
             <button 
               onClick={onClose} 
+              title="Cerrar presupuesto"
               className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg sm:rounded-xl transition-all border border-white/10"
             >
               <X size={18} className="sm:w-5 sm:h-5" />
@@ -2126,6 +2127,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                     <div className="flex-1">
                       <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">Concreto</p>
                       <select 
+                        title="Seleccionar renglón de concreto"
                         className="w-full mt-0.5 sm:mt-1 text-[8px] sm:text-[10px] bg-slate-50 border border-slate-100 rounded p-0.5 sm:p-1 outline-none"
                         onChange={(e) => {
                           if (e.target.value) {
@@ -2310,6 +2312,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                   type="number" 
                                   min="0"
                                   step="any"
+                                  title="Cantidad del renglón"
                                   className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[11px] font-black focus:ring-2 focus:ring-primary outline-none transition-all"
                                   value={item.quantity}
                                   onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
@@ -2319,6 +2322,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                 <p className="text-[12px] font-black text-primary">{formatCurrency(item.totalItemPrice)}</p>
                                 <button 
                                   onClick={() => handleDeleteItem(item.id)}
+                                  title="Eliminar renglón"
                                   className="p-1 text-slate-300 hover:text-rose-600 transition-all rounded-md hover:bg-white border border-transparent hover:border-slate-100 opacity-0 group-hover:opacity-100"
                                 >
                                   <Trash2 size={14} />
@@ -2340,6 +2344,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                   type="number" 
                                   min="0"
                                   step="any"
+                                  title="Cantidad del renglón"
                                   className="w-full px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-bold focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={item.quantity}
                                   onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
@@ -2359,6 +2364,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                 </button>
                                 <button 
                                   onClick={() => setExpandedItem(expandedItem === item.id ? null : item.id)}
+                                  title={expandedItem === item.id ? "Contraer renglón" : "Expandir renglón"}
                                   className={cn(
                                     "p-1 transition-all rounded-md",
                                     expandedItem === item.id ? "bg-primary text-white" : "text-slate-400 hover:text-primary hover:bg-white border border-transparent hover:border-slate-100"
@@ -2368,6 +2374,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                 </button>
                                 <button 
                                   onClick={() => handleDeleteItem(item.id)}
+                                  title="Eliminar renglón"
                                   className="p-1 text-slate-300 hover:text-rose-600 transition-all rounded-md hover:bg-white border border-transparent hover:border-slate-100 opacity-0 group-hover:opacity-100"
                                 >
                                   <Trash2 size={14} />
@@ -2394,6 +2401,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                   type="number" 
                                   min="0"
                                   step="any"
+                                  title="Cantidad del renglón"
                                   className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-black focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={item.quantity}
                                   onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
@@ -2401,6 +2409,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                               </div>
                               <button 
                                 onClick={() => handleDeleteItem(item.id)}
+                                title="Eliminar renglón"
                                 className="p-1 text-slate-300 hover:text-rose-600 transition-all"
                               >
                                 <Trash2 size={12} />
@@ -2450,6 +2459,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                   </button>
                                   <button 
                                     onClick={() => setExpandedItem(expandedItem === item.id ? null : item.id)}
+                                    title={expandedItem === item.id ? "Contraer renglón" : "Expandir renglón"}
                                     className={cn(
                                       "p-1 rounded transition-all",
                                       expandedItem === item.id ? "bg-primary text-white shadow-sm shadow-primary-shadow" : "bg-slate-50 text-slate-400 border border-slate-100"
@@ -2459,6 +2469,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                   </button>
                                   <button 
                                     onClick={() => handleDeleteItem(item.id)}
+                                    title="Eliminar renglón"
                                     className="p-1 bg-rose-50 text-rose-600 rounded border border-rose-100 active:scale-95 transition-all"
                                   >
                                     <Trash2 size={12} />
@@ -2469,6 +2480,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                     type="number" 
                                     min="0"
                                     step="any"
+                                    title="Cantidad del renglón"
                                     className="w-full pl-2 pr-6 py-1 bg-slate-50 border border-slate-200 rounded text-[10px] font-black focus:ring-1 focus:ring-primary outline-none transition-all"
                                     value={item.quantity}
                                     onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
@@ -2617,6 +2629,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                             <td className="px-2 py-1">
                                               <input 
                                                 type="text"
+                                                title="Nombre de material"
                                                 className={cn(
                                                   "w-full px-1 py-0.5 bg-white border border-slate-100 rounded text-[9px] font-bold",
                                                   isPurchased && "text-emerald-700"
@@ -2628,6 +2641,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                             <td className="px-2 py-1 text-center">
                                               <input 
                                                 type="text"
+                                                title="Unidad de material"
                                                 className="w-8 px-0.5 py-0.5 bg-white border border-slate-100 rounded text-center font-bold"
                                                 value={m.unit}
                                                 onChange={(e) => updateItemYield(item.id, 'material', idx, 'unit', e.target.value)}
@@ -2636,6 +2650,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                             <td className="px-2 py-1 text-center">
                                               <input 
                                                 type="number" 
+                                                title="Cantidad de material"
                                                 className="w-10 px-0.5 py-0.5 bg-white border border-slate-100 rounded text-center font-bold"
                                                 value={m.quantity}
                                                 onChange={(e) => updateItemYield(item.id, 'material', idx, 'quantity', Number(e.target.value))}
@@ -2644,6 +2659,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                             <td className="px-2 py-1 text-right">
                                               <input 
                                                 type="number" 
+                                                title="Precio unitario de material"
                                                 className="w-12 px-0.5 py-0.5 bg-white border border-slate-100 rounded text-right font-bold"
                                                 value={m.unitPrice}
                                                 onChange={(e) => updateItemYield(item.id, 'material', idx, 'unitPrice', Number(e.target.value))}
@@ -2656,6 +2672,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                                 {formatCurrency(materialRealCost)}
                                                 <button 
                                                   onClick={() => setViewingTransactionsForMaterial({ item, material: m })} 
+                                                  title="Ver transacciones"
                                                   className="p-0.5 hover:bg-emerald-50 rounded text-emerald-600"
                                                 >
                                                   <Info size={8} />
@@ -2663,7 +2680,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                               </div>
                                             </td>
                                             <td className="px-2 py-1 text-center">
-                                              <button onClick={() => removeMaterialFromItem(item.id, idx)} className="p-0.5 text-slate-300 hover:text-red-600">
+                                              <button onClick={() => removeMaterialFromItem(item.id, idx)} title="Eliminar material" className="p-0.5 text-slate-300 hover:text-red-600">
                                                 <Trash2 size={10} />
                                               </button>
                                             </td>
@@ -2776,6 +2793,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                           <td className="px-2 py-1">
                                             <input 
                                               type="text"
+                                              title="Rol de mano de obra"
                                               className="w-full px-1 py-0.5 bg-white border border-slate-100 rounded text-[9px] font-bold"
                                               value={l.role}
                                               onChange={(e) => updateItemYield(item.id, 'labor', idx, 'role', e.target.value)}
@@ -2784,6 +2802,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                           <td className="px-2 py-1 text-center">
                                             <input 
                                               type="number" 
+                                              title="Rendimiento de mano de obra"
                                               className="w-10 px-0.5 py-0.5 bg-white border border-slate-100 rounded text-center font-bold"
                                               value={l.yield}
                                               onChange={(e) => updateItemYield(item.id, 'labor', idx, 'yield', Number(e.target.value))}
@@ -2792,6 +2811,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                           <td className="px-2 py-1 text-right">
                                             <input 
                                               type="number" 
+                                              title="Tarifa diaria de mano de obra"
                                               className="w-12 px-0.5 py-0.5 bg-white border border-slate-100 rounded text-right font-bold"
                                               value={l.dailyRate}
                                               onChange={(e) => updateItemYield(item.id, 'labor', idx, 'dailyRate', Number(e.target.value))}
@@ -2801,6 +2821,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                           <td className="px-2 py-1 text-center">
                                             <button 
                                               onClick={() => removeLaborFromItem(item.id, idx)}
+                                              title="Eliminar mano de obra"
                                               className="p-0.5 text-slate-300 hover:text-red-600"
                                             >
                                               <Trash2 size={10} />
@@ -2824,21 +2845,24 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                     <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Desglose de Costos</span>
                                     <span className="text-[10px] font-black text-primary">{formatCurrency(item.totalUnitPrice)}</span>
                                   </div>
-                                  <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden flex">
-                                    <div 
-                                      className="h-full bg-primary" 
-                                      style={{ width: `${(item.materialCost / item.totalUnitPrice) * 100}%` }}
-                                      title={`Materiales: ${((item.materialCost / item.totalUnitPrice) * 100).toFixed(1)}%`}
+                                  <div className="space-y-1">
+                                    <progress
+                                      className="w-full h-1.5 [&::-webkit-progress-bar]:bg-slate-200 [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary rounded-full overflow-hidden"
+                                      value={item.totalUnitPrice > 0 ? (item.materialCost / item.totalUnitPrice) * 100 : 0}
+                                      max={100}
+                                      title={`Materiales: ${item.totalUnitPrice > 0 ? ((item.materialCost / item.totalUnitPrice) * 100).toFixed(1) : '0.0'}%`}
                                     />
-                                    <div 
-                                      className="h-full bg-blue-500" 
-                                      style={{ width: `${(item.laborCost / item.totalUnitPrice) * 100}%` }}
-                                      title={`Mano de Obra: ${((item.laborCost / item.totalUnitPrice) * 100).toFixed(1)}%`}
+                                    <progress
+                                      className="w-full h-1.5 [&::-webkit-progress-bar]:bg-slate-200 [&::-webkit-progress-value]:bg-blue-500 [&::-moz-progress-bar]:bg-blue-500 rounded-full overflow-hidden"
+                                      value={item.totalUnitPrice > 0 ? (item.laborCost / item.totalUnitPrice) * 100 : 0}
+                                      max={100}
+                                      title={`Mano de Obra: ${item.totalUnitPrice > 0 ? ((item.laborCost / item.totalUnitPrice) * 100).toFixed(1) : '0.0'}%`}
                                     />
-                                    <div 
-                                      className="h-full bg-slate-400" 
-                                      style={{ width: `${(item.indirectCost / item.totalUnitPrice) * 100}%` }}
-                                      title={`Indirectos: ${((item.indirectCost / item.totalUnitPrice) * 100).toFixed(1)}%`}
+                                    <progress
+                                      className="w-full h-1.5 [&::-webkit-progress-bar]:bg-slate-200 [&::-webkit-progress-value]:bg-slate-400 [&::-moz-progress-bar]:bg-slate-400 rounded-full overflow-hidden"
+                                      value={item.totalUnitPrice > 0 ? (item.indirectCost / item.totalUnitPrice) * 100 : 0}
+                                      max={100}
+                                      title={`Indirectos: ${item.totalUnitPrice > 0 ? ((item.indirectCost / item.totalUnitPrice) * 100).toFixed(1) : '0.0'}%`}
                                     />
                                   </div>
                                   <div className="flex gap-4 text-[8px] font-bold">
@@ -2886,15 +2910,17 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                               percentage > 100 ? "text-rose-600" : "text-emerald-600"
                                             )}>{percentage.toFixed(1)}%</span>
                                           </div>
-                                          <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                                            <div 
-                                              style={{ width: `${Math.min(percentage, 100)}%` }}
-                                              className={cn(
-                                                "h-full transition-all duration-500",
-                                                percentage > 100 ? "bg-rose-500" : "bg-emerald-500"
-                                              )}
-                                            />
-                                          </div>
+                                          <progress
+                                            className={cn(
+                                              "w-full h-1 rounded-full overflow-hidden [&::-webkit-progress-bar]:bg-slate-100 [&::-moz-progress-bar]:bg-emerald-500",
+                                              percentage > 100
+                                                ? "[&::-webkit-progress-value]:bg-rose-500 [&::-moz-progress-bar]:bg-rose-500"
+                                                : "[&::-webkit-progress-value]:bg-emerald-500 [&::-moz-progress-bar]:bg-emerald-500"
+                                            )}
+                                            value={Math.min(percentage, 100)}
+                                            max={100}
+                                            title="Ejecución real"
+                                          />
                                         </div>
                                       );
                                     })()}
@@ -2911,6 +2937,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                   </div>
                                   <button 
                                     onClick={() => addSubtaskToItem(item.id, { name: 'Nueva Subtarea', assignee: '', status: 'Pendiente' })}
+                                    title="Agregar subtarea"
                                     className="text-[8px] font-bold text-emerald-600 hover:bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100 transition-colors"
                                   >
                                     + Agregar
@@ -2929,6 +2956,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                         />
                                         <button 
                                           onClick={() => removeSubtaskFromItem(item.id, idx)}
+                                          title="Eliminar subtarea"
                                           className="p-1 text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-all"
                                         >
                                           <Trash2 size={10} />
@@ -2946,6 +2974,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                           />
                                         </div>
                                         <select
+                                          title="Estado de subtarea"
                                           className={cn(
                                             "text-[8px] font-bold px-1.5 py-0.5 rounded-md border outline-none transition-all",
                                             st.status === 'Completado' ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
@@ -2982,6 +3011,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                   {showScrollTop && (
                     <button 
                       onClick={scrollToTop}
+                      title="Subir al inicio"
                       className="fixed bottom-24 right-8 p-3 bg-primary text-white rounded-full shadow-2xl hover:scale-110 transition-all z-50"
                     >
                       <ArrowUp size={20} />
@@ -3136,6 +3166,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                 </div>
                 <div className="md:w-2/3">
                   <select 
+                    title="Categoría del renglón"
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-bold text-slate-700 dark:text-slate-200 text-sm transition-all"
                     value={newItem.category}
                     onChange={(e) => setNewItem({...newItem, category: e.target.value})}
@@ -3291,6 +3322,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                     required
                     min="0"
                     step="any"
+                    title="Factor de indirectos"
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-bold text-slate-700 dark:text-slate-200 text-sm transition-all"
                     value={newItem.indirectFactor}
                     onChange={(e) => setNewItem({...newItem, indirectFactor: Number(e.target.value)})}
@@ -3353,6 +3385,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                             />
                           </div>
                           <select
+                            title="Estado de subtarea"
                             className="px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl text-[10px] font-bold outline-none focus:ring-1 focus:ring-primary"
                             value={st.status}
                             onChange={(e) => updateSubtaskInNewItem(idx, 'status', e.target.value)}
@@ -3366,6 +3399,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                       <button 
                         type="button"
                         onClick={() => removeSubtaskFromNewItem(idx)}
+                        title="Eliminar subtarea"
                         className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
                       >
                         <Trash2 size={14} />
@@ -3485,6 +3519,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1 text-center">Cant.</label>
                           <input 
                             type="number"
+                            title="Cantidad de material"
                             className="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-center text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                             value={m.quantity}
                             onChange={(e) => updateMaterialInNewItem(idx, 'quantity', Number(e.target.value))}
@@ -3494,6 +3529,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                           <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1 text-right">P. Unit</label>
                           <input 
                             type="number"
+                            title="Precio unitario de material"
                             className="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-right text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                             value={m.unitPrice}
                             onChange={(e) => updateMaterialInNewItem(idx, 'unitPrice', Number(e.target.value))}
@@ -3516,6 +3552,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                         <button 
                           type="button"
                           onClick={() => removeMaterialFromNewItem(idx)}
+                          title="Eliminar material"
                           className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-colors"
                         >
                           <Trash2 size={16} />
@@ -3628,6 +3665,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                           <div className="relative">
                             <input 
                               type="number"
+                              title="Rendimiento de mano de obra"
                               className="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-blue-100 dark:border-blue-900/30 rounded-xl text-center text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                               value={l.yield}
                               onChange={(e) => updateLaborInNewItem(idx, 'yield', Number(e.target.value))}
@@ -3639,6 +3677,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                           <label className="text-[9px] font-black text-blue-400 dark:text-blue-500 uppercase tracking-widest block mb-1 text-right">Tarifa Diaria</label>
                           <input 
                             type="number"
+                            title="Tarifa diaria de mano de obra"
                             className="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-blue-100 dark:border-blue-900/30 rounded-xl text-right text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                             value={l.dailyRate}
                             onChange={(e) => updateLaborInNewItem(idx, 'dailyRate', Number(e.target.value))}
@@ -3661,6 +3700,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                         <button 
                           type="button"
                           onClick={() => removeLaborFromNewItem(idx)}
+                          title="Eliminar mano de obra"
                           className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-colors"
                         >
                           <Trash2 size={16} />
@@ -3728,6 +3768,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                   <div className="md:w-2/3">
                     <textarea 
                       rows={2}
+                      title="Descripción del renglón"
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-bold text-slate-700 dark:text-slate-200 text-sm transition-all resize-none"
                       value={editingItem.description}
                       onChange={(e) => {
@@ -3747,6 +3788,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                   </div>
                   <div className="md:w-2/3">
                     <select 
+                      title="Categoría del renglón"
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-bold text-slate-700 dark:text-slate-200 text-sm transition-all"
                       value={editingItem.category}
                       onChange={(e) => {
@@ -3779,6 +3821,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                     <div className="flex-1">
                       <input 
                         type="text"
+                        title="Unidad del renglón"
                         className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-bold text-slate-700 dark:text-slate-200 text-sm transition-all"
                         value={editingItem.unit}
                         onChange={(e) => {
@@ -3791,6 +3834,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                     <div className="flex-1">
                       <input 
                         type="number"
+                        title="Cantidad del renglón"
                         className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-bold text-slate-700 dark:text-slate-200 text-sm transition-all"
                         value={editingItem.quantity}
                         onChange={(e) => {
@@ -3816,6 +3860,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                       <button
                         type="button"
                         onClick={() => addSubtaskToItem(editingItem.id, { name: '', assignee: '', status: 'Pendiente' })}
+                        title="Agregar subtarea"
                         className="text-[10px] font-black text-primary hover:text-primary-hover uppercase tracking-widest"
                       >
                         + Agregar
@@ -3846,6 +3891,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                               />
                             </div>
                             <select
+                              title="Estado de subtarea"
                               className="px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] font-bold outline-none focus:ring-1 focus:ring-primary"
                               value={st.status}
                               onChange={(e) => updateSubtaskInItem(editingItem.id, idx, 'status', e.target.value)}
@@ -3859,6 +3905,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                         <button 
                           type="button"
                           onClick={() => removeSubtaskFromItem(editingItem.id, idx)}
+                          title="Eliminar subtarea"
                           className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
                         >
                           <Trash2 size={14} />
@@ -3955,6 +4002,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                             <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1">Nombre del Material</label>
                             <input 
                               type="text"
+                              title="Nombre de material"
                               className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                               value={m.name}
                               onChange={(e) => updateItemYield(editingItem.id, 'material', idx, 'name', e.target.value)}
@@ -3965,6 +4013,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                               <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1 text-center">Unid.</label>
                               <input 
                                 type="text"
+                                title="Unidad de material"
                                 className="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-center text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                 value={m.unit}
                                 onChange={(e) => updateItemYield(editingItem.id, 'material', idx, 'unit', e.target.value)}
@@ -3974,6 +4023,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                               <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1 text-center">Cant.</label>
                               <input 
                                 type="number"
+                                title="Cantidad de material"
                                 className="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-center text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                 value={m.quantity}
                                 onChange={(e) => updateItemYield(editingItem.id, 'material', idx, 'quantity', Number(e.target.value))}
@@ -3983,6 +4033,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                               <label className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-1 text-right">P. Unit</label>
                               <input 
                                 type="number"
+                                title="Precio unitario de material"
                                 className="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-right text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                 value={m.unitPrice}
                                 onChange={(e) => updateItemYield(editingItem.id, 'material', idx, 'unitPrice', Number(e.target.value))}
@@ -4005,6 +4056,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                             <button 
                               type="button"
                               onClick={() => removeMaterialFromItem(editingItem.id, idx)}
+                              title="Eliminar material"
                               className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-colors"
                             >
                               <Trash2 size={16} />
@@ -4045,6 +4097,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                             <label className="text-[9px] font-black text-blue-400 dark:text-blue-500 uppercase tracking-widest block mb-1">Rol / Cuadrilla</label>
                             <input 
                               type="text"
+                              title="Rol de mano de obra"
                               className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-blue-100 dark:border-blue-900/30 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                               value={l.role}
                               onChange={(e) => updateItemYield(editingItem.id, 'labor', idx, 'role', e.target.value)}
@@ -4056,6 +4109,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                               <div className="relative">
                                 <input 
                                   type="number"
+                                  title="Rendimiento de mano de obra"
                                   className="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-blue-100 dark:border-blue-900/30 rounded-xl text-center text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                                   value={l.yield}
                                   onChange={(e) => updateItemYield(editingItem.id, 'labor', idx, 'yield', Number(e.target.value))}
@@ -4067,6 +4121,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                               <label className="text-[9px] font-black text-blue-400 dark:text-blue-500 uppercase tracking-widest block mb-1 text-right">Tarifa Diaria</label>
                               <input 
                                 type="number"
+                                title="Tarifa diaria de mano de obra"
                                 className="w-full px-2 py-2 bg-white dark:bg-slate-900 border border-blue-100 dark:border-blue-900/30 rounded-xl text-right text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                                 value={l.dailyRate}
                                 onChange={(e) => updateItemYield(editingItem.id, 'labor', idx, 'dailyRate', Number(e.target.value))}
@@ -4089,6 +4144,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                             <button 
                               type="button"
                               onClick={() => removeLaborFromItem(editingItem.id, idx)}
+                              title="Eliminar mano de obra"
                               className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-colors"
                             >
                               <Trash2 size={16} />

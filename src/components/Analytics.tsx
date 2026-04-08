@@ -464,7 +464,9 @@ export default function Analytics() {
               {projectDistribution.slice(0, 4).map((item, i) => (
                 <div key={i} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800/50">
                   <div className="flex items-center gap-2">
-                    <div className="color-indicator" style={{ '--indicator-color': item.color } as React.CSSProperties} />
+                    <svg className="color-indicator" viewBox="0 0 8 8" aria-hidden="true" focusable="false">
+                      <circle cx="4" cy="4" r="4" fill={item.color} />
+                    </svg>
                     <span className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-tighter">{item.name}</span>
                   </div>
                   <span className="text-xs font-black text-slate-900 dark:text-white">{((item.value / projects.length) * 100).toFixed(1)}%</span>
