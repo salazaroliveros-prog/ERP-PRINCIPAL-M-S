@@ -31,6 +31,7 @@ import {
   deletePurchaseOrder,
   listInventory,
   listPurchaseOrders,
+  upsertInventoryItem,
   updatePurchaseOrder,
 } from '../lib/operationsApi';
 import { listProjects, listProjectBudgetItemsDetailed, updateProjectBudgetItem } from '../lib/projectsApi';
@@ -109,9 +110,8 @@ export default function PurchaseOrders() {
     if (newPO.budgetItemId && newPO.materialId) {
       const budgetItem = budgetItems.find(i => i.id === newPO.budgetItemId);
       if (budgetItem) {
-        // Find material in budget item by matching name (since materialId could be name or inventory ID)
-        const invMaterial = inventory.find(i => i.id === newPO.materialId);
-        const materialName = invMaterial ? invMaterial.name : newPO.materialId;
+        const selectedOption = availableMaterialOptions.find((option) => option.value === newPO.materialId);
+        const materialName = selectedOption?.name || newPO.materialId;
         
         const budgetMaterial = budgetItem.materials?.find((m: any) => m.name.toLowerCase() === materialName.toLowerCase());
         if (budgetMaterial) {
@@ -131,6 +131,48 @@ export default function PurchaseOrders() {
       (projects.find(p => p.id === po.projectId)?.name || '').toLowerCase().includes(supplierFilter.toLowerCase())
     );
   }, [purchaseOrders, supplierFilter, inventory, projects]);
+
+  const availableMaterialOptions = useMemo(() => {
+    if (newPO.budgetItemId) {
+      const selectedBudgetItem = budgetItems.find((item) => item.id === newPO.budgetItemId);
+      const budgetMaterials = Array.isArray(selectedBudgetItem?.materials) ? selectedBudgetItem.materials : [];
+
+      return budgetMaterials.map((material: any) => {
+        const matchByProjectOrGlobal = inventory.find((inv) => {
+          const sameName = String(inv.name || '').toLowerCase() === String(material.name || '').toLowerCase();
+          if (!sameName) return false;
+
+          const invProjectId = String(inv.projectId || '').trim();
+          if (!newPO.projectId) return true;
+
+          return invProjectId === newPO.projectId || invProjectId === '';
+        });
+
+        const value = matchByProjectOrGlobal?.id || `budget::${material.name}`;
+        return {
+          value,
+          name: material.name,
+          unit: material.unit,
+          unitPrice: Number(matchByProjectOrGlobal?.unitPrice ?? material.unitPrice ?? 0),
+          inventoryId: matchByProjectOrGlobal?.id || '',
+        };
+      });
+    }
+
+    return inventory
+      .filter((item) => {
+        const projectId = String(item.projectId || '').trim();
+        if (!newPO.projectId) return true;
+        return projectId === newPO.projectId || projectId === '';
+      })
+      .map((item) => ({
+        value: item.id,
+        name: item.name,
+        unit: item.unit,
+        unitPrice: Number(item.unitPrice || 0),
+        inventoryId: item.id,
+      }));
+  }, [budgetItems, inventory, newPO.budgetItemId, newPO.projectId]);
 
   const totalPages = Math.ceil(filteredPurchaseOrders.length / itemsPerPage);
   const paginatedPurchaseOrders = useMemo(() => {
@@ -153,8 +195,27 @@ export default function PurchaseOrders() {
       return;
     }
 
-    const material = inventory.find(i => i.id === newPO.materialId);
-    if (!material) return;
+    const selectedMaterialOption = availableMaterialOptions.find((option) => option.value === newPO.materialId);
+    if (!selectedMaterialOption) {
+      toast.error('No se encontró información del material seleccionado');
+      return;
+    }
+
+    let material = inventory.find((i) => i.id === selectedMaterialOption.inventoryId);
+
+    if (!material) {
+      material = await upsertInventoryItem({
+        projectId: newPO.projectId || '',
+        name: selectedMaterialOption.name,
+        category: 'Material de Obra',
+        unit: selectedMaterialOption.unit || 'u',
+        unitPrice: Number(selectedMaterialOption.unitPrice || 0),
+        stock: Number(newPO.quantity),
+        minStock: 0,
+        suppliers: [],
+        batches: [],
+      });
+    }
 
     try {
       if (isEditMode && poToEdit) {
@@ -165,7 +226,7 @@ export default function PurchaseOrders() {
           materialName: material.name,
           quantity: Number(newPO.quantity),
           unit: material.unit,
-          estimatedCost: Number(newPO.quantity) * material.unitPrice,
+          estimatedCost: Number(newPO.quantity) * Number(selectedMaterialOption.unitPrice || material.unitPrice || 0),
           supplier: newPO.supplier,
           supplierId: newPO.supplierId,
           notes: newPO.notes,
@@ -188,7 +249,7 @@ export default function PurchaseOrders() {
           materialName: material.name,
           quantity: Number(newPO.quantity),
           unit: material.unit,
-          estimatedCost: Number(newPO.quantity) * material.unitPrice,
+          estimatedCost: Number(newPO.quantity) * Number(selectedMaterialOption.unitPrice || material.unitPrice || 0),
           supplier: newPO.supplier,
           supplierId: newPO.supplierId,
           notes: newPO.notes,
@@ -772,25 +833,9 @@ export default function PurchaseOrders() {
                     onChange={(e) => setNewPO({...newPO, materialId: e.target.value})}
                   >
                     <option value="">Seleccione un material...</option>
-                    {newPO.budgetItemId ? (
-                      budgetItems.find(i => i.id === newPO.budgetItemId)?.materials.map((m: any) => {
-                        const invItem = inventory.find(inv => 
-                          inv.name.toLowerCase() === m.name.toLowerCase() && 
-                          inv.projectId === newPO.projectId
-                        );
-                        return (
-                          <option key={m.name} value={invItem?.id || m.name}>
-                            {m.name} ({m.unit})
-                          </option>
-                        );
-                      })
-                    ) : (
-                      inventory
-                        .filter(item => !newPO.projectId || item.projectId === newPO.projectId)
-                        .map(item => (
-                          <option key={item.id} value={item.id}>{item.name} ({item.unit})</option>
-                        ))
-                    )}
+                    {availableMaterialOptions.map((item) => (
+                      <option key={item.value} value={item.value}>{item.name} ({item.unit})</option>
+                    ))}
                   </FormSelect>
                   <FormInput 
                     label="Cantidad"
@@ -807,7 +852,7 @@ export default function PurchaseOrders() {
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-bold text-primary uppercase">Costo Estimado</span>
                         <span className="text-lg font-bold text-primary">
-                          {formatCurrency(newPO.quantity * (inventory.find(i => i.id === newPO.materialId)?.unitPrice || 0))}
+                          {formatCurrency(newPO.quantity * (availableMaterialOptions.find((item) => item.value === newPO.materialId)?.unitPrice || 0))}
                         </span>
                       </div>
                     </div>

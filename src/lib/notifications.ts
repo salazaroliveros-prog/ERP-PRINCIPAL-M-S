@@ -10,7 +10,69 @@ export interface Notification {
   read: boolean;
 }
 
+const NOTIFICATION_DEDUPE_STORAGE_KEY = 'erp_notification_dedupe_v1';
+const NOTIFICATION_DEDUPE_LIMIT = 300;
+const NOTIFICATION_COOLDOWN_BY_TYPE: Record<Notification['type'], number> = {
+  inventory: 30 * 60 * 1000,
+  subcontract: 12 * 60 * 60 * 1000,
+  project: 60 * 60 * 1000,
+  system: 30 * 60 * 1000,
+};
+
+function getNotificationFingerprint(title: string, body: string, type: Notification['type']) {
+  return `${type}::${title.trim().toLowerCase()}::${body.trim().toLowerCase()}`;
+}
+
+function loadDedupeMap() {
+  if (typeof window === 'undefined') {
+    return new Map<string, number>();
+  }
+
+  try {
+    const raw = window.localStorage.getItem(NOTIFICATION_DEDUPE_STORAGE_KEY);
+    if (!raw) return new Map<string, number>();
+    const parsed = JSON.parse(raw) as Array<[string, number]>;
+    return new Map(parsed.filter((entry) => Array.isArray(entry) && entry.length === 2));
+  } catch {
+    return new Map<string, number>();
+  }
+}
+
+function saveDedupeMap(map: Map<string, number>) {
+  if (typeof window === 'undefined') return;
+
+  const entries = Array.from(map.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, NOTIFICATION_DEDUPE_LIMIT);
+
+  try {
+    window.localStorage.setItem(NOTIFICATION_DEDUPE_STORAGE_KEY, JSON.stringify(entries));
+  } catch {
+    // Ignore storage quota errors.
+  }
+}
+
+function shouldSkipDuplicateNotification(title: string, body: string, type: Notification['type']) {
+  const fingerprint = getNotificationFingerprint(title, body, type);
+  const now = Date.now();
+  const cooldownMs = NOTIFICATION_COOLDOWN_BY_TYPE[type] || (30 * 60 * 1000);
+  const dedupeMap = loadDedupeMap();
+  const lastSentAt = dedupeMap.get(fingerprint) || 0;
+
+  if (now - lastSentAt < cooldownMs) {
+    return true;
+  }
+
+  dedupeMap.set(fingerprint, now);
+  saveDedupeMap(dedupeMap);
+  return false;
+}
+
 export const sendNotification = async (title: string, body: string, type: Notification['type']) => {
+  if (shouldSkipDuplicateNotification(title, body, type)) {
+    return;
+  }
+
   try {
     await requestJson<Notification>('/api/notifications', {
       method: 'POST',

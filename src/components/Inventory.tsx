@@ -85,6 +85,7 @@ export default function Inventory() {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isGeneratingPOs, setIsGeneratingPOs] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const lowStockAlertCacheRef = React.useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (selectedItemDetails) {
@@ -140,26 +141,26 @@ export default function Inventory() {
   const [isTrashModalOpen, setIsTrashModalOpen] = useState(false);
   const [deletedRecords, setDeletedRecords] = useState<any[]>([]);
 
-  const loadInventoryPage = React.useCallback(async (reset = false) => {
-    const nextOffset = reset ? 0 : inventoryOffset;
+  const loadInventoryPage = React.useCallback(async (reset = false, offsetOverride?: number) => {
+    const nextOffset = reset ? 0 : (offsetOverride ?? 0);
     const response = await listInventory({
       projectId: selectedProjectId || undefined,
       limit: 50,
       offset: nextOffset,
     });
 
-    if (reset) {
-      setInventory(response.items);
-      setInventoryOffset(response.items.length);
-    } else {
-      setInventory(prev => [...prev, ...response.items]);
-      setInventoryOffset(nextOffset + response.items.length);
-    }
+    setInventory((prev) => (reset ? response.items : [...prev, ...response.items]));
+    setInventoryOffset(reset ? response.items.length : nextOffset + response.items.length);
     setHasMore(response.hasMore);
 
-    const rows = reset ? response.items : [...inventory, ...response.items];
-    rows.forEach((item: any) => {
+    response.items.forEach((item: any) => {
       if (item.stock <= item.minStock) {
+        const stockSignature = Number(item.stock || 0);
+        if (lowStockAlertCacheRef.current[item.id] === stockSignature) {
+          return;
+        }
+
+        lowStockAlertCacheRef.current[item.id] = stockSignature;
         sendNotification(
           'Alerta de Stock Bajo',
           `El material ${item.name} tiene solo ${item.stock} ${item.unit} en existencia.`,
@@ -167,7 +168,7 @@ export default function Inventory() {
         );
       }
     });
-  }, [inventory, inventoryOffset, selectedProjectId]);
+  }, [selectedProjectId]);
 
   const loadDeletedRecords = React.useCallback(async () => {
     try {
@@ -687,11 +688,15 @@ export default function Inventory() {
   };
 
   useEffect(() => {
-    loadInventoryPage(true).catch((error) => {
+    setInventoryOffset(0);
+    setHasMore(true);
+    lowStockAlertCacheRef.current = {};
+
+    loadInventoryPage(true, 0).catch((error) => {
       console.error('Error loading inventory from API:', error);
       toast.error('No se pudo cargar inventario desde SQL');
     });
-  }, [loadInventoryPage]);
+  }, [selectedProjectId, loadInventoryPage]);
 
   useEffect(() => {
     listProjects()
@@ -768,7 +773,7 @@ export default function Inventory() {
       );
 
       const addedCount = projectMaterialSummary.length;
-      await loadInventoryPage(true);
+      await loadInventoryPage(true, 0);
       
       if (addedCount > 0) {
         toast.success(`${addedCount} materiales agregados desde el presupuesto.`);
@@ -788,7 +793,7 @@ export default function Inventory() {
     if (!hasMore || isLoadingMore) return;
     setIsLoadingMore(true);
     try {
-      await loadInventoryPage(false);
+      await loadInventoryPage(false, inventoryOffset);
     } catch (error) {
       handleApiError(error, OperationType.GET, 'inventory');
     } finally {
@@ -922,7 +927,7 @@ export default function Inventory() {
         await logAction('Registro de Material', 'Inventario', `Nuevo material ${newMaterial.name} registrado`, 'create', { materialId: saved.id });
       }
 
-      await loadInventoryPage(true);
+      await loadInventoryPage(true, 0);
       
       setIsModalOpen(false);
       setEditingMaterialId(null);
@@ -960,7 +965,7 @@ export default function Inventory() {
         });
       }
       await deleteInventoryItem(itemToDelete);
-      await loadInventoryPage(true);
+      await loadInventoryPage(true, 0);
       await loadDeletedRecords();
       setItemToDelete(null);
       toast.success('Material movido a la papelera');
@@ -1046,7 +1051,7 @@ export default function Inventory() {
           await incrementBudgetItemUsedQuantity(projectId, material.name, Math.abs(amount));
         }
 
-        await loadInventoryPage(true);
+        await loadInventoryPage(true, 0);
         toast.success(`Stock actualizado: ${material.name}`);
       } catch (error) {
         handleApiError(error, OperationType.UPDATE, `inventory/${id}`);
