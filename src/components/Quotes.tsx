@@ -366,123 +366,137 @@ export default function Quotes() {
 
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
+  const buildQuotePdf = (quote: any, client: any) => {
+    const doc = new jsPDF();
+    const quoteCode = quote.id.slice(-6).toUpperCase();
+
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 36, 'F');
+    drawLogo(doc, 16, 9, 1.05);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(19);
+    doc.setTextColor(255, 255, 255);
+    doc.text('COTIZACION PROFESIONAL', 194, 17, { align: 'right' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`No. ${quoteCode} | ${formatDate(quote.date)}`, 194, 24, { align: 'right' });
+    doc.text('Constructora WM_M&S', 194, 30, { align: 'right' });
+
+    doc.setDrawColor(37, 99, 235);
+    doc.setLineWidth(0.8);
+    doc.line(14, 40, 196, 40);
+
+    doc.setFontSize(10);
+    doc.setTextColor(71, 85, 105);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CLIENTE:', 16, 49);
+    doc.setFont('helvetica', 'normal');
+    doc.text(client?.name || 'N/A', 35, 49);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TELEFONO:', 16, 55);
+    doc.setFont('helvetica', 'normal');
+    doc.text(client?.phone || 'N/A', 38, 55);
+    doc.setFont('helvetica', 'bold');
+    doc.text('EMAIL:', 16, 61);
+    doc.setFont('helvetica', 'normal');
+    doc.text(client?.email || 'N/A', 31, 61);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('ESTADO:', 130, 49);
+    doc.setTextColor(quote.status === 'Accepted' ? 22 : 217, quote.status === 'Accepted' ? 163 : 119, quote.status === 'Accepted' ? 74 : 6);
+    doc.text(`${quote.status === 'Accepted' ? 'Aceptada' : quote.status === 'Sent' ? 'Enviada' : 'Pendiente'}`, 150, 49);
+    doc.setTextColor(71, 85, 105);
+    doc.setFont('helvetica', 'bold');
+    doc.text('VALIDEZ:', 130, 55);
+    doc.setFont('helvetica', 'normal');
+    doc.text('15 dias calendario', 150, 55);
+    doc.setFont('helvetica', 'bold');
+    doc.text('MONEDA:', 130, 61);
+    doc.setFont('helvetica', 'normal');
+    doc.text('GTQ', 150, 61);
+
+    autoTable(doc, {
+      startY: 70,
+      margin: { left: 14, right: 14 },
+      head: [['Descripcion', 'Cantidad', 'Precio Unitario', 'Subtotal']],
+      body: quote.items.map((item: any) => [
+        item.description,
+        String(item.quantity),
+        formatCurrency(item.unitPrice),
+        formatCurrency(item.quantity * item.unitPrice),
+      ]),
+      foot: [[
+        { content: 'TOTAL COTIZADO', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] } },
+        { content: formatCurrency(quote.total), styles: { fontStyle: 'bold', textColor: [37, 99, 235] } },
+      ]],
+      theme: 'grid',
+      headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 10 },
+      bodyStyles: { fontSize: 9, textColor: [51, 65, 85] },
+      footStyles: { fillColor: [241, 245, 249], fontSize: 10 },
+      columnStyles: {
+        0: { cellWidth: 96 },
+        1: { halign: 'center', cellWidth: 24 },
+        2: { halign: 'right', cellWidth: 32 },
+        3: { halign: 'right', cellWidth: 34 },
+      },
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY || 150;
+    let nextY = finalY + 10;
+
+    if (quote.notes) {
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42);
+      doc.setFont('helvetica', 'bold');
+      doc.text('ALCANCES Y CONDICIONES:', 14, nextY);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      const splitNotes = doc.splitTextToSize(quote.notes, 182);
+      doc.text(splitNotes, 14, nextY + 6);
+      nextY += 6 + (splitNotes.length * 5);
+    }
+
+    if (nextY > 235) {
+      doc.addPage();
+      nextY = 30;
+    }
+
+    doc.setDrawColor(203, 213, 225);
+    doc.line(14, nextY + 10, 88, nextY + 10);
+    doc.line(122, nextY + 10, 196, nextY + 10);
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Firma Cliente', 51, nextY + 15, { align: 'center' });
+    doc.text('Firma Responsable', 159, nextY + 15, { align: 'center' });
+
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(226, 232, 240);
+      doc.line(14, 274, 196, 274);
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Quesada, Jutiapa | Tel: 55606172 / 40601526 | Pagina ${i} de ${pageCount}`, 105, 279, { align: 'center' });
+      doc.setTextColor(37, 99, 235);
+      doc.setFont('helvetica', 'italic');
+      doc.text('"Construyendo el futuro"', 105, 284, { align: 'center' });
+    }
+
+    return doc;
+  };
+
   const generateQuotePDF = async (quote: any) => {
     const client = clients.find(c => c.id === quote.clientId);
     setIsDownloading(quote.id);
-    
+
     try {
-      const doc = new jsPDF();
-      
-      // Header
-      drawLogo(doc, 20, 10);
-      
-      doc.setFontSize(22);
-      doc.setTextColor(37, 99, 235); // Blue-600
-      doc.setFont('helvetica', 'bold');
-      doc.text('CONSTRUCTORA WM_M&S', 105, 20, { align: 'center' });
-      
-      doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139); // Slate-500
-      doc.setFont('helvetica', 'normal');
-      doc.text('Propuesta Técnica y Económica', 105, 26, { align: 'center' });
-      
-      doc.setDrawColor(37, 99, 235);
-      doc.setLineWidth(0.5);
-      doc.line(20, 32, 190, 32);
-
-      // Quote Info
-      doc.setFontSize(16);
-      doc.setTextColor(15, 23, 42); // Slate-900
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Cotización #${quote.id.slice(-6).toUpperCase()}`, 20, 45);
-      
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(71, 85, 105); // Slate-600
-      doc.text(`Cliente:`, 20, 55);
-      doc.setTextColor(15, 23, 42);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${client?.name || 'N/A'}`, 40, 55);
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(71, 85, 105);
-      doc.text(`Fecha:`, 20, 62);
-      doc.setTextColor(15, 23, 42);
-      doc.text(`${formatDate(quote.date)}`, 40, 62);
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(71, 85, 105);
-      doc.text(`Estado:`, 20, 69);
-      if (quote.status === 'Accepted') {
-        doc.setTextColor(22, 163, 74); // Emerald-600
-      } else {
-        doc.setTextColor(217, 119, 6); // Amber-600
-      }
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${quote.status === 'Accepted' ? 'Aceptada' : 'Pendiente'}`, 40, 69);
-
-      // Items Table
-      autoTable(doc, {
-        startY: 80,
-        head: [['Descripción', 'Cantidad', 'Precio Unit.', 'Total']],
-        body: quote.items.map((item: any) => [
-          item.description,
-          item.quantity,
-          formatCurrency(item.unitPrice),
-          formatCurrency(item.quantity * item.unitPrice)
-        ]),
-        foot: [[
-          { content: 'TOTAL', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
-          { content: formatCurrency(quote.total), styles: { fontStyle: 'bold', textColor: [37, 99, 235] } }
-        ]],
-        theme: 'striped',
-        headStyles: { fillColor: [37, 99, 235], fontSize: 10, fontStyle: 'bold' },
-        bodyStyles: { fontSize: 9 },
-        footStyles: { fillColor: [248, 250, 252], fontSize: 10 }
-      });
-
-      // Notes
-      const finalY = (doc as any).lastAutoTable.finalY || 150;
-      if (quote.notes) {
-        doc.setFontSize(10);
-        doc.setTextColor(15, 23, 42);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Notas y Condiciones:', 20, finalY + 15);
-        doc.setFontSize(9);
-        doc.setTextColor(71, 85, 105);
-        doc.setFont('helvetica', 'normal');
-        const splitNotes = doc.splitTextToSize(quote.notes, 170);
-        doc.text(splitNotes, 20, finalY + 22);
-      }
-
-      // Footer
-      const pageCount = doc.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        
-        // Separator line for footer
-        doc.setDrawColor(226, 232, 240); // Slate-200
-        doc.line(20, 275, 190, 275);
-        
-        doc.setFontSize(8);
-        doc.setTextColor(100, 116, 139);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Generado el ${formatDate(new Date().toISOString())} - Página ${i} de ${pageCount}`, 105, 280, { align: 'center' });
-        
-        // Company Info Footer
-        doc.setFontSize(9);
-        doc.setTextColor(71, 85, 105);
-        doc.text('Dirección: Quesada, jutiapa | Tel: 55606172 y 40601526', 105, 286, { align: 'center' });
-        doc.setFont('helvetica', 'italic');
-        doc.setTextColor(37, 99, 235);
-        doc.text('"construyendo el futuro"', 105, 292, { align: 'center' });
-      }
-
-      doc.save(`Cotizacion_${client?.name.replace(/\s+/g, '_') || 'Quote'}.pdf`);
-      toast.success('Cotización descargada con éxito');
+      const doc = buildQuotePdf(quote, client);
+      doc.save(`Cotizacion_${client?.name?.replace(/\s+/g, '_') || 'Quote'}_${quote.id.slice(-6).toUpperCase()}.pdf`);
+      toast.success('Cotizacion PDF descargada con exito');
     } catch (error) {
       console.error('Error generating PDF:', error);
-      toast.error('Error al generar el PDF de la cotización');
+      toast.error('Error al generar el PDF de la cotizacion');
     } finally {
       setIsDownloading(null);
     }
@@ -538,12 +552,14 @@ export default function Quotes() {
     }
   };
 
-  const handleSendWhatsApp = (quote: any) => {
+  const handleSendWhatsApp = async (quote: any) => {
     const client = clients.find(c => c.id === quote.clientId);
     if (!client?.phone) {
       toast.error('El cliente no tiene un número de teléfono registrado');
       return;
     }
+
+    setIsSending(quote.id);
 
     // Clean phone number (remove non-digits)
     const cleanPhone = client.phone.replace(/\D/g, '');
@@ -560,19 +576,43 @@ export default function Quotes() {
       `Atentamente,\n*CONSTRUCTORA WM_M&S*`
     );
 
-    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${message}`;
-    window.open(whatsappUrl, '_blank');
-    
-    // Update status to 'Sent' if it was 'Pending'
-    if (quote.status === 'Pending') {
-      updateQuoteRecord(quote.id, {
-        status: 'Sent',
-        sentAt: new Date().toISOString(),
-      });
-      loadQuotes();
+    try {
+      const doc = buildQuotePdf(quote, client);
+      const pdfBlob = doc.output('blob');
+      const fileName = `Cotizacion_${quote.id.slice(-6).toUpperCase()}.pdf`;
+      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+      const nav = navigator as Navigator & {
+        canShare?: (data: { files?: File[] }) => boolean;
+      };
+
+      if (nav.share && nav.canShare?.({ files: [pdfFile] })) {
+        await nav.share({
+          title: `Cotizacion #${quote.id.slice(-6).toUpperCase()} - Constructora WM_M&S`,
+          text: decodeURIComponent(message),
+          files: [pdfFile],
+        });
+        toast.success('Cotizacion lista para enviar por WhatsApp con PDF adjunto');
+      } else {
+        doc.save(fileName);
+        const whatsappUrl = `https://wa.me/${cleanPhone}?text=${message}`;
+        window.open(whatsappUrl, '_blank');
+        toast.success('Se descargo el PDF y se abrio WhatsApp. Adjunta el archivo al chat.');
+      }
+
+      if (quote.status === 'Pending') {
+        await updateQuoteRecord(quote.id, {
+          status: 'Sent',
+          sentAt: new Date().toISOString(),
+        });
+        await loadQuotes();
+      }
+    } catch (error) {
+      console.error('Error sending quote via WhatsApp:', error);
+      toast.error('No se pudo preparar el envio por WhatsApp');
+    } finally {
+      setIsSending(null);
     }
-    
-    toast.success('Abriendo WhatsApp...');
   };
 
   return (
