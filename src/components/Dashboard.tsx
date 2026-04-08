@@ -130,6 +130,21 @@ export default function Dashboard() {
   const [quickSearchTerm, setQuickSearchTerm] = useState('');
   const navigate = useNavigate();
 
+  const clampPercent = (value: any) => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return 0;
+    return Math.max(0, Math.min(100, numericValue));
+  };
+
+  const getFinancialProgress = (project: any) => {
+    const budget = Number(project?.budget || 0);
+    const spent = Number(project?.spent || 0);
+    if (budget > 0) {
+      return clampPercent((spent / budget) * 100);
+    }
+    return clampPercent(project?.financialProgress || 0);
+  };
+
   useEffect(() => {
     if (!selectedQuickProjectId) {
       setQuickBudgetItems([]);
@@ -197,19 +212,25 @@ export default function Dashboard() {
 
       // Recalculate project physical progress
       const updatedBudgetItems = quickBudgetItems.map(i => 
-        i.id === budgetItemId ? { ...i, progress: newProgress } : i
+        i.id === budgetItemId ? { ...i, progress: clampPercent(newProgress) } : i
       );
+
+      setQuickBudgetItems(updatedBudgetItems);
       
       const totalBudget = updatedBudgetItems.reduce((acc, i) => acc + ((i.materialCost + i.laborCost + i.indirectCost) * (i.quantity || 1)), 0);
       const overallProgress = totalBudget > 0
-        ? updatedBudgetItems.reduce((acc, i) => acc + ((i.progress || 0) * ((i.materialCost + i.laborCost + i.indirectCost) * (i.quantity || 1))), 0) / totalBudget
+        ? updatedBudgetItems.reduce((acc, i) => acc + (clampPercent(i.progress || 0) * ((i.materialCost + i.laborCost + i.indirectCost) * (i.quantity || 1))), 0) / totalBudget
         : 0;
 
       const project = projects.find(p => p.id === selectedQuickProjectId);
       if (project) {
         await updateProject(selectedQuickProjectId, buildProjectPayload(project, overallProgress));
       }
-      setProjects(prev => prev.map(p => p.id === selectedQuickProjectId ? { ...p, physicalProgress: overallProgress } : p));
+      setProjects(prev => prev.map(p => p.id === selectedQuickProjectId ? {
+        ...p,
+        physicalProgress: clampPercent(overallProgress),
+        financialProgress: getFinancialProgress(p),
+      } : p));
 
       const budgetItem = quickBudgetItems.find(i => i.id === budgetItemId);
       await logAction(
@@ -363,11 +384,12 @@ export default function Dashboard() {
   const activeProjectsList = projects.filter(p => p.status === 'In Progress' || p.status === 'Active');
   
   const progressComparisonData = projects.map(p => {
-    const financialProgress = p.budget > 0 ? (p.spent / p.budget) * 100 : 0;
+    const physicalProgress = clampPercent(p.physicalProgress || 0);
+    const financialProgress = getFinancialProgress(p);
     return {
       name: p.name,
-      fisico: p.physicalProgress || 0,
-      fisicoRestante: Math.max(0, 100 - (p.physicalProgress || 0)),
+      fisico: physicalProgress,
+      fisicoRestante: Math.max(0, 100 - physicalProgress),
       financiero: financialProgress,
       financieroRestante: Math.max(0, 100 - financialProgress)
     };
@@ -385,7 +407,8 @@ export default function Dashboard() {
   const ganttData = activeProjectsList.map(p => {
     const startDate = p.startDate ? parseISO(p.startDate) : globalMinDate;
     const endDate = p.endDate ? parseISO(p.endDate) : startDate;
-    const financialProgress = p.budget > 0 ? (p.spent / p.budget) * 100 : 0;
+    const physicalProgress = clampPercent(p.physicalProgress || 0);
+    const financialProgress = getFinancialProgress(p);
     
     const startOffset = Math.max(0, differenceInDays(startDate, globalMinDate));
     const duration = Math.max(1, differenceInDays(endDate, startDate));
@@ -395,9 +418,9 @@ export default function Dashboard() {
       name: p.name,
       startOffset,
       duration,
-      physicalDuration: duration * (p.physicalProgress || 0) / 100,
+      physicalDuration: duration * physicalProgress / 100,
       financialDuration: duration * financialProgress / 100,
-      physical: p.physicalProgress || 0,
+      physical: physicalProgress,
       financial: financialProgress,
       startDate: p.startDate,
       endDate: p.endDate

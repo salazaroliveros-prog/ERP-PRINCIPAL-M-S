@@ -388,6 +388,19 @@ export default function Projects() {
     longitude: ''
   });
 
+  const clampPercent = (value: any) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, Math.min(100, parsed));
+  };
+
+  const getProjectFinancialProgress = (project: any) => {
+    const budget = Number(project?.budget || 0);
+    const spent = Number(project?.spent || 0);
+    if (budget <= 0) return clampPercent(project?.financialProgress || 0);
+    return clampPercent((spent / budget) * 100);
+  };
+
   const loadProjectsFromApi = useCallback(async () => {
     try {
       const docs = await listProjects();
@@ -1841,8 +1854,9 @@ export default function Projects() {
           ) : (
             <AnimatePresence>
               {paginatedProjects.map((project) => {
-                const financialProgress = project.budget > 0 ? (project.spent / project.budget) * 100 : 0;
-                const progressDeviation = financialProgress - (project.physicalProgress || 0);
+                const physicalProgress = clampPercent(project.physicalProgress || 0);
+                const financialProgress = getProjectFinancialProgress(project);
+                const progressDeviation = financialProgress - physicalProgress;
                 const hasAlert = progressDeviation > 15;
 
                 return (
@@ -1951,13 +1965,13 @@ export default function Projects() {
                             fill="transparent"
                             strokeDasharray={125.6}
                             initial={{ strokeDashoffset: 125.6 }}
-                            animate={{ strokeDashoffset: 125.6 - (125.6 * (project.physicalProgress || 0)) / 100 }}
+                            animate={{ strokeDashoffset: 125.6 - (125.6 * physicalProgress) / 100 }}
                             className="text-primary"
                             strokeLinecap="round"
                           />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <span className="text-xs sm:text-lg font-black text-slate-900 dark:text-white leading-none">{Number(project.physicalProgress || 0).toFixed(1)}%</span>
+                          <span className="text-xs sm:text-lg font-black text-slate-900 dark:text-white leading-none">{physicalProgress.toFixed(1)}%</span>
                           <span className="text-[5px] sm:text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-tighter">Físico</span>
                         </div>
                       </div>
@@ -1995,11 +2009,11 @@ export default function Projects() {
                           <p className="text-[7px] sm:text-[10px] text-emerald-400 dark:text-emerald-500 font-black uppercase tracking-wider mb-0.5 sm:mb-1">Progreso Financiero</p>
                           <div className="flex items-center gap-2 sm:gap-3">
                             <p className="text-[10px] sm:text-lg font-black text-emerald-600 dark:text-emerald-400 leading-none">
-                              {project.budget > 0 ? `${((project.spent / project.budget) * 100).toFixed(1)}%` : '0%'}
+                              {`${financialProgress.toFixed(1)}%`}
                             </p>
                             <progress
                               className="flex-1 h-1 sm:h-2 [&::-webkit-progress-bar]:bg-emerald-100 dark:[&::-webkit-progress-bar]:bg-emerald-500/20 [&::-webkit-progress-value]:bg-emerald-500 [&::-moz-progress-bar]:bg-emerald-500 rounded-full overflow-hidden"
-                              value={Math.min((project.spent / project.budget) * 100, 100) || 0}
+                              value={financialProgress}
                               max={100}
                               title="Progreso financiero"
                             />
@@ -2015,7 +2029,7 @@ export default function Projects() {
                           </div>
                           <div className="flex items-center gap-1">
                             <TrendingUp size={10} className="sm:w-3.5 sm:h-3.5 text-emerald-500" />
-                            <span>{((project.spent / project.budget) * 100 || 0).toFixed(1)}% Finan.</span>
+                            <span>{financialProgress.toFixed(1)}% Finan.</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
@@ -2157,12 +2171,20 @@ export default function Projects() {
                       <td className="px-3 sm:px-6 py-2 sm:py-4">
                         <div className="flex flex-col">
                           <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">{formatCurrency(project.budget)}</span>
-                          <progress
-                            className="w-16 sm:w-24 h-1 sm:h-1.5 mt-1 [&::-webkit-progress-bar]:bg-slate-100 dark:[&::-webkit-progress-bar]:bg-slate-800 [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary rounded-full overflow-hidden"
-                            value={Math.min((project.spent / project.budget) * 100, 100) || 0}
-                            max={100}
-                            title="Progreso de presupuesto"
-                          />
+                          <div className="mt-1 space-y-1">
+                            <progress
+                              className="w-16 sm:w-24 h-1 sm:h-1.5 [&::-webkit-progress-bar]:bg-blue-100 dark:[&::-webkit-progress-bar]:bg-blue-900/30 [&::-webkit-progress-value]:bg-blue-500 [&::-moz-progress-bar]:bg-blue-500 rounded-full overflow-hidden"
+                              value={clampPercent(project.physicalProgress || 0)}
+                              max={100}
+                              title="Avance físico"
+                            />
+                            <progress
+                              className="w-16 sm:w-24 h-1 sm:h-1.5 [&::-webkit-progress-bar]:bg-emerald-100 dark:[&::-webkit-progress-bar]:bg-emerald-900/30 [&::-webkit-progress-value]:bg-emerald-500 [&::-moz-progress-bar]:bg-emerald-500 rounded-full overflow-hidden"
+                              value={getProjectFinancialProgress(project)}
+                              max={100}
+                              title="Avance financiero"
+                            />
+                          </div>
                         </div>
                       </td>
                       <td className="px-3 sm:px-6 py-2 sm:py-4">
