@@ -758,9 +758,14 @@ export default function Financials() {
   const balance = totalIncome - totalExpense;
 
   const administrativeCategorySet = useMemo(() => new Set(ADMINISTRATIVE_EXPENSE_CATEGORIES), []);
+  const personalCategorySet = useMemo(() => new Set(PERSONAL_EXPENSE_CATEGORIES), []);
 
   const administrativeExpenseTotal = filteredTransactions
     .filter(t => t.type === 'Expense' && administrativeCategorySet.has(t.category))
+    .reduce((acc, t) => acc + t.amount, 0);
+
+  const personalExpenseTotal = filteredTransactions
+    .filter(t => t.type === 'Expense' && personalCategorySet.has(t.category))
     .reduce((acc, t) => acc + t.amount, 0);
 
   const activeProjectIds = useMemo(() => new Set(
@@ -776,6 +781,32 @@ export default function Financials() {
   const adminExpenseVsProfit = activeProjectsProfit > 0
     ? (administrativeExpenseTotal / activeProjectsProfit) * 100
     : 0;
+
+  const personalExpenseVsProfit = activeProjectsProfit > 0
+    ? (personalExpenseTotal / activeProjectsProfit) * 100
+    : 0;
+
+  const getTrafficLightState = (ratio: number) => {
+    if (ratio <= 40) {
+      return {
+        label: 'Verde',
+        classes: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30',
+      };
+    }
+    if (ratio <= 70) {
+      return {
+        label: 'Amarillo',
+        classes: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30',
+      };
+    }
+    return {
+      label: 'Rojo',
+      classes: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/30',
+    };
+  };
+
+  const adminTrafficLight = getTrafficLightState(adminExpenseVsProfit);
+  const personalTrafficLight = getTrafficLightState(personalExpenseVsProfit);
 
   // KPIs
   const profitMargin = totalIncome > 0 ? (balance / totalIncome) * 100 : 0;
@@ -1336,6 +1367,21 @@ export default function Financials() {
             >
               Personales
             </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
+            <span className={cn(
+              "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border",
+              adminTrafficLight.classes
+            )}>
+              Admin {adminTrafficLight.label}: {activeProjectsProfit > 0 ? `${adminExpenseVsProfit.toFixed(1)}%` : 'N/A'}
+            </span>
+            <span className={cn(
+              "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border",
+              personalTrafficLight.classes
+            )}>
+              Personal {personalTrafficLight.label}: {activeProjectsProfit > 0 ? `${personalExpenseVsProfit.toFixed(1)}%` : 'N/A'}
+            </span>
           </div>
         </div>
 
