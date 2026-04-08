@@ -532,10 +532,16 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
           return null;
         }
 
-        const hasMaterials = Array.isArray(item.materials) && item.materials.length > 0;
-        const hasLabor = Array.isArray(item.labor) && item.labor.length > 0;
+        const expectedMaterials = Array.isArray(template.materials) ? template.materials.length : 0;
+        const expectedLabor = Array.isArray(template.labor) ? template.labor.length : 0;
+        const hasMaterials = Array.isArray(item.materials) && item.materials.length >= expectedMaterials;
+        const hasLabor = Array.isArray(item.labor) && item.labor.length >= expectedLabor;
         const hasUnitPrice = (Number(item.totalUnitPrice) || 0) > 0;
-        if (hasMaterials && hasLabor && hasUnitPrice) {
+        const isComplete =
+          (!expectedMaterials || hasMaterials) &&
+          (!expectedLabor || hasLabor) &&
+          hasUnitPrice;
+        if (isComplete) {
           return null;
         }
 
