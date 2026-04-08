@@ -128,6 +128,7 @@ export default function Dashboard() {
   const [quickBudgetItems, setQuickBudgetItems] = useState<any[]>([]);
   const [isLoadingQuickItems, setIsLoadingQuickItems] = useState(false);
   const [quickSearchTerm, setQuickSearchTerm] = useState('');
+  const [progressChartScope, setProgressChartScope] = useState<'all' | 'selected'>('all');
   const navigate = useNavigate();
 
   const clampPercent = (value: any) => {
@@ -157,7 +158,14 @@ export default function Dashboard() {
     (async () => {
       try {
         const items = await listProjectBudgetItemsDetailed(selectedQuickProjectId);
-        if (!cancelled) setQuickBudgetItems(items);
+        if (!cancelled) {
+          const orderedItems = [...items].sort((a: any, b: any) => {
+            const orderDiff = Number(a?.order || 0) - Number(b?.order || 0);
+            if (orderDiff !== 0) return orderDiff;
+            return String(a?.description || '').localeCompare(String(b?.description || ''));
+          });
+          setQuickBudgetItems(orderedItems);
+        }
       } catch (error) {
         if (!cancelled) {
           handleApiError(error, OperationType.GET, `projects/${selectedQuickProjectId}/budgetItems`);
@@ -262,7 +270,31 @@ export default function Dashboard() {
 
         if (cancelled) return;
 
-        setProjects(projectsItems);
+        const projectSpentMap = transactionsResult.items
+          .filter((t: any) => t.type === 'Expense')
+          .reduce((acc: Record<string, number>, t: any) => {
+            const key = String(t.projectId || '');
+            if (!key) return acc;
+            acc[key] = (acc[key] || 0) + Number(t.amount || 0);
+            return acc;
+          }, {});
+
+        const normalizedProjects = projectsItems.map((p: any) => {
+          const spentFromTransactions = projectSpentMap[String(p.id)] ?? Number(p.spent || 0);
+          const budget = Number(p.budget || 0);
+          const financialProgress = budget > 0
+            ? clampPercent((spentFromTransactions / budget) * 100)
+            : clampPercent(p.financialProgress || 0);
+
+          return {
+            ...p,
+            spent: spentFromTransactions,
+            financialProgress,
+            physicalProgress: clampPercent(p.physicalProgress || 0),
+          };
+        });
+
+        setProjects(normalizedProjects);
         setTransactions(transactionsResult.items);
         setInventory(inventoryResult.items);
         setSubcontracts(subcontractsItems);
@@ -383,17 +415,25 @@ export default function Dashboard() {
 
   const activeProjectsList = projects.filter(p => p.status === 'In Progress' || p.status === 'Active');
   
-  const progressComparisonData = projects.map(p => {
-    const physicalProgress = clampPercent(p.physicalProgress || 0);
-    const financialProgress = getFinancialProgress(p);
-    return {
-      name: p.name,
-      fisico: physicalProgress,
-      fisicoRestante: Math.max(0, 100 - physicalProgress),
-      financiero: financialProgress,
-      financieroRestante: Math.max(0, 100 - financialProgress)
-    };
-  }).filter(p => p.fisico > 0 || p.financiero > 0).slice(0, 8);
+  const progressComparisonData = projects
+    .map(p => {
+      const physicalProgress = clampPercent(p.physicalProgress || 0);
+      const financialProgress = getFinancialProgress(p);
+      return {
+        id: p.id,
+        name: p.name,
+        fisico: physicalProgress,
+        fisicoRestante: Math.max(0, 100 - physicalProgress),
+        financiero: financialProgress,
+        financieroRestante: Math.max(0, 100 - financialProgress),
+      };
+    })
+    .filter(p => p.fisico > 0 || p.financiero > 0 || p.id === selectedQuickProjectId)
+    .sort((a, b) => Math.max(b.fisico, b.financiero) - Math.max(a.fisico, a.financiero));
+
+  const progressComparisonChartData = progressChartScope === 'selected' && selectedQuickProjectId
+    ? progressComparisonData.filter((p) => p.id === selectedQuickProjectId)
+    : progressComparisonData;
   
   const allProjectDates = activeProjectsList.flatMap(p => [
     p.startDate ? parseISO(p.startDate) : null,
@@ -678,13 +718,33 @@ export default function Dashboard() {
 
           {/* Stacked Bar Chart for Progress Comparison */}
           <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
-            <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest flex items-center gap-2">
-              <TrendingUp size={18} className="text-primary" />
-              Comparativa de Avance (Físico vs Financiero)
-            </h3>
+            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
+                <TrendingUp size={18} className="text-primary" />
+                Comparativa de Avance (Físico vs Financiero)
+              </h3>
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Vista</label>
+                <select
+                  value={progressChartScope}
+                  onChange={(e) => setProgressChartScope(e.target.value as 'all' | 'selected')}
+                  className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
+                >
+                  <option value="all">Todos los proyectos</option>
+                  <option value="selected" disabled={!selectedQuickProjectId}>
+                    Solo proyecto seleccionado
+                  </option>
+                </select>
+              </div>
+            </div>
+            {progressChartScope === 'selected' && !selectedQuickProjectId && (
+              <p className="mb-4 text-xs font-bold text-amber-600 dark:text-amber-400">
+                Seleccione un proyecto en "Actualización rápida de avance" para ver su comparativa individual.
+              </p>
+            )}
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={progressComparisonData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                <BarChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                   <XAxis 
                     dataKey="name" 
@@ -1116,9 +1176,8 @@ export default function Dashboard() {
                     <div className="grid grid-cols-1 gap-3">
                       {projects
                         .filter(p => 
-                          (p.status === 'In Progress' || p.status === 'Active') &&
-                          (p.name.toLowerCase().includes(quickSearchTerm.toLowerCase()) || 
-                           p.location.toLowerCase().includes(quickSearchTerm.toLowerCase()))
+                          (String(p.name || '').toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
+                           String(p.location || '').toLowerCase().includes(quickSearchTerm.toLowerCase()))
                         )
                         .map(project => (
                           <button
