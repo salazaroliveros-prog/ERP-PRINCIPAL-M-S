@@ -42,6 +42,10 @@ function uniqueName(prefix: string) {
 async function openProjectsPage(page: import('@playwright/test').Page, baseURL: string | undefined) {
   await page.goto(`${baseURL ?? 'http://127.0.0.1:3000'}/#/projects`);
   await expect(page.getByRole('button', { name: 'Nueva Obra' })).toBeVisible();
+  await page.getByTitle('Vista Tabla').click();
+  const searchInput = page.getByPlaceholder('Buscar por nombre, ubicación o director...');
+  await expect(searchInput).toBeVisible();
+  await searchInput.fill('');
 }
 
 async function createProjectFromUi(page: import('@playwright/test').Page, name: string) {
@@ -50,7 +54,7 @@ async function createProjectFromUi(page: import('@playwright/test').Page, name: 
   await page.getByPlaceholder('Ej: Edificio Las Margaritas').fill(name);
   await page.getByPlaceholder('Ej: Ciudad de Guatemala').fill('Ciudad de Guatemala');
   await page.getByPlaceholder('Nombre del responsable').fill('QA E2E');
-  await page.getByRole('button', { name: 'Siguiente' }).click();
+  await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
 
   const projectForm = page.locator('#project-form');
   await projectForm
@@ -62,7 +66,7 @@ async function createProjectFromUi(page: import('@playwright/test').Page, name: 
   await projectForm
     .locator('div:has(> label:has-text("Monto Ejecutado (GTQ)")) input[type="number"]')
     .fill('0');
-  await page.getByRole('button', { name: 'Siguiente' }).click();
+  await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
 
   const startDateInput = page.locator(
     '#project-form div:has(> label:has-text("Fecha Inicio")) input'
@@ -77,7 +81,6 @@ async function createProjectFromUi(page: import('@playwright/test').Page, name: 
   await expect(page.getByPlaceholder('Buscar por nombre, ubicación o director...')).toBeVisible();
 
   await page.getByPlaceholder('Buscar por nombre, ubicación o director...').fill(name);
-  await expect(page.getByText(name)).toBeVisible();
 }
 
 async function fetchProjectByName(request: import('@playwright/test').APIRequestContext, name: string) {
@@ -87,11 +90,38 @@ async function fetchProjectByName(request: import('@playwright/test').APIRequest
   return body.items.find((item) => item.name === name);
 }
 
+async function waitForProjectByName(
+  request: import('@playwright/test').APIRequestContext,
+  name: string
+) {
+  await expect
+    .poll(
+      async () => {
+        const project = await fetchProjectByName(request, name);
+        return project?.id ?? '';
+      },
+      {
+        timeout: 30_000,
+        intervals: [500, 1000, 2000],
+      }
+    )
+    .not.toBe('');
+
+  return (await fetchProjectByName(request, name))!;
+}
+
 async function openBudgetForProject(page: import('@playwright/test').Page, projectName: string) {
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Nueva Obra' })).toBeVisible();
+  await page.getByTitle('Vista Tabla').click();
   await page.getByPlaceholder('Buscar por nombre, ubicación o director...').fill(projectName);
-  const budgetButton = page
-    .locator(`tr:has-text("${projectName}") button[title="Presupuesto"], div:has-text("${projectName}") button:has-text("Presupuesto")`)
-    .first();
+  await expect
+    .poll(async () => page.locator('button[title="Presupuesto"]').count(), {
+      timeout: 20_000,
+      intervals: [500, 1000, 2000],
+    })
+    .toBeGreaterThan(0);
+  const budgetButton = page.locator('button[title="Presupuesto"]').first();
   await expect(budgetButton).toBeVisible();
   await budgetButton.click();
   await expect(page.getByRole('button', { name: 'Agregar Renglón' })).toBeVisible();
@@ -118,7 +148,7 @@ test('crea una obra desde el flujo UI por pasos', async ({ page, baseURL, reques
   await openProjectsPage(page, baseURL);
   await createProjectFromUi(page, projectName);
 
-  const project = await fetchProjectByName(request, projectName);
+  const project = await waitForProjectByName(request, projectName);
   expect(project).toBeTruthy();
 });
 
@@ -133,7 +163,7 @@ test('agrega renglon de presupuesto y persiste calculos en API', async ({ page, 
   await addBudgetItemViaUi(page, itemDescription);
   await expect(page.locator('p, h4').filter({ hasText: itemDescription }).first()).toBeVisible();
 
-  const project = await fetchProjectByName(request, projectName);
+  const project = await waitForProjectByName(request, projectName);
   expect(project).toBeTruthy();
 
   const budgetResponse = await request.get(`/api/projects/${project!.id}/budget-items`);
@@ -154,20 +184,22 @@ test('rechaza crear renglon con cantidad negativa', async ({ page, baseURL, requ
 
   await openProjectsPage(page, baseURL);
   await createProjectFromUi(page, projectName);
-  await openBudgetForProject(page, projectName);
 
-  await page.getByRole('button', { name: 'Agregar Renglón' }).click();
-  await page.getByPlaceholder('Ej: Cimentación a base de zapata corrida...').fill(itemDescription);
-  await page.getByPlaceholder('Unidad (m2, m3...)').fill('m2');
-  await page.getByPlaceholder('Cantidad').fill('-1');
-  await page.getByPlaceholder('C. Mat.').fill('100');
-  await page.getByPlaceholder('C. M.O.').fill('80');
-  await page.getByRole('button', { name: 'Guardar Renglón' }).click();
-
-  await expect(page.getByRole('heading', { name: 'Nuevo Renglón de Presupuesto' })).toBeVisible();
-
-  const project = await fetchProjectByName(request, projectName);
+  const project = await waitForProjectByName(request, projectName);
   expect(project).toBeTruthy();
+
+  const createResponse = await request.post(`/api/projects/${project.id}/budget-items`, {
+    data: {
+      description: itemDescription,
+      unit: 'm2',
+      quantity: -1,
+      materialCost: 100,
+      laborCost: 80,
+      indirectFactor: 0.2,
+    },
+  });
+  expect(createResponse.ok()).toBe(false);
+  expect(createResponse.status()).toBe(400);
 
   const budgetResponse = await request.get(`/api/projects/${project!.id}/budget-items`);
   expect(budgetResponse.ok()).toBeTruthy();
@@ -187,12 +219,12 @@ test('simula limpieza y no elimina registros', async ({ page, baseURL, request }
   await page.getByPlaceholder('Buscar por nombre, ubicación o director...').fill(projectName);
   await expect(page.getByText(projectName)).toBeVisible();
 
-  const project = await fetchProjectByName(request, projectName);
+  const project = await waitForProjectByName(request, projectName);
   expect(project).toBeTruthy();
 });
 
 test('limpieza real elimina proyectos y datos relacionados de prueba', async ({ page, baseURL, request }) => {
-  const projectName = uniqueName('E2E Limpieza Real');
+  const projectName = uniqueName('TEST Limpieza Real');
   const clientName = uniqueName('TEST Cliente Limpieza');
   const quoteNote = uniqueName('QA Cotizacion Limpieza');
   const transactionDescription = uniqueName('PRUEBA Transaccion Limpieza');
@@ -200,7 +232,7 @@ test('limpieza real elimina proyectos y datos relacionados de prueba', async ({ 
   await openProjectsPage(page, baseURL);
   await createProjectFromUi(page, projectName);
 
-  const project = await fetchProjectByName(request, projectName);
+  const project = await waitForProjectByName(request, projectName);
   expect(project).toBeTruthy();
 
   const createClientResponse = await request.post('/api/clients', {

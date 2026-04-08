@@ -211,26 +211,29 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     setIsInitializing(true);
     try {
-      let newTotalBudget = 0;
+      const recalculatedItems: any[] = [];
 
       for (const item of budgetItems) {
         const factor = factors[item.description];
-        if (factor !== undefined) {
-          const newQuantity = project.area * factor;
-          const totalItemPrice = newQuantity * (item.totalUnitPrice || 0);
+        const newQuantity = factor !== undefined ? project.area * factor : (Number(item.quantity) || 0);
+        const recalculatedItem = recalculateItemTotals({ ...item, quantity: newQuantity });
 
-            await patchBudgetItem(item.id, {
-            quantity: newQuantity,
-            totalItemPrice: totalItemPrice,
-          });
-          
-          newTotalBudget += totalItemPrice;
-        } else {
-          newTotalBudget += (item.totalItemPrice || 0);
-        }
+        await patchBudgetItem(item.id, {
+          quantity: recalculatedItem.quantity,
+          materialCost: recalculatedItem.materialCost,
+          laborCost: recalculatedItem.laborCost,
+          indirectCost: recalculatedItem.indirectCost,
+          totalUnitPrice: recalculatedItem.totalUnitPrice,
+          totalItemPrice: recalculatedItem.totalItemPrice,
+          estimatedDays: recalculatedItem.estimatedDays,
+        });
+
+        recalculatedItems.push(recalculatedItem);
       }
 
-        await loadBudgetItems();
+      const newTotalBudget = sumProjectBudget(recalculatedItems);
+
+      await loadBudgetItems();
       
       await patchProjectBudget({
         budget: newTotalBudget,
@@ -429,6 +432,35 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
   const sumProjectBudget = useCallback((items: any[]) => {
     return items.reduce((sum, item) => sum + (item.totalItemPrice || 0), 0);
+  }, []);
+
+  const buildMaterialExplosion = useCallback((items: any[]) => {
+    const exploded: Record<string, { name: string; unit: string; quantity: number; unitPrice: number; total: number }> = {};
+
+    items.forEach((item) => {
+      const itemQuantity = Number(item.quantity) || 0;
+      const materials = Array.isArray(item.materials) ? item.materials : [];
+
+      materials.forEach((m: any) => {
+        const name = String(m?.name || '').trim() || 'Material sin nombre';
+        const unit = String(m?.unit || '').trim() || 'u';
+        const unitQty = Number(m?.quantity) || 0;
+        const unitPrice = Number(m?.unitPrice) || 0;
+        const totalQty = unitQty * itemQuantity;
+        const totalAmount = totalQty * unitPrice;
+        const key = `${name}_${unit}`;
+
+        if (!exploded[key]) {
+          exploded[key] = { name, unit, quantity: 0, unitPrice, total: 0 };
+        }
+
+        exploded[key].quantity += totalQty;
+        exploded[key].unitPrice = unitPrice;
+        exploded[key].total += totalAmount;
+      });
+    });
+
+    return exploded;
   }, []);
 
   const recalculateItemTotals = useCallback((item: any) => {
@@ -785,37 +817,21 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     const item = budgetItems.find(i => i.id === itemId);
     if (!item) return;
 
-    const totalItemPrice = quantity * item.totalUnitPrice;
-    
-    // Calculate estimated days based on labor yields
-    let estimatedDays = 0;
-    if (item.labor && item.labor.length > 0) {
-      const daysPerRole = item.labor.map((l: any) => l.yield > 0 ? quantity / l.yield : 0);
-      estimatedDays = Math.max(...daysPerRole);
-    }
-
-    const updatedItem = {
+    const recalculatedItem = recalculateItemTotals({
       ...item,
       quantity,
-      totalItemPrice,
-      estimatedDays,
-    };
+    });
 
     const updatedBudgetItems = budgetItems.map((budgetItem) =>
       budgetItem.id === itemId
-        ? {
-            ...budgetItem,
-            quantity,
-            totalItemPrice,
-            estimatedDays,
-          }
+        ? recalculatedItem
         : budgetItem
     );
 
     setBudgetItems(updatedBudgetItems);
 
     if (editingItem?.id === itemId) {
-      setEditingItem(updatedItem);
+      setEditingItem(recalculatedItem);
     }
 
     const newTotalBudget = updatedBudgetItems.reduce(
@@ -825,9 +841,13 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     try {
       await patchBudgetItem(itemId, {
-        quantity,
-        totalItemPrice,
-        estimatedDays,
+        quantity: recalculatedItem.quantity,
+        materialCost: recalculatedItem.materialCost,
+        laborCost: recalculatedItem.laborCost,
+        indirectCost: recalculatedItem.indirectCost,
+        totalUnitPrice: recalculatedItem.totalUnitPrice,
+        totalItemPrice: recalculatedItem.totalItemPrice,
+        estimatedDays: recalculatedItem.estimatedDays,
       });
 
       await patchProjectBudget({
@@ -1494,21 +1514,74 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const exportToCSV = () => {
-    const headers = ['#', 'Descripción', 'Unidad', 'Cantidad', 'Precio Unitario', 'Total', 'Días Estimados'];
-    const rows = budgetItems.map(item => [
+    const escapeCell = (value: any) => {
+      const text = String(value ?? '');
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+
+    const rowHeaders = ['#', 'Descripción', 'Unidad', 'Cantidad', 'Precio Unitario', 'Total', 'Días Estimados'];
+    const rowData = budgetItems.map((item) => [
       item.order,
       item.description,
       item.unit,
-      item.quantity,
-      item.totalUnitPrice,
-      item.totalItemPrice,
-      item.estimatedDays
+      Number(item.quantity || 0).toFixed(2),
+      Number(item.totalUnitPrice || 0).toFixed(2),
+      Number(item.totalItemPrice || 0).toFixed(2),
+      Number(item.estimatedDays || 0).toFixed(2),
     ]);
 
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.join(','))
-    ].join('\n');
+    const breakdownHeaders = ['Renglón', 'Material', 'Unidad', 'Cantidad x Unidad', 'Cantidad Total', 'Precio Unitario', 'Total Material'];
+    const breakdownRows = budgetItems.flatMap((item) => {
+      const materials = Array.isArray(item.materials) ? item.materials : [];
+      return materials.map((m: any) => {
+        const qtyPerUnit = Number(m.quantity || 0);
+        const itemQty = Number(item.quantity || 0);
+        const totalQty = qtyPerUnit * itemQty;
+        const unitPrice = Number(m.unitPrice || 0);
+        return [
+          `${item.order}. ${item.description}`,
+          m.name || '',
+          m.unit || '',
+          qtyPerUnit.toFixed(4),
+          totalQty.toFixed(4),
+          unitPrice.toFixed(2),
+          (totalQty * unitPrice).toFixed(2),
+        ];
+      });
+    });
+
+    const materialExplosion = buildMaterialExplosion(budgetItems);
+    const materialSummaryHeaders = ['Material', 'Unidad', 'Cantidad Total', 'Precio Unitario', 'Total'];
+    const materialSummaryRows = Object.values(materialExplosion)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((m) => [
+        m.name,
+        m.unit,
+        m.quantity.toFixed(4),
+        m.unitPrice.toFixed(2),
+        m.total.toFixed(2),
+      ]);
+
+    const totalExplosionCost = Object.values(materialExplosion).reduce((sum, m) => sum + m.total, 0);
+
+    const csvSections = [
+      ['RESUMEN DE RENGLONES'],
+      rowHeaders,
+      ...rowData,
+      [],
+      ['DESGLOSE DE MATERIALES POR RENGLÓN'],
+      breakdownHeaders,
+      ...breakdownRows,
+      [],
+      ['RESUMEN TOTAL POR MATERIAL'],
+      materialSummaryHeaders,
+      ...materialSummaryRows,
+      ['TOTAL MATERIALES', '', '', '', totalExplosionCost.toFixed(2)],
+    ];
+
+    const csvContent = csvSections
+      .map((row) => row.map(escapeCell).join(','))
+      .join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -1683,25 +1756,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     docPdf.text('RESUMEN DE MATERIALES (EXPLOSIÓN)', 14, currentY);
     currentY += 8;
 
-    const materialExplosion = budgetItems.reduce((acc: any, item) => {
-      if (item.materials) {
-        item.materials.forEach((m: any) => {
-          const key = `${m.name}_${m.unit}`;
-          if (!acc[key]) {
-            acc[key] = {
-              name: m.name,
-              unit: m.unit,
-              quantity: 0,
-              unitPrice: m.unitPrice,
-              total: 0
-            };
-          }
-          acc[key].quantity += (m.quantity * item.quantity);
-          acc[key].total += (m.quantity * item.quantity * m.unitPrice);
-        });
-      }
-      return acc;
-    }, {});
+    const materialExplosion = buildMaterialExplosion(budgetItems);
 
     const materialExplosionData = Object.values(materialExplosion).map((m: any) => [
       m.name,
@@ -1727,7 +1782,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     currentY = (docPdf as any).lastAutoTable.finalY + 15;
 
-    const totalMaterials = budgetItems.reduce((sum, item) => sum + (item.materialCost || 0), 0);
+    const totalMaterials = Object.values(materialExplosion).reduce((sum: number, m: any) => sum + (m.total || 0), 0);
     const totalLabor = budgetItems.reduce((sum, item) => sum + (item.laborCost || 0), 0);
     const totalIndirect = budgetItems.reduce((sum, item) => sum + (item.indirectCost || 0), 0);
 
