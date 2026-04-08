@@ -97,6 +97,18 @@ const ADMINISTRATIVE_EXPENSE_CATEGORIES = [
   'Mantenimiento Oficina'
 ];
 
+const PERSONAL_EXPENSE_CATEGORIES = [
+  'Gastos Personales',
+  'Gastos del Hogar',
+  'Viáticos',
+  'Combustible',
+  'Pago de Luz',
+  'Renta',
+  'Internet',
+  'Plataformas TV',
+  'Préstamos'
+];
+
 const ALL_EXPENSE_CATEGORIES = Array.from(new Set([
   ...EXPENSE_CATEGORIES,
   ...ADMINISTRATIVE_EXPENSE_CATEGORIES,
@@ -118,6 +130,7 @@ export default function Financials() {
   const [currentStep, setCurrentStep] = useState(0);
   const [filterProject, setFilterProject] = useState('all');
   const [dateFilter, setDateFilter] = useState('all'); // all, week, month, custom
+  const [quickExpenseFilter, setQuickExpenseFilter] = useState<'all' | 'admin' | 'personal'>('all');
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
   
   const [budgetItems, setBudgetItems] = useState<any[]>([]);
@@ -681,6 +694,11 @@ export default function Financials() {
 
   const filteredTransactions = transactions.filter(t => {
     const matchesProject = filterProject === 'all' || t.projectId === filterProject;
+    const matchesExpenseCategory = quickExpenseFilter === 'all'
+      ? true
+      : quickExpenseFilter === 'admin'
+        ? t.type === 'Expense' && ADMINISTRATIVE_EXPENSE_CATEGORIES.includes(t.category)
+        : t.type === 'Expense' && PERSONAL_EXPENSE_CATEGORIES.includes(t.category);
     
     let matchesDate = true;
     const tDate = parseISO(t.date);
@@ -697,7 +715,7 @@ export default function Financials() {
       });
     }
 
-    return matchesProject && matchesDate;
+    return matchesProject && matchesDate && matchesExpenseCategory;
   });
 
   // Prepare chart data
@@ -1280,6 +1298,45 @@ export default function Financials() {
               />
             </div>
           )}
+
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
+            <button
+              type="button"
+              onClick={() => setQuickExpenseFilter('all')}
+              className={cn(
+                "px-3 py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider border transition-all",
+                quickExpenseFilter === 'all'
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+              )}
+            >
+              Todo
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuickExpenseFilter('admin')}
+              className={cn(
+                "px-3 py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider border transition-all",
+                quickExpenseFilter === 'admin'
+                  ? "bg-violet-600 text-white border-violet-600"
+                  : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+              )}
+            >
+              Administrativos
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuickExpenseFilter('personal')}
+              className={cn(
+                "px-3 py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider border transition-all",
+                quickExpenseFilter === 'personal'
+                  ? "bg-amber-600 text-white border-amber-600"
+                  : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+              )}
+            >
+              Personales
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full md:w-auto">
