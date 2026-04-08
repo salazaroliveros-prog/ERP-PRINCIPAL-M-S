@@ -161,35 +161,44 @@ export const FormInput = ({ label, error, ...props }: { label: string, error?: s
   </div>
 );
 
-export const FormSelect = ({ label, error, children, ...props }: { label: string, error?: string, children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) => (
-  <div className="space-y-1.5 sm:space-y-2 group">
-    <label className="text-[8px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1 group-focus-within:text-primary transition-colors">
-      {label}
-    </label>
-    <div className="relative">
-      <select
-        {...props}
-        className={cn(
-          "w-full px-4 sm:px-5 py-2.5 sm:py-4 bg-white dark:bg-slate-900 border-2 rounded-xl sm:rounded-2xl focus:outline-none appearance-none transition-all duration-300 font-medium text-xs sm:text-sm text-slate-900 dark:text-white",
-          error 
-            ? "border-rose-100 dark:border-rose-900/30 bg-rose-50/30 dark:bg-rose-900/10 focus:border-rose-500" 
-            : "border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 focus:border-primary focus:ring-4 focus:ring-primary/5 shadow-sm hover:shadow-md"
-        )}
-      >
-        {children}
-      </select>
-      <div className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-        <ChevronRight size={14} className="rotate-90 sm:w-4.5 sm:h-4.5" />
-      </div>
-      {error && (
-        <motion.p 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-[8px] sm:text-[10px] text-rose-500 font-black mt-1 ml-1 uppercase tracking-wider"
+export const FormSelect = ({ label, error, children, ...props }: { label: string, error?: string, children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) => {
+  const normalizedLabel = String(label || '').trim();
+  const fallbackLabel = normalizedLabel || 'Seleccionar opcion';
+  const title = props.title ?? fallbackLabel;
+  const ariaLabel = props['aria-label'] ?? fallbackLabel;
+
+  return (
+    <div className="space-y-1.5 sm:space-y-2 group">
+      <label className="text-[8px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1 group-focus-within:text-primary transition-colors">
+        {label}
+      </label>
+      <div className="relative">
+        <select
+          {...props}
+          title={title}
+          aria-label={ariaLabel}
+          className={cn(
+            "w-full px-4 sm:px-5 py-2.5 sm:py-4 bg-white dark:bg-slate-900 border-2 rounded-xl sm:rounded-2xl focus:outline-none appearance-none transition-all duration-300 font-medium text-xs sm:text-sm text-slate-900 dark:text-white",
+            error
+              ? "border-rose-100 dark:border-rose-900/30 bg-rose-50/30 dark:bg-rose-900/10 focus:border-rose-500"
+              : "border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 focus:border-primary focus:ring-4 focus:ring-primary/5 shadow-sm hover:shadow-md"
+          )}
         >
-          {error}
-        </motion.p>
-      )}
+          {children}
+        </select>
+        <div className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+          <ChevronRight size={14} className="rotate-90 sm:w-4.5 sm:h-4.5" />
+        </div>
+        {error && (
+          <motion.p
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-[8px] sm:text-[10px] text-rose-500 font-black mt-1 ml-1 uppercase tracking-wider"
+          >
+            {error}
+          </motion.p>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};

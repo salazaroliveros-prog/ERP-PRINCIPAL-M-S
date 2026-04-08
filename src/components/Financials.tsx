@@ -759,6 +759,15 @@ export default function Financials() {
   }, [filteredTransactions]);
 
   const COLORS = HIGH_CONTRAST_COLORS;
+  const colorDotClasses = [
+    'bg-emerald-500',
+    'bg-rose-500',
+    'bg-blue-500',
+    'bg-amber-500',
+    'bg-violet-500',
+    'bg-cyan-500',
+    'bg-lime-500',
+  ];
 
   const totalIncome = filteredTransactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpense = filteredTransactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + t.amount, 0);
@@ -936,7 +945,7 @@ export default function Financials() {
                   </div>
                   <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Análisis Financiero IA</h3>
                 </div>
-                <button onClick={() => setIsAnalysisModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                <button onClick={() => setIsAnalysisModalOpen(false)} title="Cerrar analisis" aria-label="Cerrar analisis" className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
                   <X size={20} className="text-slate-500" />
                 </button>
               </div>
@@ -1324,7 +1333,7 @@ export default function Financials() {
               {expenseByCategoryData.map((entry, index) => (
                 <div key={entry.name} className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
                   <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                    <div className={cn("w-2.5 h-2.5 rounded-full", colorDotClasses[index % colorDotClasses.length])}></div>
                     <span className="text-xs font-bold text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors uppercase tracking-wider">{entry.name}</span>
                   </div>
                   <span className="text-xs font-black text-slate-900 dark:text-white">{formatCurrency(entry.value)}</span>
@@ -1348,6 +1357,8 @@ export default function Financials() {
               className="w-full sm:w-48 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-xs sm:text-sm text-slate-900 dark:text-white"
               value={filterProject}
               onChange={(e) => setFilterProject(e.target.value)}
+              title="Filtrar por proyecto"
+              aria-label="Filtrar por proyecto"
             >
               <option value="all">Todos los Proyectos</option>
               {projects.map(p => (
@@ -1362,6 +1373,8 @@ export default function Financials() {
               className="w-full sm:w-48 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-xs sm:text-sm text-slate-900 dark:text-white"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
+              title="Filtrar por rango de fechas"
+              aria-label="Filtrar por rango de fechas"
             >
               <option value="all">Todo el tiempo</option>
               <option value="week">Esta semana</option>
@@ -1378,6 +1391,8 @@ export default function Financials() {
                 className="flex-1 sm:w-32 px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl text-[10px] sm:text-xs text-slate-900 dark:text-white"
                 value={customRange.start}
                 onChange={(e) => setCustomRange({...customRange, start: e.target.value})}
+                title="Fecha inicial"
+                aria-label="Fecha inicial"
               />
               <span className="text-slate-400">-</span>
               <input 
@@ -1385,6 +1400,8 @@ export default function Financials() {
                 className="flex-1 sm:w-32 px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl text-[10px] sm:text-xs text-slate-900 dark:text-white"
                 value={customRange.end}
                 onChange={(e) => setCustomRange({...customRange, end: e.target.value})}
+                title="Fecha final"
+                aria-label="Fecha final"
               />
             </div>
           )}

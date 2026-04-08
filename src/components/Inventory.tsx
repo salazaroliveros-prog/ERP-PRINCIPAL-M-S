@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/control-has-associated-label */
 import React, { useEffect, useState } from 'react';
 import { 
   Plus, 
@@ -1989,6 +1990,8 @@ export default function Inventory() {
               className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary transition-all shadow-sm text-xs font-bold text-slate-600 dark:text-slate-400"
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
+              title="Seleccionar proyecto de inventario"
+              aria-label="Seleccionar proyecto de inventario"
             >
               <option value="">Inventario Global</option>
               {projects.map(p => (
@@ -2008,6 +2011,8 @@ export default function Inventory() {
           </div>
           <button 
             onClick={() => setIsScannerOpen(true)}
+            title="Abrir escaner QR"
+            aria-label="Abrir escaner QR"
             className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-primary/10 text-primary font-black rounded-lg sm:rounded-xl hover:bg-primary/20 transition-all border border-primary/20 shadow-sm text-[10px] sm:text-xs uppercase tracking-widest"
           >
             <QrCode size={14} className="sm:w-4 sm:h-4" />
@@ -2016,6 +2021,8 @@ export default function Inventory() {
           <button 
             onClick={runInventoryOptimization}
             disabled={isOptimizing}
+            title="Ejecutar optimizacion con IA"
+            aria-label="Ejecutar optimizacion con IA"
             className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-black rounded-lg sm:rounded-xl hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all border border-amber-100 dark:border-amber-500/20 shadow-sm text-[10px] sm:text-xs uppercase tracking-widest"
           >
             {isOptimizing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} className="sm:w-4 sm:h-4" />}
@@ -2027,6 +2034,8 @@ export default function Inventory() {
             className="hidden" 
             ref={fileInputRef}
             onChange={handleCSVImport}
+            title="Importar inventario desde CSV"
+            aria-label="Importar inventario desde CSV"
           />
           <button 
             onClick={() => setIsTrashModalOpen(true)}
@@ -2041,6 +2050,8 @@ export default function Inventory() {
               setIsBatchModalOpen(true);
               setNewBatch({ ...newBatch, type: 'In', materialId: '' });
             }}
+            title="Registrar entrada de inventario"
+            aria-label="Registrar entrada de inventario"
             className="flex items-center justify-center gap-1.5 sm:gap-2 bg-emerald-600 text-white font-black py-2 sm:py-2.5 px-4 sm:px-6 rounded-lg sm:rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-shadow text-[10px] sm:text-xs uppercase tracking-widest"
           >
             <ArrowUpRight size={14} className="sm:w-4 sm:h-4" />
@@ -2048,6 +2059,8 @@ export default function Inventory() {
           </button>
           <button 
             onClick={openAddModal}
+            title="Crear nuevo material"
+            aria-label="Crear nuevo material"
             className="flex items-center justify-center gap-1.5 sm:gap-2 bg-primary text-white font-black py-2 sm:py-2.5 px-4 sm:px-6 rounded-lg sm:rounded-xl hover:bg-primary-hover transition-all shadow-lg shadow-primary-shadow text-[10px] sm:text-xs uppercase tracking-widest"
           >
             <Plus size={14} className="sm:w-4 sm:h-4" />
@@ -2095,6 +2108,8 @@ export default function Inventory() {
             className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary transition-all shadow-sm text-xs sm:text-sm text-slate-900 dark:text-white"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            title="Buscar material"
+            aria-label="Buscar material"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -2103,6 +2118,8 @@ export default function Inventory() {
             className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 sm:py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary transition-all shadow-sm text-[10px] sm:text-sm font-bold text-slate-600 dark:text-slate-400"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
+            title="Filtrar por categoria"
+            aria-label="Filtrar por categoria"
           >
             <option value="all">Todas las Categorías</option>
             <option value="Materiales">Materiales</option>
@@ -2118,6 +2135,8 @@ export default function Inventory() {
             className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 sm:py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary transition-all shadow-sm text-[10px] sm:text-sm font-bold text-slate-600 dark:text-slate-400"
             value={filterType}
             onChange={(e) => setFilterType(e.target.value as any)}
+            title="Filtrar por estado de stock"
+            aria-label="Filtrar por estado de stock"
           >
             <option value="all">Todos los Estados</option>
             <option value="critical">Stock Crítico</option>
@@ -2215,6 +2234,8 @@ export default function Inventory() {
                             e.stopPropagation();
                             handleUpdateStock(item.id, 1);
                           }} 
+                          title="Aumentar stock"
+                          aria-label="Aumentar stock"
                           className="p-0.5 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-600 rounded"
                         >
                           <ArrowUpRight size={12} />
@@ -2224,6 +2245,8 @@ export default function Inventory() {
                             e.stopPropagation();
                             handleUpdateStock(item.id, -1);
                           }} 
+                          title="Disminuir stock"
+                          aria-label="Disminuir stock"
                           className="p-0.5 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-600 rounded"
                         >
                           <ArrowDownRight size={12} />
@@ -2291,6 +2314,8 @@ export default function Inventory() {
                           e.stopPropagation();
                           openEditModal(item);
                         }}
+                        title="Editar material"
+                        aria-label="Editar material"
                         className="p-2 text-slate-400 hover:text-primary transition-colors"
                       >
                         <Edit2 size={16} />
@@ -2300,6 +2325,8 @@ export default function Inventory() {
                           e.stopPropagation();
                           handleDeleteMaterial(item.id);
                         }} 
+                        title="Eliminar material"
+                        aria-label="Eliminar material"
                         className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
                       >
                         <Trash2 size={16} />
@@ -2343,6 +2370,8 @@ export default function Inventory() {
                           e.stopPropagation();
                           handleUpdateStock(item.id, -1);
                         }} 
+                        title="Disminuir stock"
+                        aria-label="Disminuir stock"
                         className="p-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded"
                       >
                         <ArrowDownRight size={12} />
@@ -2358,6 +2387,8 @@ export default function Inventory() {
                           e.stopPropagation();
                           handleUpdateStock(item.id, 1);
                         }} 
+                        title="Aumentar stock"
+                        aria-label="Aumentar stock"
                         className="p-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded"
                       >
                         <ArrowUpRight size={12} />
@@ -2385,6 +2416,8 @@ export default function Inventory() {
                           e.stopPropagation();
                           openPOModal(item);
                         }}
+                        title="Crear orden de compra"
+                        aria-label="Crear orden de compra"
                         className="p-1 bg-primary-light dark:bg-primary/20 text-primary rounded"
                       >
                         <ShoppingBag size={12} />
@@ -2396,6 +2429,8 @@ export default function Inventory() {
                         setSelectedItemForBatch(item);
                         setIsBatchModalOpen(true);
                       }}
+                      title="Gestionar lotes"
+                      aria-label="Gestionar lotes"
                       className="p-1 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-600 rounded"
                     >
                       <Layers size={12} />
@@ -2405,6 +2440,8 @@ export default function Inventory() {
                         e.stopPropagation();
                         toggleReorderItem(item.id);
                       }}
+                      title={reorderList.includes(item.id) ? 'Quitar de reorden' : 'Marcar para reorden'}
+                      aria-label={reorderList.includes(item.id) ? 'Quitar de reorden' : 'Marcar para reorden'}
                       className={cn(
                         "p-1 rounded",
                         reorderList.includes(item.id) 
@@ -2419,6 +2456,8 @@ export default function Inventory() {
                         e.stopPropagation();
                         openEditModal(item);
                       }}
+                      title="Editar material"
+                      aria-label="Editar material"
                       className="p-1 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded"
                     >
                       <Edit2 size={12} />
@@ -2428,6 +2467,8 @@ export default function Inventory() {
                         e.stopPropagation();
                         handleDeleteMaterial(item.id);
                       }} 
+                      title="Eliminar material"
+                      aria-label="Eliminar material"
                       className="p-1 bg-rose-50 dark:bg-rose-500/20 text-rose-600 rounded"
                     >
                       <Trash2 size={12} />
@@ -2454,6 +2495,8 @@ export default function Inventory() {
                       setItemsPerPage(Number(e.target.value));
                       setCurrentPage(1);
                     }}
+                    title="Cantidad de materiales por pagina"
+                    aria-label="Cantidad de materiales por pagina"
                   >
                     <option value={12}>12</option>
                     <option value={24}>24</option>
@@ -2466,6 +2509,8 @@ export default function Inventory() {
                 <button 
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  title="Pagina anterior"
+                  aria-label="Pagina anterior"
                   className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
                 >
                   <ChevronLeft size={20} />
@@ -2482,6 +2527,8 @@ export default function Inventory() {
                       <button
                         key={pageNum}
                         onClick={() => setCurrentPage(pageNum)}
+                        title={`Ir a la pagina ${pageNum}`}
+                        aria-label={`Ir a la pagina ${pageNum}`}
                         className={cn(
                           "w-10 h-10 rounded-xl text-sm font-bold transition-all",
                           currentPage === pageNum 
@@ -2497,6 +2544,8 @@ export default function Inventory() {
                 <button 
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  title="Pagina siguiente"
+                  aria-label="Pagina siguiente"
                   className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
                 >
                   <ChevronRight size={20} />
@@ -2523,6 +2572,8 @@ export default function Inventory() {
                 className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-xs sm:text-sm text-slate-900 dark:text-white"
                 value={selectedProjectId}
                 onChange={(e) => setSelectedProjectId(e.target.value)}
+                title="Seleccionar proyecto"
+                aria-label="Seleccionar proyecto"
               >
                 <option value="">Seleccione un proyecto...</option>
                 {projects.map(p => (
@@ -2784,6 +2835,8 @@ export default function Inventory() {
                                   });
                                   setIsBatchModalOpen(true);
                                 }}
+                                title="Editar lote"
+                                aria-label="Editar lote"
                                 className="p-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 rounded-lg hover:bg-blue-100 transition-all"
                               >
                                 <Edit2 size={14} />
@@ -2793,6 +2846,8 @@ export default function Inventory() {
                                   setItemToDeleteBatch({ materialId: selectedItemDetails.id, batchId: b.id });
                                   setIsBatchDeleteConfirmOpen(true);
                                 }}
+                                title="Eliminar lote"
+                                aria-label="Eliminar lote"
                                 className="p-1.5 bg-rose-50 dark:bg-rose-500/10 text-rose-600 rounded-lg hover:bg-rose-100 transition-all"
                               >
                                 <Trash2 size={14} />
@@ -2904,6 +2959,8 @@ export default function Inventory() {
                               setItemToDeleteTransaction(t.id);
                               setIsTransactionDeleteConfirmOpen(true);
                             }}
+                            title="Eliminar movimiento"
+                            aria-label="Eliminar movimiento"
                             className="p-1.5 bg-rose-50 dark:bg-rose-500/10 text-rose-600 rounded-lg hover:bg-rose-100 transition-all"
                           >
                             <Trash2 size={14} />
@@ -3076,6 +3133,8 @@ export default function Inventory() {
                   type="button"
                   onClick={handlePOAISuggestions}
                   disabled={isGeneratingPO}
+                  title="Generar sugerencia de orden con IA"
+                  aria-label="Generar sugerencia de orden con IA"
                   className="flex items-center gap-1 text-[10px] font-black text-primary uppercase tracking-tighter hover:bg-primary/10 px-2 py-1 rounded-lg transition-all"
                 >
                   {isGeneratingPO ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
@@ -3091,6 +3150,8 @@ export default function Inventory() {
                   className="w-full pl-4 pr-12 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 dark:text-white"
                   value={poData.quantity}
                   onChange={(e) => setPoData({...poData, quantity: Number(e.target.value)})}
+                  title="Cantidad a pedir"
+                  aria-label="Cantidad a pedir"
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
                   {selectedItemForPO?.unit}
@@ -3105,6 +3166,8 @@ export default function Inventory() {
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 dark:text-white"
                   value={poData.supplier}
                   onChange={(e) => setPoData({...poData, supplier: e.target.value})}
+                  title="Seleccionar proveedor"
+                  aria-label="Seleccionar proveedor"
                 >
                   <option value="">Seleccionar Proveedor...</option>
                   {selectedItemForPO?.suppliers?.map((s: string) => (
@@ -3122,6 +3185,8 @@ export default function Inventory() {
                     placeholder="Nombre del nuevo proveedor"
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 dark:text-white"
                     onChange={(e) => setPoData({...poData, supplier: e.target.value})}
+                    title="Nombre del proveedor"
+                    aria-label="Nombre del proveedor"
                   />
                 )}
               </div>
@@ -3215,6 +3280,8 @@ export default function Inventory() {
                     className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 dark:text-white"
                     value={newBatch.materialId}
                     onChange={(e) => setNewBatch({...newBatch, materialId: e.target.value})}
+                    title="Seleccionar material"
+                    aria-label="Seleccionar material"
                   >
                     <option value="">Buscar material...</option>
                     {inventory.sort((a, b) => a.name.localeCompare(b.name)).map(item => (
@@ -3244,6 +3311,8 @@ export default function Inventory() {
                     className="w-full pl-4 pr-12 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 dark:text-white"
                     value={newBatch.quantity || ''}
                     onChange={(e) => setNewBatch({...newBatch, quantity: Number(e.target.value)})}
+                    title="Cantidad del movimiento"
+                    aria-label="Cantidad del movimiento"
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
                     {selectedItemForBatch?.unit}
@@ -3257,6 +3326,8 @@ export default function Inventory() {
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 dark:text-white"
                   value={newBatch.projectId}
                   onChange={(e) => setNewBatch({...newBatch, projectId: e.target.value})}
+                  title="Proyecto asociado"
+                  aria-label="Proyecto asociado"
                 >
                   <option value="">{newBatch.type === 'In' ? 'Sin Proyecto (Stock General)' : 'Ajuste de Inventario (Sin Proyecto)'}</option>
                   {projects.map(p => (
@@ -3315,6 +3386,8 @@ export default function Inventory() {
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-slate-900 dark:text-white"
                       value={newBatch.supplier}
                       onChange={(e) => setNewBatch({...newBatch, supplier: e.target.value})}
+                      title="Seleccionar proveedor"
+                      aria-label="Seleccionar proveedor"
                     >
                       <option value="">Seleccionar Proveedor...</option>
                       {suppliers.map(s => (
@@ -3335,6 +3408,8 @@ export default function Inventory() {
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
                     value={newBatch.manufacturingDate}
                     onChange={(e) => setNewBatch({...newBatch, manufacturingDate: e.target.value})}
+                    title="Fecha de fabricacion"
+                    aria-label="Fecha de fabricacion"
                   />
                 </div>
                 <div className="space-y-2">
@@ -3344,6 +3419,8 @@ export default function Inventory() {
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
                     value={newBatch.expirationDate}
                     onChange={(e) => setNewBatch({...newBatch, expirationDate: e.target.value})}
+                    title="Fecha de vencimiento"
+                    aria-label="Fecha de vencimiento"
                   />
                 </div>
               </div>
@@ -3574,6 +3651,8 @@ export default function Inventory() {
                             input.value = '';
                           }
                         }}
+                        title="Anadir proveedor"
+                        aria-label="Anadir proveedor"
                         className="px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
                       >
                         Añadir
@@ -3586,6 +3665,8 @@ export default function Inventory() {
                           <button 
                             type="button"
                             onClick={() => setNewMaterial({...newMaterial, suppliers: newMaterial.suppliers.filter((_, i) => i !== idx)})}
+                            title="Quitar proveedor"
+                            aria-label="Quitar proveedor"
                             className="hover:text-rose-600 transition-colors"
                           >
                             <X size={14} />
