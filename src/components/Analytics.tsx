@@ -210,7 +210,7 @@ export default function Analytics() {
       };
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: `Como consultor experto en gestión de construcción, analiza los siguientes datos de la empresa y proporciona 3 recomendaciones estratégicas clave. Datos: ${JSON.stringify(summaryData)}. Proporciona la respuesta en español.`,
         config: {
           responseMimeType: "application/json",

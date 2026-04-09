@@ -186,7 +186,7 @@ export default function RiskManagement() {
     try {
       const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: `Como experto en gestión de riesgos en construcción, sugiere un plan de mitigación y un plan de contingencia detallados para el siguiente riesgo: "${formData.title}" (Categoría: ${formData.category}). Proporciona respuestas claras y profesionales en español.`,
         config: {
           responseMimeType: "application/json",

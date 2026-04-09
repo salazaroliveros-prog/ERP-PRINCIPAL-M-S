@@ -273,7 +273,7 @@ export default function Projects() {
       }));
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: `Analiza los siguientes proyectos de construcción que presentan desviaciones financieras críticas (el gasto supera al avance físico por más del 15%). Proporciona un resumen ejecutivo, causas probables para cada proyecto y un plan de mitigación detallado.
         
         Datos de los proyectos:
@@ -451,7 +451,7 @@ export default function Projects() {
     try {
       const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: `Como experto en gestión de proyectos de construcción, sugiere una descripción detallada y objetivos clave para un proyecto llamado "${newProject.name}" de tipo "${newProject.typology}". Proporciona la respuesta en español.`,
         config: {
           responseMimeType: "application/json",

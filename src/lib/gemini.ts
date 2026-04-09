@@ -364,7 +364,7 @@ export async function getAIResponse(message: string, history: { role: string, te
     ];
 
     let response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents,
       config: {
         systemInstruction,
@@ -419,7 +419,7 @@ export async function getAIResponse(message: string, history: { role: string, te
         });
 
         response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
+          model: "gemini-2.5-flash",
           contents,
           config: {
             systemInstruction,
@@ -435,7 +435,11 @@ export async function getAIResponse(message: string, history: { role: string, te
 
     return response.text || "No pude generar una respuesta clara. ¿Podrías reformular tu pregunta?";
   } catch (error: any) {
-    if (error.message?.includes("quota") || error.message?.includes("limit")) {
+    const errorMessage = String(error?.message || '').toLowerCase();
+    if (errorMessage.includes('403') || errorMessage.includes('permission_denied') || errorMessage.includes('forbidden')) {
+      return 'Error de permisos con Gemini (403). Verifica que la API key tenga acceso al modelo configurado, que la API esté habilitada y que no haya restricciones de dominio/referer en la clave.';
+    }
+    if (errorMessage.includes('quota') || errorMessage.includes('limit')) {
       return "Lo siento, se ha alcanzado el límite de capacidad de la IA. Por favor, intenta de nuevo en unos momentos.";
     }
     return "Lo siento, hubo un error al procesar tu solicitud. Por favor, intenta de nuevo.";

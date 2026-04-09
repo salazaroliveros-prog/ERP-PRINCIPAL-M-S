@@ -573,7 +573,7 @@ export default function Inventory() {
     try {
       const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: `Como experto en materiales de construcción, sugiere una descripción técnica breve y un stock mínimo recomendado para un material llamado "${newMaterial.name}" de la categoría "${newMaterial.category}". Proporciona la respuesta en español.`,
         config: {
           responseMimeType: "application/json",
@@ -646,7 +646,7 @@ export default function Inventory() {
       `;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -1116,7 +1116,7 @@ export default function Inventory() {
       Proporciona un resumen ejecutivo y recomendaciones accionables en español.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -1196,7 +1196,7 @@ export default function Inventory() {
       Responde estrictamente en formato JSON.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",

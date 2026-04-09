@@ -484,7 +484,7 @@ export default function Financials() {
       }));
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: `Como analista financiero experto en construcción, analiza las siguientes transacciones recientes y proporciona un resumen ejecutivo, identificación de tendencias y recomendaciones de optimización. Datos: ${JSON.stringify(recentTransactions)}. Proporciona la respuesta en español.`,
         config: {
           responseMimeType: "application/json",
