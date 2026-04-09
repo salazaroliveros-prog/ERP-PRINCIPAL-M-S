@@ -1,0 +1,1 @@
+import{r as i}from"./index-DDGIEGOf.js";async function e(){return(await i("/api/risks")).items}async function r(s){return i("/api/risks",{method:"POST",body:JSON.stringify(s)})}async function a(s,t){return i(`/api/risks/${s}`,{method:"PATCH",body:JSON.stringify(t)})}async function o(s){await i(`/api/risks/${s}`,{method:"DELETE"})}export{r as c,o as d,e as l,a as u};
