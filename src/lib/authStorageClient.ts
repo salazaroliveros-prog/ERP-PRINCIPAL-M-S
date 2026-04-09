@@ -390,27 +390,40 @@ let healthCheckTimer: number | null = null;
 
 const HEALTHCHECK_INTERVAL_MS = 30000;
 const HEALTHCHECK_TIMEOUT_MS = 5000;
+const HEALTHCHECK_RETRY_ATTEMPTS = 2;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const checkApiHealth = async () => {
   if (typeof window === 'undefined' || !navigator.onLine) {
     return false;
   }
 
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), HEALTHCHECK_TIMEOUT_MS);
+  for (let attempt = 1; attempt <= HEALTHCHECK_RETRY_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), HEALTHCHECK_TIMEOUT_MS);
 
-  try {
-    const response = await fetch(buildApiUrl('/api/health'), {
-      method: 'GET',
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-    return response.ok;
-  } catch {
-    return false;
-  } finally {
-    window.clearTimeout(timeout);
+    try {
+      const response = await fetch(buildApiUrl('/api/health'), {
+        method: 'GET',
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (response.ok) {
+        return true;
+      }
+    } catch {
+      // try again below
+    } finally {
+      window.clearTimeout(timeout);
+    }
+
+    if (attempt < HEALTHCHECK_RETRY_ATTEMPTS) {
+      await wait(attempt * 250);
+    }
   }
+
+  return false;
 };
 
 const updateConnectionState = (isOffline: boolean) => {

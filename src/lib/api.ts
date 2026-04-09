@@ -3,6 +3,8 @@ const AUTH_STORAGE_KEY = 'erp_local_auth_user';
 const OFFLINE_QUEUE_KEY = 'erp_offline_request_queue';
 const OFFLINE_CACHE_PREFIX = 'erp_offline_cache:';
 const OFFLINE_LAST_SYNC_AT_KEY = 'erp_offline_last_sync_at';
+const GET_RETRY_ATTEMPTS = 3;
+const REQUEST_TIMEOUT_MS = 12000;
 
 interface QueuedRequest {
   id: string;
@@ -34,6 +36,28 @@ function isGetRequest(init?: RequestInit) {
 function isMutatingRequest(init?: RequestInit) {
   const method = (init?.method || 'GET').toUpperCase();
   return method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+}
+
+function shouldRetryStatus(status: number) {
+  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithTimeout(input: string, init: RequestInit) {
+  if (typeof window === 'undefined' || init.signal) {
+    return fetch(input, init);
+  }
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 function getCacheStorageKey(pathname: string) {
@@ -249,7 +273,26 @@ export async function requestJson<T>(pathname: string, init?: RequestInit): Prom
 
   let response: Response;
   try {
-    response = await fetch(buildApiUrl(pathname), requestInit);
+    if (isGetRequest(requestInit)) {
+      let attempt = 0;
+      while (true) {
+        attempt += 1;
+        try {
+          response = await fetchWithTimeout(buildApiUrl(pathname), requestInit);
+          if (!shouldRetryStatus(response.status) || attempt >= GET_RETRY_ATTEMPTS) {
+            break;
+          }
+        } catch (error) {
+          if (attempt >= GET_RETRY_ATTEMPTS) {
+            throw error;
+          }
+        }
+
+        await wait(attempt * 300);
+      }
+    } else {
+      response = await fetchWithTimeout(buildApiUrl(pathname), requestInit);
+    }
   } catch (error) {
     if (isGetRequest(requestInit)) {
       const cached = getCachedResponse<T>(pathname);

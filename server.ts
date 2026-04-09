@@ -15,6 +15,12 @@ const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
+const PG_POOL_MAX = Number(process.env.PG_POOL_MAX || 20);
+const PG_IDLE_TIMEOUT_MS = Number(process.env.PG_IDLE_TIMEOUT_MS || 30000);
+const PG_CONNECTION_TIMEOUT_MS = Number(process.env.PG_CONNECTION_TIMEOUT_MS || 10000);
+const DB_HEALTH_OK_CACHE_MS = Number(process.env.DB_HEALTH_OK_CACHE_MS || 8000);
+const DB_HEALTH_FAIL_CACHE_MS = Number(process.env.DB_HEALTH_FAIL_CACHE_MS || 1500);
+const DB_HEALTH_RETRY_ATTEMPTS = Number(process.env.DB_HEALTH_RETRY_ATTEMPTS || 2);
 const UPLOADS_PUBLIC_DIR = path.join(process.cwd(), "public", "uploads");
 const UPLOADS_FALLBACK_DIR = path.join(process.env.TMPDIR || "/tmp", "uploads");
 
@@ -22,8 +28,21 @@ const pool = DATABASE_URL
   ? new Pool({
       connectionString: DATABASE_URL,
       ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false },
+      max: PG_POOL_MAX,
+      idleTimeoutMillis: PG_IDLE_TIMEOUT_MS,
+      connectionTimeoutMillis: PG_CONNECTION_TIMEOUT_MS,
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10000,
+      query_timeout: 30000,
+      statement_timeout: 30000,
     })
   : null;
+
+if (pool) {
+  pool.on('error', (error) => {
+    console.error('[db] pool client error:', error?.message || error);
+  });
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -1095,22 +1114,51 @@ function requireDatabase() {
 }
 
 let dbAvailabilityCache: { ok: boolean; checkedAt: number } = { ok: !!pool, checkedAt: 0 };
+let dbHealthStats = {
+  checks: 0,
+  successes: 0,
+  failures: 0,
+  consecutiveFailures: 0,
+  lastSuccessAt: null as string | null,
+  lastFailureAt: null as string | null,
+  lastError: null as string | null,
+};
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function isDatabaseAvailable() {
   if (!pool) return false;
   const now = Date.now();
-  if (now - dbAvailabilityCache.checkedAt < 8000) {
+  const cacheTtl = dbAvailabilityCache.ok ? DB_HEALTH_OK_CACHE_MS : DB_HEALTH_FAIL_CACHE_MS;
+  if (now - dbAvailabilityCache.checkedAt < cacheTtl) {
     return dbAvailabilityCache.ok;
   }
 
-  try {
-    await pool.query('select 1');
-    dbAvailabilityCache = { ok: true, checkedAt: now };
-    return true;
-  } catch {
-    dbAvailabilityCache = { ok: false, checkedAt: now };
-    return false;
+  for (let attempt = 1; attempt <= DB_HEALTH_RETRY_ATTEMPTS; attempt++) {
+    dbHealthStats.checks += 1;
+    try {
+      await pool.query('select 1');
+      dbAvailabilityCache = { ok: true, checkedAt: Date.now() };
+      dbHealthStats.successes += 1;
+      dbHealthStats.consecutiveFailures = 0;
+      dbHealthStats.lastSuccessAt = new Date().toISOString();
+      dbHealthStats.lastError = null;
+      return true;
+    } catch (error: any) {
+      dbHealthStats.failures += 1;
+      dbHealthStats.consecutiveFailures += 1;
+      dbHealthStats.lastFailureAt = new Date().toISOString();
+      dbHealthStats.lastError = String(error?.message || error || 'unknown-db-health-error');
+      if (attempt < DB_HEALTH_RETRY_ATTEMPTS) {
+        await wait(attempt * 200);
+      }
+    }
   }
+
+  dbAvailabilityCache = { ok: false, checkedAt: Date.now() };
+  return false;
 }
 
 function mapFallbackUser(email: string, displayName: string, photoURL: string | null) {
@@ -1135,7 +1183,19 @@ function mapFallbackUser(email: string, displayName: string, photoURL: string | 
 
 function serveFallbackRead(req: Request, res: Response) {
   if (req.path === '/health') {
-    return res.json({ status: 'ok', db: 'unavailable' });
+    return res.json({
+      status: 'ok',
+      db: 'unavailable',
+      telemetry: {
+        checks: dbHealthStats.checks,
+        successes: dbHealthStats.successes,
+        failures: dbHealthStats.failures,
+        consecutiveFailures: dbHealthStats.consecutiveFailures,
+        lastSuccessAt: dbHealthStats.lastSuccessAt,
+        lastFailureAt: dbHealthStats.lastFailureAt,
+        lastError: dbHealthStats.lastError,
+      },
+    });
   }
 
   if (req.path === '/projects') {
@@ -1402,12 +1462,54 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.get("/api/health", async (req, res) => {
     try {
       if (!pool) {
-        return res.json({ status: "ok", db: "not-configured" });
+        return res.json({
+          status: "ok",
+          db: "not-configured",
+          telemetry: {
+            checks: dbHealthStats.checks,
+            successes: dbHealthStats.successes,
+            failures: dbHealthStats.failures,
+            consecutiveFailures: dbHealthStats.consecutiveFailures,
+            lastSuccessAt: dbHealthStats.lastSuccessAt,
+            lastFailureAt: dbHealthStats.lastFailureAt,
+            lastError: dbHealthStats.lastError,
+          },
+        });
       }
       await pool.query("select 1");
-      return res.json({ status: "ok", db: "connected" });
-    } catch (error) {
-      return res.status(500).json({ status: "error", db: "unavailable" });
+      return res.json({
+        status: "ok",
+        db: "connected",
+        telemetry: {
+          checks: dbHealthStats.checks,
+          successes: dbHealthStats.successes,
+          failures: dbHealthStats.failures,
+          consecutiveFailures: dbHealthStats.consecutiveFailures,
+          lastSuccessAt: dbHealthStats.lastSuccessAt,
+          lastFailureAt: dbHealthStats.lastFailureAt,
+          lastError: dbHealthStats.lastError,
+        },
+      });
+    } catch (error: any) {
+      dbHealthStats.checks += 1;
+      dbHealthStats.failures += 1;
+      dbHealthStats.consecutiveFailures += 1;
+      dbHealthStats.lastFailureAt = new Date().toISOString();
+      dbHealthStats.lastError = String(error?.message || error || 'db-health-route-error');
+
+      return res.status(500).json({
+        status: "error",
+        db: "unavailable",
+        telemetry: {
+          checks: dbHealthStats.checks,
+          successes: dbHealthStats.successes,
+          failures: dbHealthStats.failures,
+          consecutiveFailures: dbHealthStats.consecutiveFailures,
+          lastSuccessAt: dbHealthStats.lastSuccessAt,
+          lastFailureAt: dbHealthStats.lastFailureAt,
+          lastError: dbHealthStats.lastError,
+        },
+      });
     }
   });
 
