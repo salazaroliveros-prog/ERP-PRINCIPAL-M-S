@@ -20,7 +20,7 @@ export default function AIChat() {
   const CHAT_BUBBLE_STORAGE_KEY = 'wm_ai_chat_bubble_pos';
   const CHAT_PANEL_STORAGE_KEY = 'wm_ai_chat_panel_pos';
   const CHAT_BUBBLE_SIZE = 56;
-  const CHAT_BUBBLE_MARGIN = 16;
+  const CHAT_BUBBLE_MARGIN = 8;
   const CHAT_PANEL_WIDTH = 400;
   const CHAT_PANEL_MINIMIZED_WIDTH = 300;
   const CHAT_PANEL_HEIGHT = 600;
@@ -47,6 +47,7 @@ export default function AIChat() {
   const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
   const dragStateRef = useRef({ pointerId: -1, startX: 0, startY: 0, moved: false });
   const panelDragStateRef = useRef({ pointerId: -1, startX: 0, startY: 0, moved: false });
+  const suppressBubbleClickRef = useRef(false);
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -89,8 +90,8 @@ export default function AIChat() {
     if (typeof window === 'undefined') return;
 
     const defaultPos = clampBubblePosition(
-      window.innerWidth - CHAT_BUBBLE_SIZE - 24,
-      window.innerHeight - CHAT_BUBBLE_SIZE - 100
+      window.innerWidth - CHAT_BUBBLE_SIZE - 16,
+      window.innerHeight - CHAT_BUBBLE_SIZE - 96
     );
 
     try {
@@ -113,8 +114,8 @@ export default function AIChat() {
     if (typeof window === 'undefined') return;
 
     const defaultPanelPos = clampPanelPosition(
-      window.innerWidth - CHAT_PANEL_WIDTH - 24,
-      window.innerHeight - CHAT_PANEL_HEIGHT - 100
+      window.innerWidth - CHAT_PANEL_WIDTH - 16,
+      window.innerHeight - CHAT_PANEL_HEIGHT - 96
     );
 
     try {
@@ -151,6 +152,7 @@ export default function AIChat() {
 
   const handleBubblePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!bubblePos) return;
+    suppressBubbleClickRef.current = false;
     dragStateRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
     (event.currentTarget as HTMLButtonElement).setPointerCapture(event.pointerId);
   };
@@ -159,8 +161,9 @@ export default function AIChat() {
     if (!bubblePos || dragStateRef.current.pointerId !== event.pointerId) return;
     const deltaX = event.clientX - dragStateRef.current.startX;
     const deltaY = event.clientY - dragStateRef.current.startY;
-    if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+    if (Math.abs(deltaX) > 6 || Math.abs(deltaY) > 6) {
       dragStateRef.current.moved = true;
+      suppressBubbleClickRef.current = true;
     }
 
     if (!dragStateRef.current.moved) return;
@@ -176,16 +179,26 @@ export default function AIChat() {
 
   const handleBubblePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (dragStateRef.current.pointerId !== event.pointerId) return;
+    (event.currentTarget as HTMLButtonElement).releasePointerCapture(event.pointerId);
 
     if (bubblePos) {
       localStorage.setItem(CHAT_BUBBLE_STORAGE_KEY, JSON.stringify(bubblePos));
     }
 
-    if (!dragStateRef.current.moved) {
-      setIsOpen(true);
-    }
-
     dragStateRef.current = { pointerId: -1, startX: 0, startY: 0, moved: false };
+  };
+
+  const handleBubblePointerCancel = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (dragStateRef.current.pointerId !== event.pointerId) return;
+    dragStateRef.current = { pointerId: -1, startX: 0, startY: 0, moved: false };
+  };
+
+  const handleBubbleClick = () => {
+    if (suppressBubbleClickRef.current) {
+      suppressBubbleClickRef.current = false;
+      return;
+    }
+    setIsOpen(true);
   };
 
   const handlePanelPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -226,9 +239,15 @@ export default function AIChat() {
 
   const handlePanelPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     if (panelDragStateRef.current.pointerId !== event.pointerId) return;
+    (event.currentTarget as HTMLDivElement).releasePointerCapture(event.pointerId);
     if (panelPos) {
       localStorage.setItem(CHAT_PANEL_STORAGE_KEY, JSON.stringify(panelPos));
     }
+    panelDragStateRef.current = { pointerId: -1, startX: 0, startY: 0, moved: false };
+  };
+
+  const handlePanelPointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (panelDragStateRef.current.pointerId !== event.pointerId) return;
     panelDragStateRef.current = { pointerId: -1, startX: 0, startY: 0, moved: false };
   };
 
@@ -555,9 +574,11 @@ export default function AIChat() {
             exit={{ scale: 0, opacity: 0 }}
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.96 }}
+            onClick={handleBubbleClick}
             onPointerDown={handleBubblePointerDown}
             onPointerMove={handleBubblePointerMove}
             onPointerUp={handleBubblePointerUp}
+            onPointerCancel={handleBubblePointerCancel}
             className="fixed z-[100] w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center hover:bg-primary-hover transition-all group relative touch-none"
             style={{ left: bubblePos.x, top: bubblePos.y }}
             title="Arrastra para mover el asistente"
@@ -595,6 +616,7 @@ export default function AIChat() {
               onPointerDown={handlePanelPointerDown}
               onPointerMove={handlePanelPointerMove}
               onPointerUp={handlePanelPointerUp}
+              onPointerCancel={handlePanelPointerCancel}
             >
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
