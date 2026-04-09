@@ -125,6 +125,26 @@ const INCOME_CATEGORIES = [
   'Otros'
 ];
 
+const OWNER_SERVICE_ORIGINS = [
+  'Proyectos en ejecución',
+  'Ante-Proyecto',
+  'Plano Registro',
+  'Planificación',
+  'Diseños Urb',
+  'Supervisión',
+  'Otros servicios',
+];
+
+const OWNER_FUNDING_SOURCES = [
+  'Cuenta Ganancias del Propietario',
+  ...OWNER_SERVICE_ORIGINS,
+  'Caja Chica',
+  'Banco',
+  'Otro',
+];
+
+const ADAPTIVE_CHIP_CLASS = 'inline-flex items-center w-fit max-w-full whitespace-normal break-words leading-tight';
+
 const FINANCE_ALERT_STORAGE_PREFIX = 'finance_traffic_light';
 
 function getDateKey(date: Date) {
@@ -136,6 +156,9 @@ export default function Financials() {
   const getDefaultTransactionForm = () => ({
     projectId: '',
     budgetItemId: '',
+    accountType: 'project',
+    incomeOrigin: OWNER_SERVICE_ORIGINS[0],
+    fundingSource: OWNER_FUNDING_SOURCES[0],
     type: 'Expense',
     category: ALL_EXPENSE_CATEGORIES[0],
     amount: '',
@@ -228,8 +251,11 @@ export default function Financials() {
 
       setNewTransaction({
         ...getDefaultTransactionForm(),
+        accountType: 'owner',
         type,
         category,
+        incomeOrigin: OWNER_SERVICE_ORIGINS[0],
+        fundingSource: OWNER_FUNDING_SOURCES[0],
       });
       setEditingTransactionId(null);
       setCurrentStep(0);
@@ -263,9 +289,11 @@ export default function Financials() {
       return;
     }
 
-    const headers = ['Fecha', 'Proyecto', 'Tipo', 'Categoría', 'Descripción', 'Monto (GTQ)'];
+    const headers = ['Fecha', 'Cuenta', 'Origen/Fuente', 'Proyecto', 'Tipo', 'Categoría', 'Descripción', 'Monto (GTQ)'];
     const rows = filteredTransactions.map(t => [
       t.date,
+      t.accountType === 'owner' ? 'Ganancias del Propietario' : 'Proyecto',
+      t.type === 'Income' ? (t.incomeOrigin || 'N/A') : (t.fundingSource || 'N/A'),
       projects.find(p => p.id === t.projectId)?.name || 'N/A',
       t.type === 'Income' ? 'Ingreso' : 'Gasto',
       t.category,
@@ -566,6 +594,9 @@ export default function Financials() {
     setNewTransaction({
       projectId: String(transaction.projectId || ''),
       budgetItemId: String(transaction.budgetItemId || ''),
+      accountType: transaction.accountType === 'owner' ? 'owner' : 'project',
+      incomeOrigin: String(transaction.incomeOrigin || OWNER_SERVICE_ORIGINS[0]),
+      fundingSource: String(transaction.fundingSource || OWNER_FUNDING_SOURCES[0]),
       type: transaction.type === 'Income' ? 'Income' : 'Expense',
       category: String(
         transaction.category ||
@@ -601,10 +632,18 @@ export default function Financials() {
     if (e) e.preventDefault();
     
     // Validation
-    if (!newTransaction.projectId) return toast.error('Por favor seleccione un proyecto');
+    if (newTransaction.accountType === 'project' && !newTransaction.projectId) {
+      return toast.error('Por favor seleccione un proyecto');
+    }
     if (!newTransaction.category) return toast.error('Por favor ingrese una categoría');
     if (!newTransaction.amount || Number(newTransaction.amount) <= 0) return toast.error('Por favor ingrese un monto válido');
     if (!newTransaction.date) return toast.error('Por favor seleccione una fecha');
+    if (newTransaction.type === 'Income' && newTransaction.accountType === 'owner' && !newTransaction.incomeOrigin) {
+      return toast.error('Seleccione el origen del ingreso');
+    }
+    if (newTransaction.type === 'Expense' && !newTransaction.fundingSource) {
+      return toast.error('Seleccione la fuente de fondos del gasto');
+    }
 
     if (!newTransaction.amount || isNaN(Number(newTransaction.amount)) || Number(newTransaction.amount) <= 0) {
       toast.error('Por favor ingrese un monto válido y mayor a cero.');
@@ -614,6 +653,8 @@ export default function Financials() {
     try {
       const payload = {
         ...newTransaction,
+        accountType: newTransaction.accountType as 'project' | 'owner',
+        projectId: newTransaction.accountType === 'owner' ? '' : newTransaction.projectId,
         type: newTransaction.type as 'Income' | 'Expense',
         amount: Number(newTransaction.amount)
       };
@@ -826,6 +867,34 @@ export default function Financials() {
   const totalIncome = filteredTransactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpense = filteredTransactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + t.amount, 0);
   const balance = totalIncome - totalExpense;
+
+  const ownerIncomeTransactions = useMemo(
+    () => transactions.filter(t => t.type === 'Income'),
+    [transactions]
+  );
+  const ownerExpenseTransactions = useMemo(
+    () => transactions.filter(
+      t => t.type === 'Expense' && (
+        t.accountType === 'owner' ||
+        String(t.fundingSource || '').toLowerCase() === 'cuenta ganancias del propietario'.toLowerCase()
+      )
+    ),
+    [transactions]
+  );
+  const ownerIncomeTotal = ownerIncomeTransactions.reduce((acc, t) => acc + t.amount, 0);
+  const ownerExpenseTotal = ownerExpenseTransactions.reduce((acc, t) => acc + t.amount, 0);
+  const ownerBalance = ownerIncomeTotal - ownerExpenseTotal;
+  const ownerIncomeByOrigin = useMemo(() => {
+    const totals = new Map<string, number>();
+    ownerIncomeTransactions.forEach((t) => {
+      const key = String(t.incomeOrigin || 'Sin origen');
+      totals.set(key, (totals.get(key) || 0) + (t.amount || 0));
+    });
+    return Array.from(totals.entries())
+      .map(([origin, total]) => ({ origin, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 6);
+  }, [ownerIncomeTransactions]);
 
   const administrativeCategorySet = useMemo(() => new Set(ADMINISTRATIVE_EXPENSE_CATEGORIES), []);
   const personalCategorySet = useMemo(() => new Set(PERSONAL_EXPENSE_CATEGORIES), []);
@@ -1133,6 +1202,58 @@ export default function Financials() {
         </div>
       </div>
 
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6 sm:p-8 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <div>
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Módulo de Ganancias del Propietario</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Consolida ingresos de proyectos en ejecución y servicios, y controla egresos por fuente de fondos.</p>
+          </div>
+          <span className={cn(
+            ADAPTIVE_CHIP_CLASS,
+            "px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border",
+            ownerBalance >= 0
+              ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30"
+              : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/30"
+          )}>
+            Balance Cuenta: {formatCurrency(ownerBalance)}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="rounded-2xl border border-emerald-100 dark:border-emerald-500/20 bg-emerald-50/70 dark:bg-emerald-500/10 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Ingresos en Cuenta</p>
+            <p className="text-2xl font-black text-emerald-600 mt-2">{formatCurrency(ownerIncomeTotal)}</p>
+          </div>
+          <div className="rounded-2xl border border-rose-100 dark:border-rose-500/20 bg-rose-50/70 dark:bg-rose-500/10 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-rose-700 dark:text-rose-400">Gastos desde Cuenta</p>
+            <p className="text-2xl font-black text-rose-600 mt-2">{formatCurrency(ownerExpenseTotal)}</p>
+          </div>
+          <div className="rounded-2xl border border-blue-100 dark:border-blue-500/20 bg-blue-50/70 dark:bg-blue-500/10 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-400">Movimientos</p>
+            <p className="text-2xl font-black text-blue-600 mt-2">{ownerIncomeTransactions.length + ownerExpenseTransactions.length}</p>
+          </div>
+        </div>
+
+        <div>
+          <h4 className="text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest mb-3">Origen principal de ingresos</h4>
+          <div className="flex flex-wrap gap-2">
+            {ownerIncomeByOrigin.length > 0 ? ownerIncomeByOrigin.map((item) => (
+              <span
+                key={item.origin}
+                className={cn(
+                  ADAPTIVE_CHIP_CLASS,
+                  "px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                )}
+              >
+                {item.origin}: {formatCurrency(item.total)}
+              </span>
+            )) : (
+              <p className="text-sm text-slate-500 dark:text-slate-400">Aún no hay ingresos enviados a la cuenta del propietario.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Insights Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         {/* Budget Deviations */}
@@ -1160,6 +1281,7 @@ export default function Financials() {
                     </p>
                   </div>
                   <span className={cn(
+                    ADAPTIVE_CHIP_CLASS,
                     "px-2 py-1 rounded-lg text-xs font-black",
                     item.deviation > 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
                   )}>
@@ -1501,12 +1623,14 @@ export default function Financials() {
 
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
             <span className={cn(
+              ADAPTIVE_CHIP_CLASS,
               "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border",
               adminTrafficLight.classes
             )}>
               Admin {adminTrafficLight.label}: {activeProjectsProfit > 0 ? `${adminExpenseVsProfit.toFixed(1)}%` : 'N/A'}
             </span>
             <span className={cn(
+              ADAPTIVE_CHIP_CLASS,
               "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border",
               personalTrafficLight.classes
             )}>
@@ -1575,6 +1699,7 @@ export default function Financials() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <span className={cn(
+                      ADAPTIVE_CHIP_CLASS,
                       "px-2 py-1 rounded-full text-micro font-bold uppercase tracking-wider border",
                       kpi.profitMargin >= 20 ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 border-emerald-100 dark:border-emerald-500/20" : 
                       kpi.profitMargin >= 10 ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 border-blue-100 dark:border-blue-500/20" : 
@@ -1611,6 +1736,8 @@ export default function Financials() {
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
                 <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Fecha</th>
                 <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Proyecto</th>
+                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cuenta</th>
+                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Origen/Fuente</th>
                 <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Categoría</th>
                 <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Descripción</th>
                 <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Monto</th>
@@ -1627,7 +1754,21 @@ export default function Financials() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-micro font-bold uppercase tracking-wider px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-full border border-slate-200 dark:border-slate-700">
+                    <span className={cn(
+                      ADAPTIVE_CHIP_CLASS,
+                      "text-micro font-bold uppercase tracking-wider px-2 py-1 rounded-full border",
+                      t.accountType === 'owner'
+                        ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30"
+                        : "bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30"
+                    )}>
+                      {t.accountType === 'owner' ? 'Ganancias Propietario' : 'Proyecto'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-xs text-slate-500 dark:text-slate-400">
+                    {(t.type === 'Income' ? t.incomeOrigin : t.fundingSource) || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={cn(ADAPTIVE_CHIP_CLASS, "text-micro font-bold uppercase tracking-wider px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-full border border-slate-200 dark:border-slate-700")}>
                       {t.category}
                     </span>
                   </td>
@@ -1663,7 +1804,7 @@ export default function Financials() {
               ))}
               {filteredTransactions.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400 dark:text-slate-500 italic">No se encontraron transacciones</td>
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400 dark:text-slate-500 italic">No se encontraron transacciones</td>
                 </tr>
               )}
             </tbody>
@@ -1680,8 +1821,14 @@ export default function Financials() {
                     {projects.find(p => p.id === t.projectId)?.name || 'N/A'}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">{formatDate(t.date)}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {t.accountType === 'owner' ? 'Cuenta: Ganancias del Propietario' : 'Cuenta: Proyecto'}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {t.type === 'Income' ? `Origen: ${t.incomeOrigin || 'N/A'}` : `Fuente: ${t.fundingSource || 'N/A'}`}
+                  </p>
                 </div>
-                <div className="text-micro font-bold uppercase tracking-wider px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-full border border-slate-200 dark:border-slate-700">
+                <div className={cn(ADAPTIVE_CHIP_CLASS, "text-micro font-bold uppercase tracking-wider px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-full border border-slate-200 dark:border-slate-700")}>
                   {t.category}
                 </div>
               </div>
@@ -1773,8 +1920,16 @@ export default function Financials() {
                 <button 
                   type="button"
                   onClick={() => {
-                    if (!newTransaction.projectId) {
+                    if (newTransaction.accountType === 'project' && !newTransaction.projectId) {
                       toast.error('Por favor seleccione un proyecto');
+                      return;
+                    }
+                    if (newTransaction.type === 'Income' && newTransaction.accountType === 'owner' && !newTransaction.incomeOrigin) {
+                      toast.error('Seleccione el origen del ingreso');
+                      return;
+                    }
+                    if (newTransaction.type === 'Expense' && !newTransaction.fundingSource) {
+                      toast.error('Seleccione la fuente de fondos del gasto');
                       return;
                     }
                     setCurrentStep(prev => prev + 1);
@@ -1807,14 +1962,33 @@ export default function Financials() {
             {
               title: "Clasificación",
               content: (
-                <FormSection title="Origen de Fondos" icon={Info} description="Vincular transacción a un proyecto">
+                <FormSection title="Origen de Fondos" icon={Info} description="Define cuenta, origen del ingreso y fuente de fondos para gastos">
+                  <FormSelect
+                    label="Cuenta de Movimiento"
+                    value={newTransaction.accountType}
+                    onChange={(e) => {
+                      const accountType = e.target.value as 'project' | 'owner';
+                      setNewTransaction({
+                        ...newTransaction,
+                        accountType,
+                        projectId: accountType === 'owner' ? '' : newTransaction.projectId,
+                        budgetItemId: accountType === 'owner' ? '' : newTransaction.budgetItemId,
+                        incomeOrigin: accountType === 'owner' ? (newTransaction.incomeOrigin || OWNER_SERVICE_ORIGINS[0]) : 'Proyectos en ejecución',
+                        fundingSource: accountType === 'owner' ? OWNER_FUNDING_SOURCES[0] : newTransaction.fundingSource,
+                      });
+                    }}
+                  >
+                    <option value="project">Proyecto</option>
+                    <option value="owner">Ganancias del Propietario</option>
+                  </FormSelect>
                   <FormSelect 
                     label="Proyecto"
-                    required
+                    required={newTransaction.accountType === 'project'}
                     value={newTransaction.projectId}
                     onChange={(e) => setNewTransaction({...newTransaction, projectId: e.target.value})}
+                    disabled={newTransaction.accountType === 'owner'}
                   >
-                    <option value="">Seleccionar Proyecto</option>
+                    <option value="">{newTransaction.accountType === 'owner' ? 'No aplica (Cuenta Propietario)' : 'Seleccionar Proyecto'}</option>
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
@@ -1823,7 +1997,7 @@ export default function Financials() {
                     label="Renglón de Presupuesto (Opcional)"
                     value={newTransaction.budgetItemId}
                     onChange={(e) => setNewTransaction({...newTransaction, budgetItemId: e.target.value})}
-                    disabled={!newTransaction.projectId}
+                    disabled={!newTransaction.projectId || newTransaction.accountType === 'owner'}
                   >
                     <option value="">General / No especificado</option>
                     {budgetItems.map(item => (
@@ -1838,13 +2012,37 @@ export default function Financials() {
                       setNewTransaction({
                         ...newTransaction, 
                         type,
-                        category: type === 'Income' ? INCOME_CATEGORIES[0] : ALL_EXPENSE_CATEGORIES[0]
+                        category: type === 'Income' ? INCOME_CATEGORIES[0] : ALL_EXPENSE_CATEGORIES[0],
+                        incomeOrigin: type === 'Income' ? (newTransaction.incomeOrigin || OWNER_SERVICE_ORIGINS[0]) : newTransaction.incomeOrigin,
+                        fundingSource: type === 'Expense' ? (newTransaction.fundingSource || OWNER_FUNDING_SOURCES[0]) : newTransaction.fundingSource,
                       });
                     }}
                   >
                     <option value="Expense">Gasto (-)</option>
                     <option value="Income">Ingreso (+)</option>
                   </FormSelect>
+                  {newTransaction.type === 'Income' && (
+                    <FormSelect
+                      label="Origen del Ingreso"
+                      value={newTransaction.incomeOrigin}
+                      onChange={(e) => setNewTransaction({ ...newTransaction, incomeOrigin: e.target.value })}
+                    >
+                      {OWNER_SERVICE_ORIGINS.map((origin) => (
+                        <option key={origin} value={origin}>{origin}</option>
+                      ))}
+                    </FormSelect>
+                  )}
+                  {newTransaction.type === 'Expense' && (
+                    <FormSelect
+                      label="Fuente de Fondos para Gasto"
+                      value={newTransaction.fundingSource}
+                      onChange={(e) => setNewTransaction({ ...newTransaction, fundingSource: e.target.value })}
+                    >
+                      {OWNER_FUNDING_SOURCES.map((source) => (
+                        <option key={source} value={source}>{source}</option>
+                      ))}
+                    </FormSelect>
+                  )}
                 </FormSection>
               )
             },

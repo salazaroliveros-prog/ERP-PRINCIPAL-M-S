@@ -10,6 +10,9 @@ export interface FinancialTransaction {
   amount: number;
   date: string;
   description: string;
+  accountType: 'project' | 'owner';
+  incomeOrigin: string;
+  fundingSource: string;
   createdAt: string;
 }
 
@@ -21,7 +24,7 @@ export interface ListTransactionsResult {
 }
 
 export interface CreateTransactionInput {
-  projectId: string;
+  projectId?: string;
   budgetItemId: string;
   subcontractId?: string;
   type: 'Income' | 'Expense';
@@ -29,6 +32,9 @@ export interface CreateTransactionInput {
   amount: number;
   date: string;
   description: string;
+  accountType?: 'project' | 'owner';
+  incomeOrigin?: string;
+  fundingSource?: string;
 }
 
 export async function listTransactions(params: {

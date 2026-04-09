@@ -79,7 +79,7 @@ type TransactionType = "Income" | "Expense";
 
 interface TransactionRow {
   id: string;
-  project_id: string;
+  project_id: string | null;
   budget_item_id: string | null;
   subcontract_id: string | null;
   type: TransactionType;
@@ -87,6 +87,9 @@ interface TransactionRow {
   amount: string;
   date: string;
   description: string | null;
+  account_type: 'project' | 'owner' | null;
+  income_origin: string | null;
+  funding_source: string | null;
   created_at: string;
 }
 
@@ -489,7 +492,7 @@ interface AppUserRow {
 function mapTransaction(row: TransactionRow) {
   return {
     id: row.id,
-    projectId: row.project_id,
+    projectId: row.project_id || '',
     budgetItemId: row.budget_item_id,
     subcontractId: row.subcontract_id,
     type: row.type,
@@ -497,6 +500,9 @@ function mapTransaction(row: TransactionRow) {
     amount: Number(row.amount),
     date: row.date,
     description: row.description || "",
+    accountType: row.account_type || 'project',
+    incomeOrigin: row.income_origin || '',
+    fundingSource: row.funding_source || '',
     createdAt: row.created_at,
   };
 }
@@ -1606,7 +1612,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
 
       const result = await db.query<TransactionRow>(
         `
-          select id, project_id, budget_item_id, subcontract_id, type, category, amount, date::text, description, created_at
+          select id, project_id, budget_item_id, subcontract_id, type, category, amount, date::text, description, account_type, income_origin, funding_source, created_at
           from financial_transactions
           ${whereClause}
           order by date desc, created_at desc
@@ -6324,12 +6330,21 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       const amount = Number(req.body?.amount);
       const date = String(req.body?.date || "").trim();
       const description = String(req.body?.description || "").trim();
+      const accountType = String(req.body?.accountType || "project").trim();
+      const incomeOrigin = String(req.body?.incomeOrigin || "").trim();
+      const fundingSource = String(req.body?.fundingSource || "").trim();
 
-      if (!projectId || !category || !date || !Number.isFinite(amount) || amount <= 0) {
+      if (!category || !date || !Number.isFinite(amount) || amount <= 0) {
         return res.status(400).json({ error: "Datos invalidos para crear transaccion" });
       }
       if (type !== "Income" && type !== "Expense") {
         return res.status(400).json({ error: "El tipo debe ser Income o Expense" });
+      }
+      if (accountType !== 'project' && accountType !== 'owner') {
+        return res.status(400).json({ error: "La cuenta debe ser project u owner" });
+      }
+      if (accountType === 'project' && !projectId) {
+        return res.status(400).json({ error: "Debe seleccionar un proyecto cuando la cuenta es por proyecto" });
       }
 
       const insert = await db.query<TransactionRow>(
@@ -6342,11 +6357,26 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             category,
             amount,
             date,
-            description
-          ) values ($1, $2, $3, $4, $5, $6, $7::date, $8)
-          returning id, project_id, budget_item_id, subcontract_id, type, category, amount, date::text, description, created_at
+            description,
+            account_type,
+            income_origin,
+            funding_source
+          ) values ($1, $2, $3, $4, $5, $6, $7::date, $8, $9, $10, $11)
+          returning id, project_id, budget_item_id, subcontract_id, type, category, amount, date::text, description, account_type, income_origin, funding_source, created_at
         `,
-        [projectId, budgetItemId || null, subcontractId || null, type, category, amount, date, description]
+        [
+          accountType === 'project' ? projectId : null,
+          budgetItemId || null,
+          subcontractId || null,
+          type,
+          category,
+          amount,
+          date,
+          description,
+          accountType,
+          incomeOrigin || null,
+          fundingSource || null,
+        ]
       );
 
       return res.status(201).json(mapTransaction(insert.rows[0]));
@@ -6370,12 +6400,21 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       const amount = Number(req.body?.amount);
       const date = String(req.body?.date || "").trim();
       const description = String(req.body?.description || "").trim();
+      const accountType = String(req.body?.accountType || "project").trim();
+      const incomeOrigin = String(req.body?.incomeOrigin || "").trim();
+      const fundingSource = String(req.body?.fundingSource || "").trim();
 
-      if (!projectId || !category || !date || !Number.isFinite(amount) || amount <= 0) {
+      if (!category || !date || !Number.isFinite(amount) || amount <= 0) {
         return res.status(400).json({ error: "Datos invalidos para actualizar transaccion" });
       }
       if (type !== "Income" && type !== "Expense") {
         return res.status(400).json({ error: "El tipo debe ser Income o Expense" });
+      }
+      if (accountType !== 'project' && accountType !== 'owner') {
+        return res.status(400).json({ error: "La cuenta debe ser project u owner" });
+      }
+      if (accountType === 'project' && !projectId) {
+        return res.status(400).json({ error: "Debe seleccionar un proyecto cuando la cuenta es por proyecto" });
       }
 
       const updated = await db.query<TransactionRow>(
@@ -6388,11 +6427,26 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             category = $4,
             amount = $5,
             date = $6::date,
-            description = $7
-          where id = $8
-          returning id, project_id, budget_item_id, subcontract_id, type, category, amount, date::text, description, created_at
+            description = $7,
+            account_type = $8,
+            income_origin = $9,
+            funding_source = $10
+          where id = $11
+          returning id, project_id, budget_item_id, subcontract_id, type, category, amount, date::text, description, account_type, income_origin, funding_source, created_at
         `,
-        [projectId, budgetItemId || null, type, category, amount, date, description, id]
+        [
+          accountType === 'project' ? projectId : null,
+          budgetItemId || null,
+          type,
+          category,
+          amount,
+          date,
+          description,
+          accountType,
+          incomeOrigin || null,
+          fundingSource || null,
+          id,
+        ]
       );
 
       if (!updated.rows[0]) {
