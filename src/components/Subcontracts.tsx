@@ -898,12 +898,6 @@ export default function Subcontracts() {
                         toast.error('Por favor complete los campos obligatorios');
                         return;
                       }
-                    } else if (currentStep === 1) {
-                      if (Number(newSub.total) <= 0) {
-                        validateField('total', newSub.total);
-                        toast.error('El monto total debe ser mayor a cero');
-                        return;
-                      }
                     }
                     setCurrentStep(prev => prev + 1);
                   }}
