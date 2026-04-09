@@ -241,6 +241,26 @@ export default function Documents() {
       toast.info(`El documento ${doc.name} no tiene archivo adjunto`);
       return;
     }
+
+    if (String(doc.fileUrl).startsWith('data:')) {
+      try {
+        const dataUrl = String(doc.fileUrl);
+        const [meta, content] = dataUrl.split(',', 2);
+        if (!meta || !content) throw new Error('Formato data URL inválido');
+
+        const mimeMatch = meta.match(/^data:([^;]+);base64$/i);
+        const mimeType = mimeMatch?.[1] || 'application/octet-stream';
+        const bytes = Uint8Array.from(atob(content), (char) => char.charCodeAt(0));
+        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+        window.open(blobUrl, '_blank', 'noopener,noreferrer');
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+        return;
+      } catch {
+        toast.error(`No se pudo abrir ${doc.name}`);
+        return;
+      }
+    }
+
     window.open(doc.fileUrl, '_blank', 'noopener,noreferrer');
   };
 
@@ -251,6 +271,31 @@ export default function Documents() {
     }
 
     const link = document.createElement('a');
+
+    if (String(doc.fileUrl).startsWith('data:')) {
+      try {
+        const dataUrl = String(doc.fileUrl);
+        const [meta, content] = dataUrl.split(',', 2);
+        if (!meta || !content) throw new Error('Formato data URL inválido');
+
+        const mimeMatch = meta.match(/^data:([^;]+);base64$/i);
+        const mimeType = mimeMatch?.[1] || 'application/octet-stream';
+        const bytes = Uint8Array.from(atob(content), (char) => char.charCodeAt(0));
+        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+        link.href = blobUrl;
+        link.download = doc.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 5_000);
+        toast.success(`Descargando ${doc.name}...`);
+        return;
+      } catch {
+        toast.error(`No se pudo descargar ${doc.name}`);
+        return;
+      }
+    }
+
     link.href = doc.fileUrl;
     link.download = doc.name;
     document.body.appendChild(link);
