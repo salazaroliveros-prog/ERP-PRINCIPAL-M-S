@@ -19,7 +19,8 @@ import {
   Sparkles,
   Loader2,
   CheckCircle2,
-  Trash2
+  Trash2,
+  Pencil
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
@@ -28,7 +29,7 @@ import { logAction } from '../lib/audit';
 import { drawReportHeader } from '../lib/pdfUtils';
 import { FormModal } from './FormModal';
 import { toast } from 'sonner';
-import { createTransaction, deleteTransactionById, listTransactions } from '../lib/financialsApi';
+import { createTransaction, deleteTransactionById, listTransactions, updateTransactionById } from '../lib/financialsApi';
 import { listBudgetItems, listProjects } from '../lib/projectsApi';
 import { sendNotification } from '../lib/notifications';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -132,9 +133,19 @@ function getDateKey(date: Date) {
 
 export default function Financials() {
   const PAGE_SIZE = 50;
+  const getDefaultTransactionForm = () => ({
+    projectId: '',
+    budgetItemId: '',
+    type: 'Expense',
+    category: ALL_EXPENSE_CATEGORIES[0],
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    description: ''
+  });
   const [transactions, setTransactions] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [filterProject, setFilterProject] = useState('all');
   const [dateFilter, setDateFilter] = useState('all'); // all, week, month, custom
@@ -149,15 +160,13 @@ export default function Financials() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
   
-  const [newTransaction, setNewTransaction] = useState({
-    projectId: '',
-    budgetItemId: '',
-    type: 'Expense',
-    category: ALL_EXPENSE_CATEGORIES[0],
-    amount: '',
-    date: new Date().toISOString().split('T')[0],
-    description: ''
-  });
+  const [newTransaction, setNewTransaction] = useState(getDefaultTransactionForm());
+
+  const resetTransactionForm = () => {
+    setEditingTransactionId(null);
+    setNewTransaction(getDefaultTransactionForm());
+    setCurrentStep(0);
+  };
 
   useEffect(() => {
     const loadBudgetItemsForProject = async () => {
@@ -218,14 +227,11 @@ export default function Financials() {
       const category = type === 'Income' ? INCOME_CATEGORIES[0] : ALL_EXPENSE_CATEGORIES[0];
 
       setNewTransaction({
-        projectId: '',
-        budgetItemId: '',
-        amount: '',
+        ...getDefaultTransactionForm(),
         type,
         category,
-        description: '',
-        date: new Date().toISOString().split('T')[0]
       });
+      setEditingTransactionId(null);
       setCurrentStep(0);
       setIsModalOpen(true);
     };
@@ -555,6 +561,24 @@ export default function Financials() {
     setIsDeleteConfirmOpen(true);
   };
 
+  const handleEditTransaction = (transaction: any) => {
+    setEditingTransactionId(transaction.id);
+    setNewTransaction({
+      projectId: String(transaction.projectId || ''),
+      budgetItemId: String(transaction.budgetItemId || ''),
+      type: transaction.type === 'Income' ? 'Income' : 'Expense',
+      category: String(
+        transaction.category ||
+        (transaction.type === 'Income' ? INCOME_CATEGORIES[0] : ALL_EXPENSE_CATEGORIES[0])
+      ),
+      amount: String(transaction.amount ?? ''),
+      date: String(transaction.date || '').split('T')[0] || new Date().toISOString().split('T')[0],
+      description: String(transaction.description || '')
+    });
+    setCurrentStep(0);
+    setIsModalOpen(true);
+  };
+
   const confirmDeleteTransaction = async () => {
     if (!transactionToDelete) return;
     try {
@@ -573,7 +597,7 @@ export default function Financials() {
     }
   };
 
-  const handleAddTransaction = async (e?: React.FormEvent) => {
+  const handleSubmitTransaction = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     
     // Validation
@@ -588,27 +612,35 @@ export default function Financials() {
     }
 
     try {
-      const created = await createTransaction({
+      const payload = {
         ...newTransaction,
         type: newTransaction.type as 'Income' | 'Expense',
         amount: Number(newTransaction.amount)
-      });
-      setTransactions(prev => [created, ...prev]);
-      setOffset(prev => prev + 1);
-      toast.success('Transacción registrada con éxito');
-      await logAction('Registro de Transacción', 'Finanzas', `${newTransaction.type === 'Income' ? 'Ingreso' : 'Egreso'} de ${formatCurrency(Number(newTransaction.amount))} registrado`, 'create', { transactionId: created.id });
+      };
+
+      if (editingTransactionId) {
+        const updated = await updateTransactionById(editingTransactionId, payload);
+        setTransactions(prev => prev.map(t => (t.id === editingTransactionId ? updated : t)));
+        toast.success('Transacción actualizada con éxito');
+        await logAction(
+          'Edición de Transacción',
+          'Finanzas',
+          `${updated.type === 'Income' ? 'Ingreso' : 'Egreso'} de ${formatCurrency(updated.amount)} actualizado`,
+          'update',
+          { transactionId: updated.id }
+        );
+      } else {
+        const created = await createTransaction(payload);
+        setTransactions(prev => [created, ...prev]);
+        setOffset(prev => prev + 1);
+        toast.success('Transacción registrada con éxito');
+        await logAction('Registro de Transacción', 'Finanzas', `${newTransaction.type === 'Income' ? 'Ingreso' : 'Egreso'} de ${formatCurrency(Number(newTransaction.amount))} registrado`, 'create', { transactionId: created.id });
+      }
+
       setIsModalOpen(false);
-      setNewTransaction({
-        projectId: '',
-        budgetItemId: '',
-        type: 'Expense',
-        category: '',
-        amount: '',
-        date: new Date().toISOString().split('T')[0],
-        description: ''
-      });
+      resetTransactionForm();
     } catch (error) {
-      toast.error('Error al registrar transacción', {
+      toast.error(editingTransactionId ? 'Error al actualizar transacción' : 'Error al registrar transacción', {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -1610,13 +1642,22 @@ export default function Financials() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => handleDeleteTransaction(t.id)}
-                      className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
-                      title="Eliminar"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => handleEditTransaction(t)}
+                        className="p-2 text-slate-400 hover:text-primary transition-colors"
+                        title="Editar"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteTransaction(t.id)}
+                        className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1646,6 +1687,13 @@ export default function Financials() {
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400">{t.description}</p>
               <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => handleEditTransaction(t)}
+                  className="p-2 text-slate-400 hover:text-primary transition-colors"
+                  title="Editar"
+                >
+                  <Pencil size={18} />
+                </button>
                 <button 
                   onClick={() => handleDeleteTransaction(t.id)}
                   className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
@@ -1691,18 +1739,9 @@ export default function Financials() {
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
-          setNewTransaction({
-            projectId: '',
-            budgetItemId: '',
-            amount: '',
-            type: 'Expense',
-            category: '',
-            description: '',
-            date: new Date().toISOString().split('T')[0]
-          });
-          setCurrentStep(0);
+          resetTransactionForm();
         }}
-        title="Nuevo Registro Financiero"
+        title={editingTransactionId ? 'Editar Registro Financiero' : 'Nuevo Registro Financiero'}
         maxWidth="max-w-2xl"
         fullVertical
         footer={
@@ -1712,16 +1751,7 @@ export default function Financials() {
                 type="button"
                 onClick={() => {
                   setIsModalOpen(false);
-                  setNewTransaction({
-                    projectId: '',
-                    budgetItemId: '',
-                    amount: '',
-                    type: 'Expense',
-                    category: '',
-                    description: '',
-                    date: new Date().toISOString().split('T')[0]
-                  });
-                  setCurrentStep(0);
+                    resetTransactionForm();
                 }}
                 className="px-6 py-3 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
               >
@@ -1760,7 +1790,7 @@ export default function Financials() {
                   form="transaction-form"
                   className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-10 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary-hover transition-all shadow-lg shadow-primary-shadow"
                 >
-                  Guardar Registro
+                  {editingTransactionId ? 'Guardar Cambios' : 'Guardar Registro'}
                   <CheckCircle2 size={18} />
                 </button>
               )}
@@ -1772,7 +1802,7 @@ export default function Financials() {
           formId="transaction-form"
           currentStep={currentStep}
           onStepChange={setCurrentStep}
-          onSubmit={handleAddTransaction}
+          onSubmit={handleSubmitTransaction}
           steps={[
             {
               title: "Clasificación",

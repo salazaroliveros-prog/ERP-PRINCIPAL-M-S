@@ -6355,6 +6355,56 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
     }
   });
 
+  app.patch("/api/transactions/:id", async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || "").trim();
+      if (!id) {
+        return res.status(400).json({ error: "Id requerido" });
+      }
+
+      const projectId = String(req.body?.projectId || "").trim();
+      const budgetItemId = String(req.body?.budgetItemId || "").trim();
+      const type = String(req.body?.type || "") as TransactionType;
+      const category = String(req.body?.category || "").trim();
+      const amount = Number(req.body?.amount);
+      const date = String(req.body?.date || "").trim();
+      const description = String(req.body?.description || "").trim();
+
+      if (!projectId || !category || !date || !Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ error: "Datos invalidos para actualizar transaccion" });
+      }
+      if (type !== "Income" && type !== "Expense") {
+        return res.status(400).json({ error: "El tipo debe ser Income o Expense" });
+      }
+
+      const updated = await db.query<TransactionRow>(
+        `
+          update financial_transactions
+          set
+            project_id = $1,
+            budget_item_id = $2,
+            type = $3,
+            category = $4,
+            amount = $5,
+            date = $6::date,
+            description = $7
+          where id = $8
+          returning id, project_id, budget_item_id, subcontract_id, type, category, amount, date::text, description, created_at
+        `,
+        [projectId, budgetItemId || null, type, category, amount, date, description, id]
+      );
+
+      if (!updated.rows[0]) {
+        return res.status(404).json({ error: "Transaccion no encontrada" });
+      }
+
+      return res.json(mapTransaction(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || "No se pudo actualizar la transaccion" });
+    }
+  });
+
   app.delete("/api/transactions/:id", async (req, res) => {
     try {
       const db = requireDatabase();

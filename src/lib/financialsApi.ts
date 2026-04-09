@@ -60,6 +60,13 @@ export async function createTransaction(payload: CreateTransactionInput): Promis
   });
 }
 
+export async function updateTransactionById(id: string, payload: CreateTransactionInput): Promise<FinancialTransaction> {
+  return requestJson<FinancialTransaction>(`/api/transactions/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function deleteTransactionById(id: string): Promise<void> {
   await requestJson<void>(`/api/transactions/${id}`, {
     method: 'DELETE',
