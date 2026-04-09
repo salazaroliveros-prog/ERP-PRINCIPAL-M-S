@@ -28,7 +28,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import ConfirmModal from './ConfirmModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { drawLogo } from '../lib/pdfUtils';
+import { drawReportHeader } from '../lib/pdfUtils';
 import { toast } from 'sonner';
 import { FormModal } from './FormModal';
 import { Info, List, ChevronLeft, ChevronRight, CheckCircle2, Database, Sparkles, Loader2 } from 'lucide-react';
@@ -370,54 +370,44 @@ export default function Quotes() {
     const doc = new jsPDF();
     const quoteCode = quote.id.slice(-6).toUpperCase();
 
-    doc.setFillColor(15, 23, 42);
-    doc.rect(0, 0, 210, 36, 'F');
-    drawLogo(doc, 16, 9, 1.05);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(19);
-    doc.setTextColor(255, 255, 255);
-    doc.text('COTIZACION PROFESIONAL', 194, 17, { align: 'right' });
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`No. ${quoteCode} | ${formatDate(quote.date)}`, 194, 24, { align: 'right' });
-    doc.text('Constructora WM_M&S', 194, 30, { align: 'right' });
-
-    doc.setDrawColor(37, 99, 235);
-    doc.setLineWidth(0.8);
-    doc.line(14, 40, 196, 40);
+    const headerBottom = drawReportHeader(doc, 'COTIZACION PROFESIONAL', {
+      subtitle: `No. ${quoteCode}`,
+      dateText: `Fecha: ${formatDate(quote.date)}`,
+      x: 14,
+      y: 9,
+    });
 
     doc.setFontSize(10);
     doc.setTextColor(71, 85, 105);
     doc.setFont('helvetica', 'bold');
-    doc.text('CLIENTE:', 16, 49);
+    doc.text('CLIENTE:', 16, headerBottom + 9);
     doc.setFont('helvetica', 'normal');
-    doc.text(client?.name || 'N/A', 35, 49);
+    doc.text(client?.name || 'N/A', 35, headerBottom + 9);
     doc.setFont('helvetica', 'bold');
-    doc.text('TELEFONO:', 16, 55);
+    doc.text('TELEFONO:', 16, headerBottom + 15);
     doc.setFont('helvetica', 'normal');
-    doc.text(client?.phone || 'N/A', 38, 55);
+    doc.text(client?.phone || 'N/A', 38, headerBottom + 15);
     doc.setFont('helvetica', 'bold');
-    doc.text('EMAIL:', 16, 61);
+    doc.text('EMAIL:', 16, headerBottom + 21);
     doc.setFont('helvetica', 'normal');
-    doc.text(client?.email || 'N/A', 31, 61);
+    doc.text(client?.email || 'N/A', 31, headerBottom + 21);
 
     doc.setFont('helvetica', 'bold');
-    doc.text('ESTADO:', 130, 49);
+    doc.text('ESTADO:', 130, headerBottom + 9);
     doc.setTextColor(quote.status === 'Accepted' ? 22 : 217, quote.status === 'Accepted' ? 163 : 119, quote.status === 'Accepted' ? 74 : 6);
-    doc.text(`${quote.status === 'Accepted' ? 'Aceptada' : quote.status === 'Sent' ? 'Enviada' : 'Pendiente'}`, 150, 49);
+    doc.text(`${quote.status === 'Accepted' ? 'Aceptada' : quote.status === 'Sent' ? 'Enviada' : 'Pendiente'}`, 150, headerBottom + 9);
     doc.setTextColor(71, 85, 105);
     doc.setFont('helvetica', 'bold');
-    doc.text('VALIDEZ:', 130, 55);
+    doc.text('VALIDEZ:', 130, headerBottom + 15);
     doc.setFont('helvetica', 'normal');
-    doc.text('15 dias calendario', 150, 55);
+    doc.text('15 dias calendario', 150, headerBottom + 15);
     doc.setFont('helvetica', 'bold');
-    doc.text('MONEDA:', 130, 61);
+    doc.text('MONEDA:', 130, headerBottom + 21);
     doc.setFont('helvetica', 'normal');
-    doc.text('GTQ', 150, 61);
+    doc.text('GTQ', 150, headerBottom + 21);
 
     autoTable(doc, {
-      startY: 70,
+      startY: headerBottom + 30,
       margin: { left: 14, right: 14 },
       head: [['Descripcion', 'Cantidad', 'Precio Unitario', 'Subtotal']],
       body: quote.items.map((item: any) => [
@@ -480,7 +470,7 @@ export default function Quotes() {
       doc.text(`Quesada, Jutiapa | Tel: 55606172 / 40601526 | Pagina ${i} de ${pageCount}`, 105, 279, { align: 'center' });
       doc.setTextColor(37, 99, 235);
       doc.setFont('helvetica', 'italic');
-      doc.text('"Construyendo el futuro"', 105, 284, { align: 'center' });
+      doc.text('"Edificando el Futuro"', 105, 284, { align: 'center' });
     }
 
     return doc;

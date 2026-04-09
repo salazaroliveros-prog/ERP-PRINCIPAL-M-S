@@ -59,7 +59,7 @@ import ProjectMap from './ProjectMap';
 import CalendarView from './CalendarView';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { drawLogo } from '../lib/pdfUtils';
+import { drawReportHeader } from '../lib/pdfUtils';
 import { sendNotification } from '../lib/notifications';
 import { logAction } from '../lib/audit';
 import { toast } from 'sonner';
@@ -737,38 +737,30 @@ export default function Projects() {
 
   const generateReport = (project: any) => {
     const doc = new jsPDF();
-    
-    // Header
-    drawLogo(doc, 20, 10);
-    
-    doc.setFontSize(22);
-    doc.setTextColor(37, 99, 235); // Blue-600
-    doc.text('CONSTRUCTORA WM_M&S', 105, 20, { align: 'center' });
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100, 116, 139); // Slate-500
-    doc.text('construyendo el futuro', 105, 26, { align: 'center' });
-    
-    doc.setDrawColor(37, 99, 235);
-    doc.line(20, 32, 190, 32);
+    const headerBottom = drawReportHeader(doc, 'INFORME DE OBRA', {
+      subtitle: project.name,
+      dateText: `Fecha: ${formatDate(new Date().toISOString())}`,
+      x: 20,
+      y: 10,
+    });
 
     // Project Info
     doc.setFontSize(16);
     doc.setTextColor(15, 23, 42); // Slate-900
-    doc.text(`Informe de Obra: ${project.name}`, 20, 45);
+    doc.text(`Informe de Obra: ${project.name}`, 20, headerBottom + 8);
     
     doc.setFontSize(12);
-    doc.text(`Ubicación: ${project.location}`, 20, 55);
-    doc.text(`Estado: ${project.status}`, 20, 62);
-    doc.text(`Fecha de Inicio: ${project.startDate ? formatDate(project.startDate) : 'N/A'}`, 20, 69);
-    doc.text(`Fecha de Fin: ${project.endDate ? formatDate(project.endDate) : 'N/A'}`, 20, 76);
+    doc.text(`Ubicación: ${project.location}`, 20, headerBottom + 18);
+    doc.text(`Estado: ${project.status}`, 20, headerBottom + 25);
+    doc.text(`Fecha de Inicio: ${project.startDate ? formatDate(project.startDate) : 'N/A'}`, 20, headerBottom + 32);
+    doc.text(`Fecha de Fin: ${project.endDate ? formatDate(project.endDate) : 'N/A'}`, 20, headerBottom + 39);
 
     // Financial Summary
     doc.setFontSize(14);
-    doc.text('Resumen Financiero', 20, 90);
+    doc.text('Resumen Financiero', 20, headerBottom + 53);
     
     autoTable(doc, {
-      startY: 95,
+      startY: headerBottom + 58,
       head: [['Concepto', 'Monto (GTQ)']],
       body: [
         ['Presupuesto Total', formatCurrency(project.budget)],
@@ -807,19 +799,10 @@ export default function Projects() {
       const docPdf = new jsPDF();
       const now = new Date();
 
-      // Add Logo
-      drawLogo(docPdf, 14, 10, 1.2);
-
-      // Header Info
-      docPdf.setFontSize(18);
-      docPdf.setTextColor(15, 23, 42);
-      docPdf.text('Presupuesto de Obra Detallado', 70, 20);
-
-      docPdf.setFontSize(10);
-      docPdf.setTextColor(100, 116, 139);
-      docPdf.text(`Proyecto: ${project.name}`, 70, 28);
-      docPdf.text(`Ubicación: ${project.location}`, 70, 33);
-      docPdf.text(`Fecha: ${formatDate(now)}`, 70, 38);
+      const headerBottom = drawReportHeader(docPdf, 'PRESUPUESTO DE OBRA DETALLADO', {
+        subtitle: `Proyecto: ${project.name} · Ubicación: ${project.location}`,
+        dateText: `Fecha: ${formatDate(now)}`,
+      });
 
       const totalBudget = budgetItems.reduce((sum, item) => sum + (item.totalItemPrice || 0), 0);
       const totalMaterials = budgetItems.reduce((sum, item) => sum + (item.materialCost || 0), 0);
@@ -828,23 +811,23 @@ export default function Projects() {
 
       // Summary Stats
       docPdf.setFillColor(248, 250, 252);
-      docPdf.rect(14, 45, 182, 20, 'F');
+      docPdf.rect(14, headerBottom + 4, 182, 20, 'F');
       
       docPdf.setFontSize(9);
       docPdf.setTextColor(71, 85, 105);
-      docPdf.text('TOTAL PRESUPUESTADO', 20, 53);
+      docPdf.text('TOTAL PRESUPUESTADO', 20, headerBottom + 12);
       docPdf.setFontSize(12);
       docPdf.setTextColor(37, 99, 235);
-      docPdf.text(formatCurrency(totalBudget), 20, 60);
+      docPdf.text(formatCurrency(totalBudget), 20, headerBottom + 19);
 
       docPdf.setFontSize(9);
       docPdf.setTextColor(71, 85, 105);
-      docPdf.text('ITEMS TOTALES', 100, 53);
+      docPdf.text('ITEMS TOTALES', 100, headerBottom + 12);
       docPdf.setFontSize(12);
       docPdf.setTextColor(15, 23, 42);
-      docPdf.text(budgetItems.length.toString(), 100, 60);
+      docPdf.text(budgetItems.length.toString(), 100, headerBottom + 19);
 
-      let currentY = 75;
+      let currentY = headerBottom + 34;
 
       budgetItems.forEach((item) => {
         // Check for page break

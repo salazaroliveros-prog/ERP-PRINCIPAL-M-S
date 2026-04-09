@@ -75,7 +75,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate, cn, handleApiError, OperationType, getMitigationSuggestions } from '../lib/utils';
 import { MARKET_DATA } from '../constants/apuData';
-import { drawLogo } from '../lib/pdfUtils';
+import { drawReportHeader } from '../lib/pdfUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { FormModal } from './FormModal';
@@ -393,32 +393,27 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
 
   const generateReport = () => {
     const doc = new jsPDF() as any;
-    
-    // Header
-    doc.setFillColor(37, 99, 235); // Blue-600
-    doc.rect(0, 0, 210, 40, 'F');
-    
-    // Draw Logo in Header
-    drawLogo(doc, 20, 10, 1.5);
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.text('INFORME DETALLADO DE OBRA', 20, 32);
+    const headerBottom = drawReportHeader(doc, 'INFORME DETALLADO DE OBRA', {
+      subtitle: project.name,
+      dateText: `Fecha de Reporte: ${new Date().toLocaleDateString()}`,
+      x: 20,
+      y: 10,
+    });
 
     // Project Summary
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(16);
-    doc.text(project.name, 20, 55);
+    doc.text(project.name, 20, headerBottom + 8);
     doc.setFontSize(10);
-    doc.text(`Ubicación: ${project.location}`, 20, 62);
-    doc.text(`Estado: ${project.status}`, 20, 67);
-    doc.text(`Fecha de Reporte: ${new Date().toLocaleDateString()}`, 20, 72);
+    doc.text(`Ubicación: ${project.location}`, 20, headerBottom + 15);
+    doc.text(`Estado: ${project.status}`, 20, headerBottom + 20);
+    doc.text(`Fecha de Reporte: ${new Date().toLocaleDateString()}`, 20, headerBottom + 25);
 
     // Financial Overview
     doc.setFontSize(12);
-    doc.text('Resumen Financiero', 20, 85);
+    doc.text('Resumen Financiero', 20, headerBottom + 38);
     autoTable(doc, {
-      startY: 90,
+      startY: headerBottom + 43,
       head: [['Concepto', 'Monto']],
       body: [
         ['Presupuesto Total', formatCurrency(project.budget)],
@@ -512,32 +507,27 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
 
   const generateBudgetPDF = () => {
     const doc = new jsPDF() as any;
-    
-    // Header
-    doc.setFillColor(37, 99, 235); // Blue-600
-    doc.rect(0, 0, 210, 40, 'F');
-    
-    // Draw Logo in Header
-    drawLogo(doc, 20, 10, 1.5);
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.text('PRESUPUESTO DETALLADO DE OBRA', 20, 32);
+    const headerBottom = drawReportHeader(doc, 'PRESUPUESTO DETALLADO DE OBRA', {
+      subtitle: project.name,
+      dateText: `Fecha de Reporte: ${new Date().toLocaleDateString()}`,
+      x: 20,
+      y: 10,
+    });
 
     // Project Info
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(16);
-    doc.text(project.name, 20, 55);
+    doc.text(project.name, 20, headerBottom + 8);
     doc.setFontSize(10);
-    doc.text(`Ubicación: ${project.location || 'N/A'}`, 20, 62);
-    doc.text(`Fecha de Reporte: ${new Date().toLocaleDateString()}`, 20, 67);
+    doc.text(`Ubicación: ${project.location || 'N/A'}`, 20, headerBottom + 15);
+    doc.text(`Fecha de Reporte: ${new Date().toLocaleDateString()}`, 20, headerBottom + 20);
 
     const client = clients.find(c => c.id === project.clientId);
     if (client) {
-      doc.text(`Cliente: ${client.name}`, 20, 72);
+      doc.text(`Cliente: ${client.name}`, 20, headerBottom + 25);
     }
 
-    let currentY = 85;
+    let currentY = headerBottom + 38;
 
     budgetItems.forEach((item, index) => {
       if (currentY > 240) {

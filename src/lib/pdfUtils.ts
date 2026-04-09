@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { COMPANY_DISPLAY_NAME, COMPANY_TAGLINE } from './reportBranding';
 
 const sharedLogoImage = (() => {
   if (typeof window === 'undefined') return null;
@@ -56,6 +57,73 @@ export const drawLogo = (doc: any, x: number, y: number, scale: number = 1) => {
   doc.text('ERVICIOS DE GUATEMALA S.A.', x + 6.5 * scale, subtextY);
 };
 
+export const drawRoundBrandLogo = (doc: any, x: number, y: number, size: number = 14) => {
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  const radius = size / 2;
+
+  doc.setFillColor(15, 23, 42);
+  doc.circle(cx, cy, radius, 'F');
+  doc.setDrawColor(242, 125, 38);
+  doc.setLineWidth(0.8);
+  doc.circle(cx, cy, radius - 0.6);
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(Math.max(8, size * 0.42));
+  doc.text('WM', cx, cy + size * 0.13, { align: 'center' });
+};
+
+export const drawReportHeader = (
+  doc: any,
+  title: string,
+  options: { subtitle?: string; dateText?: string; x?: number; y?: number } = {}
+) => {
+  const x = options.x ?? 14;
+  const y = options.y ?? 10;
+  const subtitle = options.subtitle;
+  const dateText = options.dateText;
+
+  drawRoundBrandLogo(doc, x, y, 14);
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text(COMPANY_DISPLAY_NAME, x + 18, y + 5.5);
+
+  doc.setTextColor(100, 116, 139);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.text(COMPANY_TAGLINE, x + 18, y + 10.5);
+
+  doc.setTextColor(30, 41, 59);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(title, x, y + 21);
+
+  let nextY = y + 27;
+  if (subtitle) {
+    doc.setTextColor(71, 85, 105);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.text(subtitle, x, nextY);
+    nextY += 5;
+  }
+
+  if (dateText) {
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(8.5);
+    doc.text(dateText, x, nextY);
+    nextY += 5;
+  }
+
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.4);
+  doc.line(x, nextY, 196, nextY);
+
+  return nextY + 4;
+};
+
 export const generateExecutiveReport = (data: {
   projects: any[],
   financials: { totalIncome: number, totalExpense: number },
@@ -65,31 +133,21 @@ export const generateExecutiveReport = (data: {
   const doc = new jsPDF() as any;
   const { projects, financials, inventoryAlerts, risks } = data;
 
-  // Header
-  doc.setFillColor(30, 41, 59); // Slate-800
-  doc.rect(0, 0, 210, 45, 'F');
-  
-  drawLogo(doc, 20, 10, 1.5);
-  
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('INFORME EJECUTIVO GERENCIAL', 190, 25, { align: 'right' });
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Fecha de Emisión: ${new Date().toLocaleDateString()}`, 190, 32, { align: 'right' });
+  const headerBottom = drawReportHeader(doc, 'INFORME EJECUTIVO GERENCIAL', {
+    dateText: `Fecha de Emisión: ${new Date().toLocaleDateString()}`,
+  });
 
   // 1. Resumen Financiero
   doc.setTextColor(30, 41, 59);
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text('1. Resumen Financiero Consolidado', 20, 60);
+  doc.text('1. Resumen Financiero Consolidado', 20, headerBottom + 8);
   
   const balance = financials.totalIncome - financials.totalExpense;
   const margin = financials.totalIncome > 0 ? (balance / financials.totalIncome) * 100 : 0;
 
   (doc as any).autoTable({
-    startY: 65,
+    startY: headerBottom + 13,
     head: [['Concepto', 'Valor']],
     body: [
       ['Ingresos Totales', `$${financials.totalIncome.toLocaleString()}`],

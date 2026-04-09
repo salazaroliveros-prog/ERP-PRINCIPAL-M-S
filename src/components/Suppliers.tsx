@@ -27,6 +27,7 @@ import { logAction } from '../lib/audit';
 import { toast } from 'sonner';
 import ConfirmModal from './ConfirmModal';
 import { createSupplier, createSupplierPayment, deleteSupplier, listSupplierPayments, listSuppliers, updateSupplier } from '../lib/suppliersApi';
+import { escapeCsvCell, getBrandedCsvPreamble } from '../lib/reportBranding';
 
 export default function Suppliers() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -194,14 +195,6 @@ export default function Suppliers() {
       return;
     }
 
-    const escapeCsv = (value: unknown) => {
-      const text = String(value ?? '');
-      if (text.includes('"') || text.includes(',') || text.includes('\n')) {
-        return `"${text.replace(/"/g, '""')}"`;
-      }
-      return text;
-    };
-
     const headers = ['proveedor', 'fecha_pago', 'monto', 'metodo', 'referencia', 'orden_compra', 'notas'];
     const rows = filteredSupplierPayments.map((pay) => [
       quickSupplier.name,
@@ -214,14 +207,11 @@ export default function Suppliers() {
     ]);
 
     const csvContent = [
-      ['WM_M&S CONSTRUCTORA'],
-      ['Reporte: Pagos a proveedores'],
-      [`Proveedor: ${quickSupplier.name}`],
-      [`Fecha de emisión: ${new Date().toISOString().slice(0, 10)}`],
+      ...getBrandedCsvPreamble('Pagos a proveedores', [`Proveedor: ${quickSupplier.name}`]),
       [],
       headers,
       ...rows,
-    ].map((row) => row.map(escapeCsv).join(',')).join('\n');
+    ].map((row) => row.map(escapeCsvCell).join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

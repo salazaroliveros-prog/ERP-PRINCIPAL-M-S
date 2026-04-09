@@ -42,7 +42,8 @@ import { Info, Tag, DollarSign, AlertCircle, ShoppingCart, History, RotateCcw } 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { QRScanner } from './QRScanner';
-import { drawLogo } from '../lib/pdfUtils';
+import { drawReportHeader } from '../lib/pdfUtils';
+import { getBrandedCsvPreamble, escapeCsvCell } from '../lib/reportBranding';
 import {
   adjustInventoryStock,
   createDeletedRecord,
@@ -378,16 +379,9 @@ export default function Inventory() {
     const doc = new jsPDF();
     const date = new Date().toLocaleDateString();
     
-    // Header
-    drawLogo(doc, 14, 8, 1.2);
-    doc.setFontSize(16);
-    doc.setTextColor(15, 23, 42);
-    doc.text(COMPANY_NAME, 70, 18);
-    doc.setFontSize(13);
-    doc.text('Reporte de Inventario por Categoría', 70, 26);
-    doc.setFontSize(10);
-    doc.setTextColor(100, 116, 139);
-    doc.text(`Fecha: ${date}`, 70, 33);
+    drawReportHeader(doc, 'REPORTE DE INVENTARIO POR CATEGORIA', {
+      dateText: `Fecha: ${date}`,
+    });
 
     // Grouping logic by Category
     const categoryGroups: { [key: string]: any[] } = {};
@@ -417,7 +411,7 @@ export default function Inventory() {
       }
     });
 
-    let currentY = 45;
+    let currentY = 50;
 
     // Render Categories
     Object.keys(categoryGroups).sort().forEach(category => {
@@ -1563,13 +1557,10 @@ export default function Inventory() {
     ]);
 
     const csvContent = [
-      COMPANY_NAME,
-      'Reporte: Presupuesto de Materiales por Proyecto',
-      `Proyecto: ${projectName}`,
-      `Fecha de emisión: ${new Date().toISOString().split('T')[0]}`,
+      ...getBrandedCsvPreamble('Presupuesto de Materiales por Proyecto', [`Proyecto: ${projectName}`]),
       '',
-      headers.join(','),
-      ...rows.map(row => row.join(','))
+      headers.map(escapeCsvCell).join(','),
+      ...rows.map(row => row.map(escapeCsvCell).join(','))
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

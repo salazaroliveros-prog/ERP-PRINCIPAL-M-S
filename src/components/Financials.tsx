@@ -25,7 +25,7 @@ import ConfirmModal from './ConfirmModal';
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
 import { logAction } from '../lib/audit';
-import { drawLogo } from '../lib/pdfUtils';
+import { drawReportHeader } from '../lib/pdfUtils';
 import { FormModal } from './FormModal';
 import { toast } from 'sonner';
 import { createTransaction, deleteTransactionById, listTransactions } from '../lib/financialsApi';
@@ -64,6 +64,7 @@ import { es } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Calculator, FileBarChart, Info, DollarSign, ChevronLeft, ChevronRight } from 'lucide-react';
+import { getBrandedCsvPreamble, escapeCsvCell } from '../lib/reportBranding';
 
 const EXPENSE_CATEGORIES = [
   'Materiales',
@@ -240,14 +241,12 @@ export default function Financials() {
       t.amount
     ]);
 
-    const csvContent = [
-      'WM_M&S CONSTRUCTORA',
-      `Reporte: Transacciones financieras`,
-      `Fecha de emisión: ${new Date().toISOString().split('T')[0]}`,
-      '',
-      headers.join(','),
-      ...rows.map(row => row.join(','))
-    ].join('\n');
+    const csvRows = [
+      ...getBrandedCsvPreamble('Transacciones financieras'),
+      headers,
+      ...rows,
+    ];
+    const csvContent = csvRows.map((row) => row.map(escapeCsvCell).join(',')).join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -289,17 +288,10 @@ export default function Financials() {
 
     const doc = new jsPDF();
     
-    // Header
-    doc.setFillColor(30, 41, 59);
-    doc.rect(0, 0, 210, 40, 'F');
-    
-    // Draw Logo in Header
-    drawLogo(doc, 20, 10, 1.5);
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Generado el: ${format(now, "dd 'de' MMMM, yyyy", { locale: es })}`, 20, 32);
+    const headerBottom = drawReportHeader(doc, 'REPORTE FINANCIERO DETALLADO', {
+      subtitle: `Comparativo mensual: ${format(currentMonthStart, 'MMMM yyyy', { locale: es })}`,
+      dateText: `Generado el: ${format(now, "dd 'de' MMMM, yyyy", { locale: es })}`,
+    });
 
     // Comparison Table
     const tableData = [
@@ -310,7 +302,7 @@ export default function Financials() {
     ];
 
     autoTable(doc, {
-      startY: 50,
+      startY: headerBottom + 6,
       head: [tableData[0]],
       body: tableData.slice(1),
       theme: 'grid',
@@ -325,7 +317,7 @@ export default function Financials() {
     });
 
     // Bar Chart in PDF
-    const chartStartY = (doc as any).lastAutoTable.finalY + 15;
+    const chartStartY = (doc as any).lastAutoTable.finalY + 12;
     const chartHeight = 40;
     const barWidth = 15;
     const groupSpacing = 45;

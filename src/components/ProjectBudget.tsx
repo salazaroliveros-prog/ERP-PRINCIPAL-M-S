@@ -44,7 +44,7 @@ import {
 } from '../constants/apuData';
 import { toast } from 'sonner';
 import { logAction } from '../lib/audit';
-import { drawLogo } from '../lib/pdfUtils';
+import { drawReportHeader } from '../lib/pdfUtils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { FormModal } from './FormModal';
@@ -60,6 +60,7 @@ import {
 } from '../lib/projectsApi';
 import { listTransactions } from '../lib/financialsApi';
 import { createQuote, listInventoryByProject, syncInventoryFromBudget } from '../lib/operationsApi';
+import { getBrandedCsvPreamble, escapeCsvCell } from '../lib/reportBranding';
 
 interface ProjectBudgetProps {
   project: any;
@@ -892,20 +893,15 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     const totalMaterialCost = Object.values(materialSummary).reduce((sum, m) => sum + m.totalCost, 0);
 
-    // Header
-    doc.setFillColor(30, 41, 59);
-    doc.rect(0, 0, 210, 40, 'F');
-    drawLogo(doc, 20, 10, 1.5);
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
-    doc.text('Resumen de Materiales Consumidos', 70, 25);
-    doc.setFontSize(10);
-    doc.text(`Proyecto: ${project.name}`, 70, 32);
-    doc.text(`Fecha: ${date}`, 160, 32);
+    const headerBottom = drawReportHeader(doc, 'RESUMEN DE MATERIALES CONSUMIDOS', {
+      subtitle: `Proyecto: ${project.name}`,
+      dateText: `Fecha: ${date}`,
+      x: 20,
+      y: 10,
+    });
 
     autoTable(doc, {
-      startY: 50,
+      startY: headerBottom + 8,
       head: [['Material', 'Unidad', 'Cantidad Total', 'Precio Unit.', 'Costo Total']],
       body: summaryRows,
       theme: 'grid',
@@ -1709,11 +1705,6 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   };
 
   const exportToCSV = () => {
-    const escapeCell = (value: any) => {
-      const text = String(value ?? '');
-      return `"${text.replace(/"/g, '""')}"`;
-    };
-
     const rowHeaders = ['#', 'Descripción', 'Unidad', 'Cantidad', 'Precio Unitario', 'Total', 'Días Estimados'];
     const rowData = budgetItems.map((item) => [
       item.order,
@@ -1760,10 +1751,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     const totalExplosionCost = Object.values(materialExplosion).reduce((sum, m) => sum + m.total, 0);
 
     const csvSections = [
-      ['WM_M&S CONSTRUCTORA'],
-      [`Reporte: Presupuesto detallado`],
-      [`Proyecto: ${project.name}`],
-      [`Fecha de emisión: ${new Date().toISOString().split('T')[0]}`],
+      ...getBrandedCsvPreamble('Presupuesto detallado', [`Proyecto: ${project.name}`]),
       [],
       ['RESUMEN DE RENGLONES'],
       rowHeaders,
@@ -1780,7 +1768,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     ];
 
     const csvContent = csvSections
-      .map((row) => row.map(escapeCell).join(','))
+      .map((row) => row.map(escapeCsvCell).join(','))
       .join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1801,39 +1789,30 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     const docPdf = new jsPDF();
     const now = new Date();
 
-    // Add Logo
-    drawLogo(docPdf, 14, 10, 1.2);
-
-    // Header Info
-    docPdf.setFontSize(18);
-    docPdf.setTextColor(15, 23, 42);
-    docPdf.text('Presupuesto de Obra Detallado', 70, 20);
-
-    docPdf.setFontSize(10);
-    docPdf.setTextColor(100, 116, 139);
-    docPdf.text(`Proyecto: ${project.name}`, 70, 28);
-    docPdf.text(`Ubicación: ${project.location}`, 70, 33);
-    docPdf.text(`Fecha: ${formatDate(now)}`, 70, 38);
+    const headerBottom = drawReportHeader(docPdf, 'PRESUPUESTO DE OBRA DETALLADO', {
+      subtitle: `Proyecto: ${project.name} · Ubicación: ${project.location}`,
+      dateText: `Fecha: ${formatDate(now)}`,
+    });
 
     // Summary Stats
     docPdf.setFillColor(248, 250, 252);
-    docPdf.rect(14, 45, 182, 20, 'F');
+    docPdf.rect(14, headerBottom + 4, 182, 20, 'F');
     
     docPdf.setFontSize(9);
     docPdf.setTextColor(71, 85, 105);
-    docPdf.text('TOTAL PRESUPUESTADO', 20, 53);
+    docPdf.text('TOTAL PRESUPUESTADO', 20, headerBottom + 12);
     docPdf.setFontSize(12);
     docPdf.setTextColor(234, 88, 12);
-    docPdf.text(formatCurrency(totalBudget), 20, 60);
+    docPdf.text(formatCurrency(totalBudget), 20, headerBottom + 19);
 
     docPdf.setFontSize(9);
     docPdf.setTextColor(71, 85, 105);
-    docPdf.text('ITEMS TOTALES', 100, 53);
+    docPdf.text('ITEMS TOTALES', 100, headerBottom + 12);
     docPdf.setFontSize(12);
     docPdf.setTextColor(15, 23, 42);
-    docPdf.text(budgetItems.length.toString(), 100, 60);
+    docPdf.text(budgetItems.length.toString(), 100, headerBottom + 19);
 
-    let currentY = 75;
+    let currentY = headerBottom + 34;
 
     // Resumen de Renglones
     docPdf.setFontSize(14);

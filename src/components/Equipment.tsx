@@ -28,7 +28,7 @@ import { FormModal } from './FormModal';
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { drawLogo } from '../lib/pdfUtils';
+import { drawReportHeader } from '../lib/pdfUtils';
 import { listProjects } from '../lib/projectsApi';
 import { createEquipment, deleteEquipment, listEquipment, updateEquipment } from '../lib/equipmentApi';
 
@@ -151,20 +151,11 @@ export default function Equipment() {
     try {
       const doc = new jsPDF();
       
-      // Header
-      drawLogo(doc, 20, 10);
-      
-      doc.setFontSize(22);
-      doc.setTextColor(37, 99, 235); // Blue-600
-      doc.text('CONSTRUCTORA WM_M&S', 105, 20, { align: 'center' });
-      
-      doc.setFontSize(14);
-      doc.setTextColor(15, 23, 42); // Slate-900
-      doc.text('Reporte de Asignación de Equipo', 105, 30, { align: 'center' });
-      
-      doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139); // Slate-500
-      doc.text(`Fecha: ${formatDate(new Date().toISOString())}`, 105, 36, { align: 'center' });
+      const headerBottom = drawReportHeader(doc, 'REPORTE DE ASIGNACION DE EQUIPO', {
+        dateText: `Fecha: ${formatDate(new Date().toISOString())}`,
+        x: 20,
+        y: 10,
+      });
 
       // Group equipment by project
       const assignedEquipment = equipment.filter(e => e.projectId);
@@ -177,7 +168,7 @@ export default function Equipment() {
         groupedByProject[e.projectId].push(e);
       });
 
-      let currentY = 45;
+      let currentY = headerBottom + 8;
 
       Object.entries(groupedByProject).forEach(([projectId, items], index) => {
         const project = projects.find(p => p.id === projectId);
