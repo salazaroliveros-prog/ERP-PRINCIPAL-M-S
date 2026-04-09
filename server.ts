@@ -15,6 +15,7 @@ const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
 const UPLOADS_PUBLIC_DIR = path.join(process.cwd(), "public", "uploads");
+const UPLOADS_FALLBACK_DIR = path.join(process.env.TMPDIR || "/tmp", "uploads");
 
 const pool = DATABASE_URL
   ? new Pool({
@@ -42,6 +43,16 @@ function toSafeRelativePath(rawPath: string) {
     .filter((segment) => segment && segment !== "." && segment !== "..");
 
   return segments.map(sanitizePathSegment).join("/");
+}
+
+async function resolveWritableUploadsBaseDir() {
+  try {
+    await fs.mkdir(UPLOADS_PUBLIC_DIR, { recursive: true });
+    return UPLOADS_PUBLIC_DIR;
+  } catch {
+    await fs.mkdir(UPLOADS_FALLBACK_DIR, { recursive: true });
+    return UPLOADS_FALLBACK_DIR;
+  }
 }
 
 type TransactionType = "Income" | "Expense";
@@ -1246,6 +1257,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   );
   app.use(express.json());
   app.use("/uploads", express.static(UPLOADS_PUBLIC_DIR));
+  app.use("/uploads", express.static(UPLOADS_FALLBACK_DIR));
 
   app.use('/api', async (req, res, next) => {
     const dbAvailable = await isDatabaseAvailable();
@@ -1362,7 +1374,8 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       const randomToken = Math.random().toString(36).slice(2, 8);
       const finalFileName = `${timestamp}-${randomToken}-${originalName}`;
 
-      const destinationDir = path.join(UPLOADS_PUBLIC_DIR, safeDir);
+      const uploadsBaseDir = await resolveWritableUploadsBaseDir();
+      const destinationDir = path.join(uploadsBaseDir, safeDir);
       await fs.mkdir(destinationDir, { recursive: true });
 
       const finalFilePath = path.join(destinationDir, finalFileName);
