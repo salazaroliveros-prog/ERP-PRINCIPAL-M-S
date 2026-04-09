@@ -112,8 +112,36 @@ const installChunkLoadRecovery = () => {
   });
 };
 
+const installConsoleNoiseFilter = () => {
+  if (typeof window === 'undefined' || !import.meta.env.PROD) return;
+
+  const originalWarn = console.warn.bind(console);
+  console.warn = (...args: unknown[]) => {
+    const text = args
+      .map((value) => {
+        try {
+          return typeof value === 'string' ? value : JSON.stringify(value);
+        } catch {
+          return String(value);
+        }
+      })
+      .join(' ')
+      .toLowerCase();
+
+    const isKnownExternalZustandWarning =
+      text.includes('default export is deprecated') && text.includes('zustand');
+
+    if (isKnownExternalZustandWarning) {
+      return;
+    }
+
+    originalWarn(...args);
+  };
+};
+
 if (!enforceCanonicalOrigin()) {
   patchRangeSelectNode();
+  installConsoleNoiseFilter();
   installChunkLoadRecovery();
 
   createRoot(document.getElementById('root')!).render(
