@@ -241,6 +241,10 @@ export default function Financials() {
     ]);
 
     const csvContent = [
+      'WM_M&S CONSTRUCTORA',
+      `Reporte: Transacciones financieras`,
+      `Fecha de emisión: ${new Date().toISOString().split('T')[0]}`,
+      '',
       headers.join(','),
       ...rows.map(row => row.join(','))
     ].join('\n');

@@ -42,6 +42,7 @@ import { Info, Tag, DollarSign, AlertCircle, ShoppingCart, History, RotateCcw } 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { QRScanner } from './QRScanner';
+import { drawLogo } from '../lib/pdfUtils';
 import {
   adjustInventoryStock,
   createDeletedRecord,
@@ -60,6 +61,7 @@ import {
 import { listProjects, listProjectBudgetItemsDetailed, updateProjectBudgetItem } from '../lib/projectsApi';
 
 export default function Inventory() {
+  const COMPANY_NAME = 'WM_M&S CONSTRUCTORA';
   const [inventory, setInventory] = useState<any[]>([]);
   const [inventoryOffset, setInventoryOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -272,6 +274,10 @@ export default function Inventory() {
     ];
 
     const csvContent = [
+      COMPANY_NAME,
+      'Plantilla de Inventario',
+      `Fecha de emisión: ${new Date().toISOString().split('T')[0]}`,
+      '',
       headers.join(','),
       ...examples.map(row => row.join(','))
     ].join('\n');
@@ -373,11 +379,15 @@ export default function Inventory() {
     const date = new Date().toLocaleDateString();
     
     // Header
-    doc.setFontSize(20);
-    doc.text('Reporte de Inventario por Categoría', 14, 22);
-    doc.setFontSize(11);
-    doc.text(`Fecha: ${date}`, 14, 30);
-    doc.text('WM_M&S - Sistema de Control de Inventario', 14, 37);
+    drawLogo(doc, 14, 8, 1.2);
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42);
+    doc.text(COMPANY_NAME, 70, 18);
+    doc.setFontSize(13);
+    doc.text('Reporte de Inventario por Categoría', 70, 26);
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Fecha: ${date}`, 70, 33);
 
     // Grouping logic by Category
     const categoryGroups: { [key: string]: any[] } = {};
@@ -1553,6 +1563,11 @@ export default function Inventory() {
     ]);
 
     const csvContent = [
+      COMPANY_NAME,
+      'Reporte: Presupuesto de Materiales por Proyecto',
+      `Proyecto: ${projectName}`,
+      `Fecha de emisión: ${new Date().toISOString().split('T')[0]}`,
+      '',
       headers.join(','),
       ...rows.map(row => row.join(','))
     ].join('\n');

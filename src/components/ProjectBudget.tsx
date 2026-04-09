@@ -1760,6 +1760,11 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     const totalExplosionCost = Object.values(materialExplosion).reduce((sum, m) => sum + m.total, 0);
 
     const csvSections = [
+      ['WM_M&S CONSTRUCTORA'],
+      [`Reporte: Presupuesto detallado`],
+      [`Proyecto: ${project.name}`],
+      [`Fecha de emisión: ${new Date().toISOString().split('T')[0]}`],
+      [],
       ['RESUMEN DE RENGLONES'],
       rowHeaders,
       ...rowData,

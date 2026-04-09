@@ -49,6 +49,7 @@ import {
   updateVacancy,
   VacancyRecord,
 } from '../lib/hrApi';
+import { drawLogo } from '../lib/pdfUtils';
 
 export default function HR() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -209,8 +210,15 @@ export default function HR() {
     const left = 48;
     let y = 56;
 
+    drawLogo(doc, left, 18, 1.2);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(51, 65, 85);
+    doc.text('WM_M&S CONSTRUCTORA', left + 66, 34);
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
+    doc.setTextColor(0, 0, 0);
     doc.text('CONTRATO INDIVIDUAL DE TRABAJO', left, y);
 
     y += 28;
