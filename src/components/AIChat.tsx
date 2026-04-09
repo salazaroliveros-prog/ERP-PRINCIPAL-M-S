@@ -250,6 +250,15 @@ export default function AIChat() {
     return () => window.removeEventListener('AI_COMMAND', handleAICommand);
   }, [messages]);
 
+  useEffect(() => {
+    const handleOpenAIChat = () => {
+      setIsOpen(true);
+    };
+
+    window.addEventListener('OPEN_AI_CHAT', handleOpenAIChat);
+    return () => window.removeEventListener('OPEN_AI_CHAT', handleOpenAIChat);
+  }, []);
+
   const handleSend = async () => {
     // Validation: Prevent empty or whitespace-only messages, ensure valid characters
     const trimmedInput = input.trim();
@@ -401,25 +410,6 @@ export default function AIChat() {
 
   return (
     <>
-      <AnimatePresence>
-        {!isOpen && (
-          <motion.button
-            initial={{ opacity: 0, x: 24 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 24 }}
-            whileHover={{ x: -4 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setIsOpen(true)}
-            className="fixed z-[100] right-0 top-1/2 -translate-y-1/2 bg-primary text-white rounded-l-xl shadow-2xl px-2.5 py-4 hover:bg-primary-hover transition-all group"
-            title="Abrir asistente"
-          >
-            <span className="[writing-mode:vertical-rl] rotate-180 text-[11px] font-black tracking-[0.2em] uppercase flex items-center gap-1">
-              IA
-            </span>
-          </motion.button>
-        )}
-      </AnimatePresence>
-
       <AnimatePresence>
         {isOpen && (
           <motion.div

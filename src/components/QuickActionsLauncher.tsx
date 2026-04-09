@@ -43,6 +43,15 @@ const QUICK_ACTIONS: QuickAction[] = [
 export function QuickActionsLauncher() {
   const [isOpen, setIsOpen] = useState(false);
 
+  React.useEffect(() => {
+    const handleOpenQuickActions = () => {
+      setIsOpen(true);
+    };
+
+    window.addEventListener('OPEN_QUICK_ACTIONS', handleOpenQuickActions);
+    return () => window.removeEventListener('OPEN_QUICK_ACTIONS', handleOpenQuickActions);
+  }, []);
+
   const triggerQuickAction = (action: QuickAction) => {
     const targetHash = `#${action.route}`;
     const dispatchAction = () => {
@@ -70,31 +79,12 @@ export function QuickActionsLauncher() {
   return (
     <>
       <AnimatePresence>
-        {!isOpen && (
-          <motion.button
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            whileHover={{ x: 4 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setIsOpen(true)}
-            className="fixed z-[95] left-0 top-1/2 -translate-y-1/2 bg-slate-900 text-white rounded-r-xl shadow-2xl px-2.5 py-4 hover:bg-slate-800 transition-all"
-            title="Abrir acciones rapidas"
-          >
-            <span className="[writing-mode:vertical-rl] rotate-180 text-[11px] font-black tracking-[0.16em] uppercase flex items-center gap-1">
-              Atajos
-            </span>
-          </motion.button>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, x: -30 }}
+            initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -30 }}
-            className="fixed z-[95] left-4 top-1/2 -translate-y-1/2 w-[300px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden"
+            exit={{ opacity: 0, x: 30 }}
+            className="fixed z-[95] right-4 top-1/2 -translate-y-1/2 w-[300px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden"
           >
             <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">

@@ -57,6 +57,9 @@ const AIChat = lazy(() => import('./components/AIChat'));
 const QuickActionsLauncher = lazy(() =>
   import('./components/QuickActionsLauncher').then((module) => ({ default: module.QuickActionsLauncher }))
 );
+const SideToolsDock = lazy(() =>
+  import('./components/SideToolsDock').then((module) => ({ default: module.SideToolsDock }))
+);
 const HRContractSignPage = lazy(() => import('./components/HRContractSignPage'));
 const NotificationManager = lazy(() =>
   import('./components/NotificationManager').then((module) => ({ default: module.NotificationManager }))
@@ -453,6 +456,9 @@ function AppContent({
           </Suspense>
           <Suspense fallback={null}>
             <QuickActionsLauncher />
+          </Suspense>
+          <Suspense fallback={null}>
+            <SideToolsDock />
           </Suspense>
           {enhancementsReady && (
             <Suspense fallback={null}>
