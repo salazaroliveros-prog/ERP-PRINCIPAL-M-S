@@ -8,6 +8,40 @@ const sharedLogoImage = (() => {
   return image;
 })();
 
+const circularLogoCache = new Map<number, string>();
+
+const getCircularLogoDataUrl = (size: number) => {
+  if (typeof document === 'undefined' || !sharedLogoImage || !sharedLogoImage.complete) {
+    return null;
+  }
+
+  if (circularLogoCache.has(size)) {
+    return circularLogoCache.get(size)!;
+  }
+
+  const canvasSize = Math.max(64, size * 4);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvasSize;
+  canvas.height = canvasSize;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, canvasSize, canvasSize);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(canvasSize / 2, canvasSize / 2, canvasSize / 2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvasSize, canvasSize);
+  ctx.drawImage(sharedLogoImage, 0, 0, canvasSize, canvasSize);
+  ctx.restore();
+
+  const dataUrl = canvas.toDataURL('image/png');
+  circularLogoCache.set(size, dataUrl);
+  return dataUrl;
+};
+
 export const drawLogo = (doc: any, x: number, y: number, scale: number = 1) => {
   const imageWidth = 42 * scale;
   const imageHeight = 16 * scale;
@@ -57,21 +91,33 @@ export const drawLogo = (doc: any, x: number, y: number, scale: number = 1) => {
   doc.text('ERVICIOS DE GUATEMALA S.A.', x + 6.5 * scale, subtextY);
 };
 
-export const drawRoundBrandLogo = (doc: any, x: number, y: number, size: number = 14) => {
+export const drawRoundBrandLogo = (doc: any, x: number, y: number, size: number = 18) => {
   const cx = x + size / 2;
   const cy = y + size / 2;
   const radius = size / 2;
 
-  doc.setFillColor(15, 23, 42);
+  doc.setFillColor(255, 255, 255);
   doc.circle(cx, cy, radius, 'F');
   doc.setDrawColor(242, 125, 38);
-  doc.setLineWidth(0.8);
-  doc.circle(cx, cy, radius - 0.6);
+  doc.setLineWidth(1.2);
+  doc.circle(cx, cy, radius - 0.4);
 
+  const circularLogo = getCircularLogoDataUrl(size - 2);
+  if (circularLogo) {
+    try {
+      doc.addImage(circularLogo, 'PNG', x + 1, y + 1, size - 2, size - 2);
+      return;
+    } catch {
+      // Fall through to text fallback if image embedding fails.
+    }
+  }
+
+  doc.setFillColor(15, 23, 42);
+  doc.circle(cx, cy, radius - 1.6, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(Math.max(8, size * 0.42));
-  doc.text('WM', cx, cy + size * 0.13, { align: 'center' });
+  doc.setFontSize(Math.max(8, size * 0.36));
+  doc.text('WM', cx, cy + size * 0.12, { align: 'center' });
 };
 
 export const drawReportHeader = (
@@ -84,24 +130,24 @@ export const drawReportHeader = (
   const subtitle = options.subtitle;
   const dateText = options.dateText;
 
-  drawRoundBrandLogo(doc, x, y, 14);
+  drawRoundBrandLogo(doc, x, y, 18);
 
   doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text(COMPANY_DISPLAY_NAME, x + 18, y + 5.5);
+  doc.text(COMPANY_DISPLAY_NAME, x + 22, y + 7);
 
   doc.setTextColor(100, 116, 139);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
-  doc.text(COMPANY_TAGLINE, x + 18, y + 10.5);
+  doc.text(COMPANY_TAGLINE, x + 22, y + 12.5);
 
   doc.setTextColor(30, 41, 59);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.text(title, x, y + 21);
+  doc.text(title, x, y + 24);
 
-  let nextY = y + 27;
+  let nextY = y + 31;
   if (subtitle) {
     doc.setTextColor(71, 85, 105);
     doc.setFont('helvetica', 'normal');

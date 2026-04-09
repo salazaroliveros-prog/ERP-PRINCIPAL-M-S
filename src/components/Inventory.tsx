@@ -62,7 +62,6 @@ import {
 import { listProjects, listProjectBudgetItemsDetailed, updateProjectBudgetItem } from '../lib/projectsApi';
 
 export default function Inventory() {
-  const COMPANY_NAME = 'WM_M&S CONSTRUCTORA';
   const [inventory, setInventory] = useState<any[]>([]);
   const [inventoryOffset, setInventoryOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -275,12 +274,9 @@ export default function Inventory() {
     ];
 
     const csvContent = [
-      COMPANY_NAME,
-      'Plantilla de Inventario',
-      `Fecha de emisión: ${new Date().toISOString().split('T')[0]}`,
-      '',
-      headers.join(','),
-      ...examples.map(row => row.join(','))
+      ...getBrandedCsvPreamble('Plantilla de Inventario'),
+      headers.map(escapeCsvCell).join(','),
+      ...examples.map((row) => row.map(escapeCsvCell).join(',')),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
