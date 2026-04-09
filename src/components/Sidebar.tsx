@@ -238,7 +238,7 @@ export const Sidebar = ({
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={onToggleCollapse}
-                className="hidden lg:flex p-1.5 sm:p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg sm:rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                className="hidden lg:flex p-1.5 sm:p-2 bg-transparent text-slate-600/70 dark:text-slate-300/70 rounded-lg sm:rounded-xl hover:bg-slate-900/10 dark:hover:bg-white/10 hover:text-slate-700 dark:hover:text-slate-100 transition-all backdrop-blur-sm"
                 title={isCollapsed ? "Expandir" : "Contraer"}
               >
                 {isCollapsed ? <ChevronRight size={14} className="sm:w-4 sm:h-4" /> : <ChevronLeft size={14} className="sm:w-4 sm:h-4" />}
@@ -252,7 +252,7 @@ export const Sidebar = ({
                       markAllAsRead();
                     }
                   }}
-                  className="p-1.5 sm:p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg sm:rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all relative"
+                  className="p-1.5 sm:p-2 bg-transparent text-slate-600/70 dark:text-slate-300/70 rounded-lg sm:rounded-xl hover:bg-slate-900/10 dark:hover:bg-white/10 hover:text-slate-700 dark:hover:text-slate-100 transition-all relative backdrop-blur-sm"
                   title="Notificaciones"
                 >
                   <AlertCircle size={14} className="sm:w-4 sm:h-4" />
@@ -329,14 +329,14 @@ export const Sidebar = ({
 
               <button
                 onClick={toggleDarkMode}
-                className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                className="p-2 bg-transparent text-slate-600/70 dark:text-slate-300/70 rounded-xl hover:bg-slate-900/10 dark:hover:bg-white/10 hover:text-slate-700 dark:hover:text-slate-100 transition-all backdrop-blur-sm"
                 title={isDarkMode ? "Modo Claro" : "Modo Oscuro"}
               >
                 {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
               </button>
               <div className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter shadow-sm border transition-all duration-300",
-                isOnline ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20" : "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-500/20",
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter border transition-all duration-300 backdrop-blur-sm",
+                isOnline ? "bg-transparent text-emerald-500 dark:text-emerald-300 border-emerald-400/30" : "bg-transparent text-rose-500 dark:text-rose-300 border-rose-400/30",
                 isCollapsed && "px-1 w-6 h-6 justify-center"
               )}>
                 <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse flex-shrink-0", isOnline ? "bg-emerald-500" : "bg-rose-500")} />

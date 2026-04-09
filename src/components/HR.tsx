@@ -101,6 +101,10 @@ export default function HR() {
   const [isSigningOwner, setIsSigningOwner] = useState(false);
   const [ownerSignature, setOwnerSignature] = useState('');
   const [selectedContractId, setSelectedContractId] = useState('');
+  const [isContractViewerOpen, setIsContractViewerOpen] = useState(false);
+  const [contractViewerUrl, setContractViewerUrl] = useState('');
+  const [contractViewerName, setContractViewerName] = useState('');
+  const [contractViewerIsObjectUrl, setContractViewerIsObjectUrl] = useState(false);
 
   const loadEmployees = useCallback(async () => {
     try {
@@ -374,6 +378,42 @@ export default function HR() {
     } catch (error) {
       handleApiError(error, OperationType.UPDATE, 'contracts');
     }
+  };
+
+  const handleOpenContractViewer = async (fileUrl: string, fileName: string) => {
+    if (!fileUrl) {
+      toast.error('No hay documento disponible para visualizar');
+      return;
+    }
+
+    try {
+      if (fileUrl.startsWith('data:')) {
+        const response = await fetch(fileUrl);
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        setContractViewerUrl(objectUrl);
+        setContractViewerIsObjectUrl(true);
+      } else {
+        setContractViewerUrl(fileUrl);
+        setContractViewerIsObjectUrl(false);
+      }
+
+      setContractViewerName(fileName || 'contrato-firmado.pdf');
+      setIsContractViewerOpen(true);
+    } catch (error) {
+      console.error('Error opening contract viewer:', error);
+      toast.error('No se pudo abrir el contrato');
+    }
+  };
+
+  const handleCloseContractViewer = () => {
+    if (contractViewerIsObjectUrl && contractViewerUrl) {
+      URL.revokeObjectURL(contractViewerUrl);
+    }
+    setIsContractViewerOpen(false);
+    setContractViewerUrl('');
+    setContractViewerName('');
+    setContractViewerIsObjectUrl(false);
   };
 
   const filteredEmployees = useMemo(() => {
@@ -910,6 +950,48 @@ export default function HR() {
             </motion.div>
           </div>
         )}
+
+        {isContractViewerOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 10 }}
+              className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-5xl h-[86vh] overflow-hidden border border-slate-100 dark:border-slate-800"
+            >
+              <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+                <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white truncate">
+                  {contractViewerName || 'Contrato firmado'}
+                </h3>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={contractViewerUrl}
+                    download={contractViewerName || 'contrato-firmado.pdf'}
+                    className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-black uppercase tracking-widest text-slate-700"
+                  >
+                    Descargar
+                  </a>
+                  <button
+                    title="Cerrar visor de contrato"
+                    aria-label="Cerrar visor de contrato"
+                    onClick={handleCloseContractViewer}
+                    className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                  >
+                    <X size={18} className="text-slate-500" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="h-[calc(86vh-70px)] bg-slate-100 dark:bg-slate-950">
+                <iframe
+                  title="Visor de contrato firmado"
+                  src={contractViewerUrl}
+                  className="w-full h-full"
+                />
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* Stats Grid */}
@@ -1364,14 +1446,13 @@ export default function HR() {
                     </button>
 
                     {contract.signedFileUrl && (
-                      <a
-                        href={contract.signedFileUrl}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => void handleOpenContractViewer(contract.signedFileUrl || '', contract.signedFileName || '')}
                         className="px-2.5 py-1.5 rounded-lg border border-emerald-300 text-[11px] font-bold text-emerald-700"
                       >
                         Ver PDF
-                      </a>
+                      </button>
                     )}
                   </div>
                 </div>
