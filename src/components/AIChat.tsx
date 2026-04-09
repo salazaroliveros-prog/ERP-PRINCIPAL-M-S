@@ -17,6 +17,9 @@ interface Message {
 }
 
 export default function AIChat() {
+  const CHAT_BUBBLE_STORAGE_KEY = 'wm_ai_chat_bubble_pos';
+  const CHAT_BUBBLE_SIZE = 56;
+  const CHAT_BUBBLE_MARGIN = 16;
   const [isMobile, setIsMobile] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -34,10 +37,21 @@ export default function AIChat() {
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
+  const [bubblePos, setBubblePos] = useState<{ x: number; y: number } | null>(null);
+  const dragStateRef = useRef({ pointerId: -1, startX: 0, startY: 0, moved: false });
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const clampBubblePosition = (x: number, y: number) => {
+    const maxX = Math.max(CHAT_BUBBLE_MARGIN, window.innerWidth - CHAT_BUBBLE_SIZE - CHAT_BUBBLE_MARGIN);
+    const maxY = Math.max(CHAT_BUBBLE_MARGIN, window.innerHeight - CHAT_BUBBLE_SIZE - CHAT_BUBBLE_MARGIN);
+    return {
+      x: Math.min(Math.max(CHAT_BUBBLE_MARGIN, x), maxX),
+      y: Math.min(Math.max(CHAT_BUBBLE_MARGIN, y), maxY),
+    };
+  };
 
   useEffect(() => {
     const checkMobile = () => {
@@ -47,6 +61,76 @@ export default function AIChat() {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const defaultPos = clampBubblePosition(
+      window.innerWidth - CHAT_BUBBLE_SIZE - 24,
+      window.innerHeight - CHAT_BUBBLE_SIZE - 100
+    );
+
+    try {
+      const saved = localStorage.getItem(CHAT_BUBBLE_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+          setBubblePos(clampBubblePosition(parsed.x, parsed.y));
+          return;
+        }
+      }
+    } catch {
+      // ignore malformed saved position
+    }
+
+    setBubblePos(defaultPos);
+  }, []);
+
+  useEffect(() => {
+    if (!bubblePos || typeof window === 'undefined') return;
+    const handleResize = () => setBubblePos((prev) => (prev ? clampBubblePosition(prev.x, prev.y) : prev));
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [bubblePos]);
+
+  const handleBubblePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!bubblePos) return;
+    dragStateRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
+    (event.currentTarget as HTMLButtonElement).setPointerCapture(event.pointerId);
+  };
+
+  const handleBubblePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!bubblePos || dragStateRef.current.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - dragStateRef.current.startX;
+    const deltaY = event.clientY - dragStateRef.current.startY;
+    if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+      dragStateRef.current.moved = true;
+    }
+
+    if (!dragStateRef.current.moved) return;
+
+    setBubblePos((prev) => {
+      if (!prev) return prev;
+      const next = clampBubblePosition(prev.x + deltaX, prev.y + deltaY);
+      dragStateRef.current.startX = event.clientX;
+      dragStateRef.current.startY = event.clientY;
+      return next;
+    });
+  };
+
+  const handleBubblePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (dragStateRef.current.pointerId !== event.pointerId) return;
+
+    if (bubblePos) {
+      localStorage.setItem(CHAT_BUBBLE_STORAGE_KEY, JSON.stringify(bubblePos));
+    }
+
+    if (!dragStateRef.current.moved) {
+      setIsOpen(true);
+    }
+
+    dragStateRef.current = { pointerId: -1, startX: 0, startY: 0, moved: false };
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
@@ -362,20 +446,21 @@ export default function AIChat() {
   ];
 
   return (
-    <div className={cn(
-      "fixed z-[100] transition-all duration-300",
-      isOpen && isMobile && !isMinimized ? "inset-0 flex items-end justify-center p-4" : "bottom-20 sm:bottom-6 right-6"
-    )}>
+    <>
       <AnimatePresence>
-        {!isOpen && (
+        {!isOpen && bubblePos && (
           <motion.button
             initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
+            animate={{ scale: 1, opacity: 1, x: 0, y: 0 }}
             exit={{ scale: 0, opacity: 0 }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setIsOpen(true)}
-            className="w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center hover:bg-primary-hover transition-all group relative"
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.96 }}
+            onPointerDown={handleBubblePointerDown}
+            onPointerMove={handleBubblePointerMove}
+            onPointerUp={handleBubblePointerUp}
+            className="fixed z-[100] w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center hover:bg-primary-hover transition-all group relative touch-none"
+            style={{ left: bubblePos.x, top: bubblePos.y }}
+            title="Arrastra para mover el asistente"
           >
             <Bot size={28} className="group-hover:scale-110 transition-transform" />
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full animate-pulse"></span>
@@ -395,7 +480,10 @@ export default function AIChat() {
               width: isMinimized ? '300px' : (isMobile ? '100%' : '400px'),
             }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden transition-all duration-300"
+            className={cn(
+              "fixed z-[100] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden transition-all duration-300",
+              isOpen && isMobile && !isMinimized ? "inset-0 m-4" : "bottom-20 sm:bottom-6 right-6"
+            )}
           >
             {/* Header */}
             <div className="bg-slate-900 text-white p-4 flex items-center justify-between shrink-0">
@@ -623,6 +711,6 @@ export default function AIChat() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 }

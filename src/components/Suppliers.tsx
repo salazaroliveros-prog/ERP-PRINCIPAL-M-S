@@ -26,7 +26,7 @@ import { cn, formatCurrency, handleApiError, OperationType } from '../lib/utils'
 import { logAction } from '../lib/audit';
 import { toast } from 'sonner';
 import ConfirmModal from './ConfirmModal';
-import { createSupplier, createSupplierPayment, deleteSupplier, listSupplierPayments, listSuppliers, updateSupplier } from '../lib/suppliersApi';
+import { createSupplier, createSupplierPayment, deleteSupplier, deleteSupplierPayment, listSupplierPayments, listSuppliers, updateSupplier, updateSupplierPayment } from '../lib/suppliersApi';
 import { escapeCsvCell, getBrandedCsvPreamble } from '../lib/reportBranding';
 
 export default function Suppliers() {
@@ -45,6 +45,17 @@ export default function Suppliers() {
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [paymentDateFrom, setPaymentDateFrom] = useState('');
   const [paymentDateTo, setPaymentDateTo] = useState('');
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isPaymentDeleteConfirmOpen, setIsPaymentDeleteConfirmOpen] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<string | null>(null);
+  const [paymentForm, setPaymentForm] = useState({
+    amount: '',
+    paymentMethod: 'banrural_virtual',
+    paymentReference: '',
+    notes: '',
+    paidAt: new Date().toISOString().slice(0, 10),
+  });
   const [newSupplier, setNewSupplier] = useState({
     name: '',
     category: 'Materiales',
@@ -374,6 +385,76 @@ export default function Suppliers() {
     toast.success('Pago registrado correctamente');
   };
 
+  const handleOpenEditPayment = (payment: any) => {
+    setEditingPaymentId(payment.id);
+    setPaymentForm({
+      amount: String(Number(payment.amount || 0).toFixed(2)),
+      paymentMethod: String(payment.paymentMethod || 'banrural_virtual'),
+      paymentReference: String(payment.paymentReference || ''),
+      notes: String(payment.notes || ''),
+      paidAt: String(payment.paidAt || '').slice(0, 10) || new Date().toISOString().slice(0, 10),
+    });
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleSavePaymentEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingPaymentId || !quickSupplier) return;
+
+    const amount = Number(paymentForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Monto inválido');
+      return;
+    }
+
+    try {
+      await updateSupplierPayment(editingPaymentId, {
+        amount,
+        paymentMethod: paymentForm.paymentMethod as any,
+        paymentReference: paymentForm.paymentReference,
+        notes: paymentForm.notes,
+        paidAt: paymentForm.paidAt,
+      });
+
+      const [latestPayments] = await Promise.all([
+        listSupplierPayments({ supplierId: quickSupplier.id }),
+        loadSuppliers(),
+      ]);
+
+      setSupplierPayments(latestPayments);
+      setIsPaymentModalOpen(false);
+      setEditingPaymentId(null);
+      toast.success('Pago actualizado');
+      await logAction('Edición de Pago a Proveedor', 'Proveedores', `Pago actualizado para ${quickSupplier.name}`, 'update', {
+        supplierId: quickSupplier.id,
+        paymentId: editingPaymentId,
+      });
+    } catch (error) {
+      handleApiError(error, OperationType.UPDATE, `supplier-payments/${editingPaymentId}`);
+    }
+  };
+
+  const handleDeletePaymentRecord = async () => {
+    if (!paymentToDelete || !quickSupplier) return;
+    try {
+      await deleteSupplierPayment(paymentToDelete);
+      const [latestPayments] = await Promise.all([
+        listSupplierPayments({ supplierId: quickSupplier.id }),
+        loadSuppliers(),
+      ]);
+      setSupplierPayments(latestPayments);
+      setIsPaymentDeleteConfirmOpen(false);
+      setPaymentToDelete(null);
+      toast.success('Pago eliminado');
+      await logAction('Eliminación de Pago a Proveedor', 'Proveedores', `Pago eliminado para ${quickSupplier.name}`, 'delete', {
+        supplierId: quickSupplier.id,
+        paymentId: paymentToDelete,
+      });
+    } catch (error) {
+      handleApiError(error, OperationType.DELETE, `supplier-payments/${paymentToDelete}`);
+    }
+  };
+
   return (
     <div className="space-y-8 pb-20">
       {/* Header */}
@@ -494,6 +575,86 @@ export default function Suppliers() {
                 </div>
                 <button type="submit" className="w-full py-4 bg-primary text-white rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all mt-4">
                   {isEditMode ? 'Actualizar Proveedor' : 'Registrar Proveedor'}
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isPaymentModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 dark:border-slate-800"
+            >
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h3 className="text-xl font-black text-slate-900 dark:text-white">Editar Pago</h3>
+                <button title="Cerrar" aria-label="Cerrar" onClick={() => setIsPaymentModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                  <X size={20} className="text-slate-500" />
+                </button>
+              </div>
+              <form onSubmit={handleSavePaymentEdit} className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Monto</label>
+                    <input
+                      required
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={paymentForm.amount}
+                      onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha</label>
+                    <input
+                      required
+                      type="date"
+                      value={paymentForm.paidAt}
+                      onChange={(e) => setPaymentForm((prev) => ({ ...prev, paidAt: e.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Método</label>
+                  <select
+                    value={paymentForm.paymentMethod}
+                    onChange={(e) => setPaymentForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
+                  >
+                    <option value="banrural_virtual">banrural_virtual</option>
+                    <option value="paypal">paypal</option>
+                    <option value="transferencia">transferencia</option>
+                    <option value="efectivo">efectivo</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Referencia</label>
+                  <input
+                    type="text"
+                    value={paymentForm.paymentReference}
+                    onChange={(e) => setPaymentForm((prev) => ({ ...prev, paymentReference: e.target.value }))}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Notas</label>
+                  <textarea
+                    value={paymentForm.notes}
+                    onChange={(e) => setPaymentForm((prev) => ({ ...prev, notes: e.target.value }))}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm"
+                    rows={3}
+                  />
+                </div>
+                <button type="submit" className="w-full py-4 bg-primary text-white rounded-2xl font-black uppercase tracking-widest">
+                  Guardar Cambios
                 </button>
               </form>
             </motion.div>
@@ -817,9 +978,30 @@ export default function Suppliers() {
                     <div key={pay.id} className="p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950/60">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-bold text-slate-900 dark:text-white">{formatCurrency(Number(pay.amount || 0))}</p>
-                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300">
-                          {String(pay.paymentMethod || '').replace('_', ' ')}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300">
+                            {String(pay.paymentMethod || '').replace('_', ' ')}
+                          </span>
+                          <button
+                            type="button"
+                            title="Editar pago"
+                            onClick={() => handleOpenEditPayment(pay)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Eliminar pago"
+                            onClick={() => {
+                              setPaymentToDelete(pay.id);
+                              setIsPaymentDeleteConfirmOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Fecha: {pay.paidAt || 'N/A'}</p>
                       {pay.paymentReference && (
@@ -843,6 +1025,19 @@ export default function Suppliers() {
         onConfirm={handleDeleteSupplier}
         title="Eliminar Proveedor"
         message="¿Está seguro que desea eliminar este proveedor? Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        variant="danger"
+      />
+
+      <ConfirmModal
+        isOpen={isPaymentDeleteConfirmOpen}
+        onClose={() => {
+          setIsPaymentDeleteConfirmOpen(false);
+          setPaymentToDelete(null);
+        }}
+        onConfirm={handleDeletePaymentRecord}
+        title="Eliminar Pago"
+        message="¿Está seguro que desea eliminar este pago? Se ajustará el saldo del proveedor."
         confirmText="Eliminar"
         variant="danger"
       />

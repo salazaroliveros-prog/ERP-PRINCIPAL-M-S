@@ -22,6 +22,14 @@ export interface CreateSupplierPaymentPayload {
   paidAt?: string;
 }
 
+export interface UpdateSupplierPaymentPayload {
+  amount?: number;
+  paymentMethod?: 'paypal' | 'banrural_virtual' | 'transferencia' | 'efectivo';
+  paymentReference?: string;
+  notes?: string;
+  paidAt?: string;
+}
+
 export async function listSuppliers(): Promise<any[]> {
   const response = await requestJson<{ items: any[] }>('/api/suppliers');
   return response.items;
@@ -61,5 +69,18 @@ export async function createSupplierPayment(payload: CreateSupplierPaymentPayloa
   return requestJson<any>('/api/supplier-payments', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function updateSupplierPayment(id: string, payload: UpdateSupplierPaymentPayload): Promise<any> {
+  return requestJson<any>(`/api/supplier-payments/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteSupplierPayment(id: string): Promise<void> {
+  await requestJson<void>(`/api/supplier-payments/${id}`, {
+    method: 'DELETE',
   });
 }

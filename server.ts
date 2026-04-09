@@ -3827,6 +3827,235 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
     }
   });
 
+  app.patch('/api/supplier-payments/:id', async (req, res) => {
+    const db = requireDatabase();
+    const client = await db.connect();
+    try {
+      const id = String(req.params.id || '').trim();
+      if (!id) {
+        return res.status(400).json({ error: 'id requerido' });
+      }
+
+      await client.query('begin');
+
+      const paymentResult = await client.query<SupplierPaymentRow>(
+        `
+          select
+            id,
+            supplier_id,
+            purchase_order_id,
+            amount,
+            payment_method,
+            payment_reference,
+            notes,
+            paid_at::text,
+            created_at
+          from supplier_payments
+          where id = $1
+          for update
+        `,
+        [id]
+      );
+
+      const currentPayment = paymentResult.rows[0];
+      if (!currentPayment) {
+        await client.query('rollback');
+        return res.status(404).json({ error: 'Pago a proveedor no encontrado' });
+      }
+
+      const nextAmount = req.body?.amount !== undefined ? Number(req.body.amount) : Number(currentPayment.amount || 0);
+      if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
+        await client.query('rollback');
+        return res.status(400).json({ error: 'amount inválido' });
+      }
+
+      const nextPaymentMethod = String(req.body?.paymentMethod || currentPayment.payment_method || '').trim();
+      if (!nextPaymentMethod) {
+        await client.query('rollback');
+        return res.status(400).json({ error: 'paymentMethod es obligatorio' });
+      }
+
+      const nextPaymentReference = req.body?.paymentReference !== undefined
+        ? (req.body.paymentReference ? String(req.body.paymentReference).trim() : null)
+        : currentPayment.payment_reference;
+      const nextNotes = req.body?.notes !== undefined
+        ? (req.body.notes ? String(req.body.notes).trim() : null)
+        : currentPayment.notes;
+      const nextPaidAt = req.body?.paidAt ? String(req.body.paidAt).trim() : currentPayment.paid_at;
+
+      const supplierResult = await client.query<SupplierRow>(
+        `
+          select
+            id,
+            name,
+            category,
+            contact,
+            email,
+            phone,
+            rating,
+            status,
+            balance,
+            last_order,
+            created_at,
+            updated_at
+          from suppliers
+          where id = $1
+          for update
+        `,
+        [currentPayment.supplier_id]
+      );
+
+      const supplier = supplierResult.rows[0];
+      if (!supplier) {
+        await client.query('rollback');
+        return res.status(404).json({ error: 'Proveedor asociado no encontrado' });
+      }
+
+      const currentAmount = Number(currentPayment.amount || 0);
+      const amountDelta = nextAmount - currentAmount;
+      const currentBalance = Number(supplier.balance || 0);
+      const nextBalance = Math.max(0, currentBalance - amountDelta);
+
+      const updatedPayment = await client.query<SupplierPaymentRow>(
+        `
+          update supplier_payments
+          set amount = $1,
+              payment_method = $2,
+              payment_reference = $3,
+              notes = $4,
+              paid_at = $5::date
+          where id = $6
+          returning
+            id,
+            supplier_id,
+            purchase_order_id,
+            amount,
+            payment_method,
+            payment_reference,
+            notes,
+            paid_at::text,
+            created_at
+        `,
+        [nextAmount, nextPaymentMethod, nextPaymentReference, nextNotes, nextPaidAt, id]
+      );
+
+      await client.query(
+        `
+          update suppliers
+          set balance = $1,
+              updated_at = now()
+          where id = $2
+        `,
+        [nextBalance, currentPayment.supplier_id]
+      );
+
+      await client.query('commit');
+      return res.json({ payment: mapSupplierPayment(updatedPayment.rows[0]), supplierBalance: nextBalance });
+    } catch (error: any) {
+      try {
+        await client.query('rollback');
+      } catch {
+        // ignore rollback errors
+      }
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar pago a proveedor' });
+    } finally {
+      client.release();
+    }
+  });
+
+  app.delete('/api/supplier-payments/:id', async (req, res) => {
+    const db = requireDatabase();
+    const client = await db.connect();
+    try {
+      const id = String(req.params.id || '').trim();
+      if (!id) {
+        return res.status(400).json({ error: 'id requerido' });
+      }
+
+      await client.query('begin');
+
+      const paymentResult = await client.query<SupplierPaymentRow>(
+        `
+          select
+            id,
+            supplier_id,
+            purchase_order_id,
+            amount,
+            payment_method,
+            payment_reference,
+            notes,
+            paid_at::text,
+            created_at
+          from supplier_payments
+          where id = $1
+          for update
+        `,
+        [id]
+      );
+
+      const payment = paymentResult.rows[0];
+      if (!payment) {
+        await client.query('rollback');
+        return res.status(404).json({ error: 'Pago a proveedor no encontrado' });
+      }
+
+      const supplierResult = await client.query<SupplierRow>(
+        `
+          select
+            id,
+            name,
+            category,
+            contact,
+            email,
+            phone,
+            rating,
+            status,
+            balance,
+            last_order,
+            created_at,
+            updated_at
+          from suppliers
+          where id = $1
+          for update
+        `,
+        [payment.supplier_id]
+      );
+
+      const supplier = supplierResult.rows[0];
+      if (!supplier) {
+        await client.query('rollback');
+        return res.status(404).json({ error: 'Proveedor asociado no encontrado' });
+      }
+
+      const currentBalance = Number(supplier.balance || 0);
+      const restoredBalance = currentBalance + Number(payment.amount || 0);
+
+      await client.query('delete from supplier_payments where id = $1', [id]);
+
+      await client.query(
+        `
+          update suppliers
+          set balance = $1,
+              updated_at = now()
+          where id = $2
+        `,
+        [restoredBalance, payment.supplier_id]
+      );
+
+      await client.query('commit');
+      return res.status(204).send();
+    } catch (error: any) {
+      try {
+        await client.query('rollback');
+      } catch {
+        // ignore rollback errors
+      }
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar pago a proveedor' });
+    } finally {
+      client.release();
+    }
+  });
+
   app.get('/api/clients', async (req, res) => {
     try {
       const db = requireDatabase();

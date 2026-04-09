@@ -1948,7 +1948,7 @@ export default function Projects() {
 
                     <div className="flex items-center gap-3 sm:gap-6 mb-3 sm:mb-6">
                       <div className="relative w-12 h-12 sm:w-20 sm:h-20 flex-shrink-0">
-                        <svg className="w-full h-full transform -rotate-90">
+                        <svg viewBox="0 0 48 48" className="w-full h-full transform -rotate-90">
                           <circle
                             cx="24"
                             cy="24"
