@@ -480,7 +480,7 @@ export default function Financials() {
 
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       
       // Prepare data for AI
       const recentTransactions = transactions.slice(0, 20).map(t => ({

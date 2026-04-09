@@ -153,7 +153,7 @@ export default function Safety() {
 
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Como experto en seguridad industrial en construcción, sugiere medidas preventivas y correctivas para un incidente titulado "${newIncident.title}" de tipo "${newIncident.type}" y severidad "${newIncident.severity}". Proporciona la respuesta en español.`,

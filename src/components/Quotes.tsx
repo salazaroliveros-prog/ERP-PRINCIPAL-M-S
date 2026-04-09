@@ -194,7 +194,7 @@ export default function Quotes() {
     setIsGenerating(true);
     try {
       const project = projects.find(p => p.id === newQuote.projectId);
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Como experto en presupuestos de construcción, sugiere una descripción profesional para una cotización del proyecto "${project?.name || 'seleccionado'}". Proporciona la respuesta en español.`,

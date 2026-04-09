@@ -305,7 +305,7 @@ const tools = {
 };
 
 export async function getAIResponse(message: string, history: { role: string, text: string }[]) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   
   if (!apiKey) {
     return "Error: La clave de API de Gemini no está configurada. Por favor, verifica las variables de entorno.";

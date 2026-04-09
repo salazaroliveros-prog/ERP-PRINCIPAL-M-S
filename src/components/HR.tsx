@@ -468,7 +468,7 @@ export default function HR() {
 
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Como experto en recursos humanos para empresas de construcción, sugiere un salario mensual competitivo en dólares para el cargo de "${newEmployee.role}" en el departamento de "${newEmployee.department}". Proporciona la respuesta en español.`,

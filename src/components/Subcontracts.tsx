@@ -236,7 +236,7 @@ export default function Subcontracts() {
     setIsGenerating(true);
     try {
       const project = projects.find(p => p.id === newSub.projectId);
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Como experto en gestión de subcontratos de construcción, sugiere un monto total estimado en dólares para el servicio de "${newSub.service}" en el proyecto "${project?.name || 'seleccionado'}". Proporciona la respuesta en español.`,

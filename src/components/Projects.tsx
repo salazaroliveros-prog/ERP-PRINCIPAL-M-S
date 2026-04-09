@@ -262,7 +262,7 @@ export default function Projects() {
     setIsAuditing(true);
     setIsAuditModalOpen(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       const projectData = projectsWithDeviations.map(p => ({
         name: p.name,
         budget: p.budget,
@@ -449,7 +449,7 @@ export default function Projects() {
 
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Como experto en gestión de proyectos de construcción, sugiere una descripción detallada y objetivos clave para un proyecto llamado "${newProject.name}" de tipo "${newProject.typology}". Proporciona la respuesta en español.`,

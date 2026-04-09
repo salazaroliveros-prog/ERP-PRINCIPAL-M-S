@@ -1139,7 +1139,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Como experto en presupuestos de construcción, sugiere costos estimados de materiales y mano de obra por unidad para el item "${newItem.description}" en un proyecto de tipo "${project.typology || 'General'}". Proporciona la respuesta en español.`,

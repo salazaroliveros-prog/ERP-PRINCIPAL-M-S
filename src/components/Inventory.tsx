@@ -581,7 +581,7 @@ export default function Inventory() {
 
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Como experto en materiales de construcción, sugiere una descripción técnica breve y un stock mínimo recomendado para un material llamado "${newMaterial.name}" de la categoría "${newMaterial.category}". Proporciona la respuesta en español.`,
@@ -625,7 +625,7 @@ export default function Inventory() {
 
     setIsGeneratingPO(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       
       // Get historical consumption (simulated or from inventoryTransactions)
       const history = await listInventoryTransactions({
@@ -1087,7 +1087,7 @@ export default function Inventory() {
     setOptimizationResults(null);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       
       // Prepare data for AI
       const inventoryData = inventory.map(item => ({
@@ -1188,7 +1188,7 @@ export default function Inventory() {
 
     setIsGeneratingPOs(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       
       const prompt = `Basado en estos resultados de optimización de inventario:
       ${JSON.stringify(optimizationResults)}
