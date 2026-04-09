@@ -1259,6 +1259,9 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.use(express.json());
   app.use("/uploads", express.static(UPLOADS_PUBLIC_DIR));
   app.use("/uploads", express.static(UPLOADS_FALLBACK_DIR));
+  app.get('/favicon.ico', (_req, res) => {
+    return res.status(204).end();
+  });
 
   app.use('/api', async (req, res, next) => {
     const dbAvailable = await isDatabaseAvailable();

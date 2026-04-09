@@ -30,7 +30,6 @@ import { toast } from 'sonner';
 import ConfirmModal from './ConfirmModal';
 import { logAction } from '../lib/audit';
 import jsPDF from 'jspdf';
-import { ref, storage, uploadBytes, getDownloadURL } from '../lib/authStorageClient';
 import SignaturePad from './SignaturePad';
 import {
   createAttendance,
@@ -342,11 +341,18 @@ export default function HR() {
       const pdf = buildContractPdf(contract, ownerSignature);
       const blob = pdf.output('blob');
       const fileName = `contrato-${contract.employeeName.replace(/\s+/g, '-').toLowerCase()}-${contract.id}.pdf`;
-      const file = new File([blob], fileName, { type: 'application/pdf' });
-      const fileRef = ref(storage, `contracts/${fileName}`);
-
-      await uploadBytes(fileRef, file);
-      const fileUrl = await getDownloadURL(fileRef);
+      const fileUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+            return;
+          }
+          reject(new Error('No se pudo convertir el PDF para archivado persistente'));
+        };
+        reader.onerror = () => reject(reader.error || new Error('No se pudo leer el PDF generado'));
+        reader.readAsDataURL(blob);
+      });
 
       await updateEmploymentContract(contract.id, {
         ownerSignatureDataUrl: ownerSignature,
