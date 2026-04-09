@@ -18,8 +18,14 @@ interface Message {
 
 export default function AIChat() {
   const CHAT_BUBBLE_STORAGE_KEY = 'wm_ai_chat_bubble_pos';
+  const CHAT_PANEL_STORAGE_KEY = 'wm_ai_chat_panel_pos';
   const CHAT_BUBBLE_SIZE = 56;
   const CHAT_BUBBLE_MARGIN = 16;
+  const CHAT_PANEL_WIDTH = 400;
+  const CHAT_PANEL_MINIMIZED_WIDTH = 300;
+  const CHAT_PANEL_HEIGHT = 600;
+  const CHAT_PANEL_MINIMIZED_HEIGHT = 64;
+  const CHAT_PANEL_MARGIN = 16;
   const [isMobile, setIsMobile] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -38,7 +44,9 @@ export default function AIChat() {
   const [isListening, setIsListening] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [bubblePos, setBubblePos] = useState<{ x: number; y: number } | null>(null);
+  const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
   const dragStateRef = useRef({ pointerId: -1, startX: 0, startY: 0, moved: false });
+  const panelDragStateRef = useRef({ pointerId: -1, startX: 0, startY: 0, moved: false });
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -50,6 +58,21 @@ export default function AIChat() {
     return {
       x: Math.min(Math.max(CHAT_BUBBLE_MARGIN, x), maxX),
       y: Math.min(Math.max(CHAT_BUBBLE_MARGIN, y), maxY),
+    };
+  };
+
+  const getPanelDimensions = () => ({
+    width: isMinimized ? CHAT_PANEL_MINIMIZED_WIDTH : CHAT_PANEL_WIDTH,
+    height: isMinimized ? CHAT_PANEL_MINIMIZED_HEIGHT : CHAT_PANEL_HEIGHT,
+  });
+
+  const clampPanelPosition = (x: number, y: number) => {
+    const { width, height } = getPanelDimensions();
+    const maxX = Math.max(CHAT_PANEL_MARGIN, window.innerWidth - width - CHAT_PANEL_MARGIN);
+    const maxY = Math.max(CHAT_PANEL_MARGIN, window.innerHeight - height - CHAT_PANEL_MARGIN);
+    return {
+      x: Math.min(Math.max(CHAT_PANEL_MARGIN, x), maxX),
+      y: Math.min(Math.max(CHAT_PANEL_MARGIN, y), maxY),
     };
   };
 
@@ -87,11 +110,44 @@ export default function AIChat() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const defaultPanelPos = clampPanelPosition(
+      window.innerWidth - CHAT_PANEL_WIDTH - 24,
+      window.innerHeight - CHAT_PANEL_HEIGHT - 100
+    );
+
+    try {
+      const saved = localStorage.getItem(CHAT_PANEL_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+          setPanelPos(clampPanelPosition(parsed.x, parsed.y));
+          return;
+        }
+      }
+    } catch {
+      // ignore malformed saved position
+    }
+
+    setPanelPos(defaultPanelPos);
+  }, []);
+
+  useEffect(() => {
     if (!bubblePos || typeof window === 'undefined') return;
-    const handleResize = () => setBubblePos((prev) => (prev ? clampBubblePosition(prev.x, prev.y) : prev));
+    const handleResize = () => {
+      setBubblePos((prev) => (prev ? clampBubblePosition(prev.x, prev.y) : prev));
+      setPanelPos((prev) => (prev ? clampPanelPosition(prev.x, prev.y) : prev));
+    };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [bubblePos]);
+  }, [bubblePos, isMinimized]);
+
+  useEffect(() => {
+    if (!panelPos || typeof window === 'undefined') return;
+    setPanelPos(clampPanelPosition(panelPos.x, panelPos.y));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMinimized]);
 
   const handleBubblePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!bubblePos) return;
@@ -130,6 +186,50 @@ export default function AIChat() {
     }
 
     dragStateRef.current = { pointerId: -1, startX: 0, startY: 0, moved: false };
+  };
+
+  const handlePanelPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (isMobile || !panelPos) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('button')) return;
+
+    panelDragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    };
+
+    (event.currentTarget as HTMLDivElement).setPointerCapture(event.pointerId);
+  };
+
+  const handlePanelPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (isMobile || !panelPos || panelDragStateRef.current.pointerId !== event.pointerId) return;
+
+    const deltaX = event.clientX - panelDragStateRef.current.startX;
+    const deltaY = event.clientY - panelDragStateRef.current.startY;
+
+    if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+      panelDragStateRef.current.moved = true;
+    }
+
+    if (!panelDragStateRef.current.moved) return;
+
+    setPanelPos((prev) => {
+      if (!prev) return prev;
+      const next = clampPanelPosition(prev.x + deltaX, prev.y + deltaY);
+      panelDragStateRef.current.startX = event.clientX;
+      panelDragStateRef.current.startY = event.clientY;
+      return next;
+    });
+  };
+
+  const handlePanelPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (panelDragStateRef.current.pointerId !== event.pointerId) return;
+    if (panelPos) {
+      localStorage.setItem(CHAT_PANEL_STORAGE_KEY, JSON.stringify(panelPos));
+    }
+    panelDragStateRef.current = { pointerId: -1, startX: 0, startY: 0, moved: false };
   };
 
   useEffect(() => {
@@ -482,11 +582,20 @@ export default function AIChat() {
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             className={cn(
               "fixed z-[100] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden transition-all duration-300",
-              isOpen && isMobile && !isMinimized ? "inset-0 m-4" : "bottom-20 sm:bottom-6 right-6"
+              isOpen && isMobile && !isMinimized ? "inset-0 m-4" : ""
             )}
+            style={!isMobile && panelPos ? { left: panelPos.x, top: panelPos.y } : undefined}
           >
             {/* Header */}
-            <div className="bg-slate-900 text-white p-4 flex items-center justify-between shrink-0">
+            <div
+              className={cn(
+                "bg-slate-900 text-white p-4 flex items-center justify-between shrink-0",
+                !isMobile ? "cursor-move select-none" : ""
+              )}
+              onPointerDown={handlePanelPointerDown}
+              onPointerMove={handlePanelPointerMove}
+              onPointerUp={handlePanelPointerUp}
+            >
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                   <Bot size={20} />
