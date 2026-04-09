@@ -222,7 +222,7 @@ export const Sidebar = ({
         <div className={cn("flex flex-col h-full", isCollapsed ? "p-2 sm:p-4" : "p-4 sm:p-6")}>
           <div className={cn("mb-6 sm:mb-10 flex justify-between items-center", isCollapsed ? "flex-col gap-3 sm:gap-4" : "px-1 sm:px-2")}>
             <div className="flex items-center gap-2 overflow-hidden">
-              {!isCollapsed && <Logo size="sm" className="w-24 sm:w-32" />}
+              {!isCollapsed && <Logo size="sm" />}
               {isCollapsed && <Construction size={20} className="text-primary sm:w-6 sm:h-6" />}
             </div>
             <div className={cn("flex items-center gap-1.5 sm:gap-2", isCollapsed && "flex-col")}>

@@ -371,7 +371,7 @@ function AppContent({
         
         {/* Mobile Header */}
         <header className="lg:hidden sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
-          <Logo />
+          <Logo size="sm" />
           <div className="flex items-center gap-3">
             <button 
               onClick={() => {
