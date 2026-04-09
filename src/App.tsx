@@ -366,7 +366,7 @@ function AppContent({
 
   return (
     <Router>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col lg:flex-row transition-colors duration-300">
+      <div className="h-screen h-[100dvh] min-h-0 bg-slate-50 dark:bg-slate-950 flex flex-col lg:flex-row overflow-hidden transition-colors duration-300">
         <Toaster position="top-right" richColors closeButton />
         
         {/* Mobile Header */}
@@ -417,7 +417,7 @@ function AppContent({
         </Suspense>
         
         <main className={cn(
-          "flex-1 p-4 lg:p-8 pb-24 lg:pb-8 overflow-x-hidden transition-all duration-300",
+          "flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 lg:p-8 pb-24 lg:pb-8 transition-all duration-300",
           isSidebarCollapsed ? "lg:ml-20" : "lg:ml-64"
         )}>
           <Suspense fallback={<LoadingFallback />}>

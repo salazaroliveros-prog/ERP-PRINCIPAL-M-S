@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, Send, X, Minimize2, Maximize2, MessageSquare, Sparkles, AlertTriangle, TrendingUp, Wrench, Loader2, MoreVertical, History, Construction, DollarSign, Mic, MicOff, Trash2 } from 'lucide-react';
+import { Bot, Send, X, MessageSquare, Sparkles, AlertTriangle, TrendingUp, Wrench, Loader2, MoreVertical, History, Construction, DollarSign, Mic, MicOff, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, handleApiError, OperationType } from '../lib/utils';
 import { getAIResponse } from '../lib/gemini';
@@ -17,18 +17,11 @@ interface Message {
 }
 
 export default function AIChat() {
-  const CHAT_BUBBLE_STORAGE_KEY = 'wm_ai_chat_bubble_pos';
-  const CHAT_PANEL_STORAGE_KEY = 'wm_ai_chat_panel_pos';
-  const CHAT_BUBBLE_SIZE = 56;
-  const CHAT_BUBBLE_MARGIN = 8;
+  const CHAT_AUTO_HIDE_STORAGE_KEY = 'wm_ai_chat_auto_hide';
   const CHAT_PANEL_WIDTH = 400;
-  const CHAT_PANEL_MINIMIZED_WIDTH = 300;
   const CHAT_PANEL_HEIGHT = 600;
-  const CHAT_PANEL_MINIMIZED_HEIGHT = 64;
-  const CHAT_PANEL_MARGIN = 16;
   const [isMobile, setIsMobile] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
@@ -43,39 +36,11 @@ export default function AIChat() {
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
-  const [bubblePos, setBubblePos] = useState<{ x: number; y: number } | null>(null);
-  const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
-  const dragStateRef = useRef({ pointerId: -1, startX: 0, startY: 0, moved: false });
-  const panelDragStateRef = useRef({ pointerId: -1, startX: 0, startY: 0, moved: false });
-  const suppressBubbleClickRef = useRef(false);
+  const [isAutoHideEnabled, setIsAutoHideEnabled] = useState(true);
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  const clampBubblePosition = (x: number, y: number) => {
-    const maxX = Math.max(CHAT_BUBBLE_MARGIN, window.innerWidth - CHAT_BUBBLE_SIZE - CHAT_BUBBLE_MARGIN);
-    const maxY = Math.max(CHAT_BUBBLE_MARGIN, window.innerHeight - CHAT_BUBBLE_SIZE - CHAT_BUBBLE_MARGIN);
-    return {
-      x: Math.min(Math.max(CHAT_BUBBLE_MARGIN, x), maxX),
-      y: Math.min(Math.max(CHAT_BUBBLE_MARGIN, y), maxY),
-    };
-  };
-
-  const getPanelDimensions = () => ({
-    width: isMinimized ? CHAT_PANEL_MINIMIZED_WIDTH : CHAT_PANEL_WIDTH,
-    height: isMinimized ? CHAT_PANEL_MINIMIZED_HEIGHT : CHAT_PANEL_HEIGHT,
-  });
-
-  const clampPanelPosition = (x: number, y: number) => {
-    const { width, height } = getPanelDimensions();
-    const maxX = Math.max(CHAT_PANEL_MARGIN, window.innerWidth - width - CHAT_PANEL_MARGIN);
-    const maxY = Math.max(CHAT_PANEL_MARGIN, window.innerHeight - height - CHAT_PANEL_MARGIN);
-    return {
-      x: Math.min(Math.max(CHAT_PANEL_MARGIN, x), maxX),
-      y: Math.min(Math.max(CHAT_PANEL_MARGIN, y), maxY),
-    };
-  };
 
   useEffect(() => {
     const checkMobile = () => {
@@ -88,167 +53,31 @@ export default function AIChat() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
-    const defaultPos = clampBubblePosition(
-      window.innerWidth - CHAT_BUBBLE_SIZE - 16,
-      window.innerHeight - CHAT_BUBBLE_SIZE - 96
-    );
-
-    try {
-      const saved = localStorage.getItem(CHAT_BUBBLE_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
-          setBubblePos(clampBubblePosition(parsed.x, parsed.y));
-          return;
-        }
-      }
-    } catch {
-      // ignore malformed saved position
+    const savedPreference = localStorage.getItem(CHAT_AUTO_HIDE_STORAGE_KEY);
+    if (savedPreference === 'true') {
+      setIsAutoHideEnabled(true);
+    } else if (savedPreference === 'false') {
+      setIsAutoHideEnabled(false);
     }
-
-    setBubblePos(defaultPos);
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    localStorage.setItem(CHAT_AUTO_HIDE_STORAGE_KEY, String(isAutoHideEnabled));
+  }, [isAutoHideEnabled]);
 
-    const defaultPanelPos = clampPanelPosition(
-      window.innerWidth - CHAT_PANEL_WIDTH - 16,
-      window.innerHeight - CHAT_PANEL_HEIGHT - 96
-    );
-
-    try {
-      const saved = localStorage.getItem(CHAT_PANEL_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
-          setPanelPos(clampPanelPosition(parsed.x, parsed.y));
-          return;
-        }
-      }
-    } catch {
-      // ignore malformed saved position
-    }
-
-    setPanelPos(defaultPanelPos);
-  }, []);
-
-  useEffect(() => {
-    if (!bubblePos || typeof window === 'undefined') return;
-    const handleResize = () => {
-      setBubblePos((prev) => (prev ? clampBubblePosition(prev.x, prev.y) : prev));
-      setPanelPos((prev) => (prev ? clampPanelPosition(prev.x, prev.y) : prev));
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [bubblePos, isMinimized]);
-
-  useEffect(() => {
-    if (!panelPos || typeof window === 'undefined') return;
-    setPanelPos(clampPanelPosition(panelPos.x, panelPos.y));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMinimized]);
-
-  const handleBubblePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (!bubblePos) return;
-    suppressBubbleClickRef.current = false;
-    dragStateRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false };
-    (event.currentTarget as HTMLButtonElement).setPointerCapture(event.pointerId);
+  const autoHideAssistant = () => {
+    if (!isAutoHideEnabled) return;
+    window.setTimeout(() => {
+      setShowQuickActions(false);
+      setIsOpen(false);
+    }, 700);
   };
 
-  const handleBubblePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (!bubblePos || dragStateRef.current.pointerId !== event.pointerId) return;
-    const deltaX = event.clientX - dragStateRef.current.startX;
-    const deltaY = event.clientY - dragStateRef.current.startY;
-    if (Math.abs(deltaX) > 6 || Math.abs(deltaY) > 6) {
-      dragStateRef.current.moved = true;
-      suppressBubbleClickRef.current = true;
-    }
-
-    if (!dragStateRef.current.moved) return;
-
-    setBubblePos((prev) => {
-      if (!prev) return prev;
-      const next = clampBubblePosition(prev.x + deltaX, prev.y + deltaY);
-      dragStateRef.current.startX = event.clientX;
-      dragStateRef.current.startY = event.clientY;
-      return next;
-    });
-  };
-
-  const handleBubblePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (dragStateRef.current.pointerId !== event.pointerId) return;
-    (event.currentTarget as HTMLButtonElement).releasePointerCapture(event.pointerId);
-
-    if (bubblePos) {
-      localStorage.setItem(CHAT_BUBBLE_STORAGE_KEY, JSON.stringify(bubblePos));
-    }
-
-    dragStateRef.current = { pointerId: -1, startX: 0, startY: 0, moved: false };
-  };
-
-  const handleBubblePointerCancel = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (dragStateRef.current.pointerId !== event.pointerId) return;
-    dragStateRef.current = { pointerId: -1, startX: 0, startY: 0, moved: false };
-  };
-
-  const handleBubbleClick = () => {
-    if (suppressBubbleClickRef.current) {
-      suppressBubbleClickRef.current = false;
-      return;
-    }
-    setIsOpen(true);
-  };
-
-  const handlePanelPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (isMobile || !panelPos) return;
-    const target = event.target as HTMLElement;
-    if (target.closest('button')) return;
-
-    panelDragStateRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      moved: false,
-    };
-
-    (event.currentTarget as HTMLDivElement).setPointerCapture(event.pointerId);
-  };
-
-  const handlePanelPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (isMobile || !panelPos || panelDragStateRef.current.pointerId !== event.pointerId) return;
-
-    const deltaX = event.clientX - panelDragStateRef.current.startX;
-    const deltaY = event.clientY - panelDragStateRef.current.startY;
-
-    if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
-      panelDragStateRef.current.moved = true;
-    }
-
-    if (!panelDragStateRef.current.moved) return;
-
-    setPanelPos((prev) => {
-      if (!prev) return prev;
-      const next = clampPanelPosition(prev.x + deltaX, prev.y + deltaY);
-      panelDragStateRef.current.startX = event.clientX;
-      panelDragStateRef.current.startY = event.clientY;
-      return next;
-    });
-  };
-
-  const handlePanelPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (panelDragStateRef.current.pointerId !== event.pointerId) return;
-    (event.currentTarget as HTMLDivElement).releasePointerCapture(event.pointerId);
-    if (panelPos) {
-      localStorage.setItem(CHAT_PANEL_STORAGE_KEY, JSON.stringify(panelPos));
-    }
-    panelDragStateRef.current = { pointerId: -1, startX: 0, startY: 0, moved: false };
-  };
-
-  const handlePanelPointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (panelDragStateRef.current.pointerId !== event.pointerId) return;
-    panelDragStateRef.current = { pointerId: -1, startX: 0, startY: 0, moved: false };
+  const hideAssistantManually = () => {
+    setShowQuickActions(false);
+    setShowHistoryMenu(false);
+    setIsOpen(false);
   };
 
   useEffect(() => {
@@ -363,16 +192,15 @@ export default function AIChat() {
   };
 
   useEffect(() => {
-    if (isOpen && !isMinimized) {
+    if (isOpen) {
       scrollToBottom();
     }
-  }, [messages, isOpen, isMinimized]);
+  }, [messages, isOpen]);
 
   useEffect(() => {
     const handleAICommand = async (event: any) => {
       const { command, params } = event.detail;
       setIsOpen(true);
-      setIsMinimized(false);
       
       if (command === 'Análisis de Riesgos Profundo') {
         const prompt = `Realiza un análisis de riesgos exhaustivo para el proyecto "${params.projectName}" (ID: ${params.projectId}). Identifica desviaciones, predice sobrecostos futuros y sugiere acciones correctivas inmediatas.`;
@@ -392,6 +220,7 @@ export default function AIChat() {
           setError("Error al procesar el análisis de riesgos.");
         } finally {
           setIsLoading(false);
+          autoHideAssistant();
         }
       } else if (command === 'GENERATE_EXECUTIVE_REPORT') {
         const prompt = `Generar informe ejecutivo para el proyecto "${params.projectName}" (ID: ${params.projectId}).`;
@@ -413,6 +242,7 @@ export default function AIChat() {
           setError("No se pudieron obtener los datos para el informe.");
         }
         setIsLoading(false);
+        autoHideAssistant();
       }
     };
 
@@ -459,6 +289,7 @@ export default function AIChat() {
       // Dispatch custom event
       window.dispatchEvent(new CustomEvent('OPEN_COST_CALCULATOR'));
       setIsLoading(false);
+      autoHideAssistant();
       return;
     }
 
@@ -474,6 +305,7 @@ export default function AIChat() {
       // Dispatch custom event
       window.dispatchEvent(new CustomEvent('GENERATE_BUDGET_REPORT'));
       setIsLoading(false);
+      autoHideAssistant();
       return;
     }
 
@@ -496,6 +328,7 @@ export default function AIChat() {
       };
       setMessages(prev => [...prev, aiMessage]);
       setIsLoading(false);
+      autoHideAssistant();
       return;
     }
 
@@ -521,6 +354,7 @@ export default function AIChat() {
         setError("No se pudieron obtener los datos para el informe.");
       }
       setIsLoading(false);
+      autoHideAssistant();
       return;
     }
 
@@ -551,6 +385,7 @@ export default function AIChat() {
       }
     } finally {
       setIsLoading(false);
+      autoHideAssistant();
     }
   };
 
@@ -567,24 +402,20 @@ export default function AIChat() {
   return (
     <>
       <AnimatePresence>
-        {!isOpen && bubblePos && (
+        {!isOpen && (
           <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1, x: 0, y: 0 }}
-            exit={{ scale: 0, opacity: 0 }}
-            whileHover={{ scale: 1.08 }}
-            whileTap={{ scale: 0.96 }}
-            onClick={handleBubbleClick}
-            onPointerDown={handleBubblePointerDown}
-            onPointerMove={handleBubblePointerMove}
-            onPointerUp={handleBubblePointerUp}
-            onPointerCancel={handleBubblePointerCancel}
-            className="fixed z-[100] w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center hover:bg-primary-hover transition-all group relative touch-none"
-            style={{ left: bubblePos.x, top: bubblePos.y }}
-            title="Arrastra para mover el asistente"
+            initial={{ opacity: 0, x: 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 24 }}
+            whileHover={{ x: -4 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setIsOpen(true)}
+            className="fixed z-[100] right-0 top-1/2 -translate-y-1/2 bg-primary text-white rounded-l-xl shadow-2xl px-2.5 py-4 hover:bg-primary-hover transition-all group"
+            title="Abrir asistente"
           >
-            <Bot size={28} className="group-hover:scale-110 transition-transform" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full animate-pulse"></span>
+            <span className="[writing-mode:vertical-rl] rotate-180 text-[11px] font-black tracking-[0.2em] uppercase flex items-center gap-1">
+              IA
+            </span>
           </motion.button>
         )}
       </AnimatePresence>
@@ -592,32 +423,19 @@ export default function AIChat() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ 
-              opacity: 1, 
-              scale: 1, 
-              y: 0,
-              height: isMinimized ? '64px' : (isMobile ? 'calc(100% - 20px)' : '600px'),
-              width: isMinimized ? '300px' : (isMobile ? '100%' : '400px'),
-            }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            initial={{ opacity: 0, x: 36 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 36 }}
             className={cn(
-              "fixed z-[100] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden transition-all duration-300",
-              isOpen && isMobile && !isMinimized ? "inset-0 m-4" : ""
+              "fixed z-[100] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden",
+              isMobile
+                ? "inset-x-3 top-16 bottom-3"
+                : "right-4 top-1/2 -translate-y-1/2"
             )}
-            style={!isMobile && panelPos ? { left: panelPos.x, top: panelPos.y } : undefined}
+            style={!isMobile ? { width: CHAT_PANEL_WIDTH, height: CHAT_PANEL_HEIGHT } : undefined}
           >
             {/* Header */}
-            <div
-              className={cn(
-                "bg-slate-900 text-white p-4 flex items-center justify-between shrink-0",
-                !isMobile ? "cursor-move select-none" : ""
-              )}
-              onPointerDown={handlePanelPointerDown}
-              onPointerMove={handlePanelPointerMove}
-              onPointerUp={handlePanelPointerUp}
-              onPointerCancel={handlePanelPointerCancel}
-            >
+            <div className="bg-slate-900 text-white p-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                   <Bot size={20} />
@@ -664,19 +482,49 @@ export default function AIChat() {
                           <History size={14} />
                           Ver Historial
                         </button>
+                        <button
+                          onClick={() => {
+                            setIsAutoHideEnabled((prev) => {
+                              const next = !prev;
+                              toast.info(next ? 'Auto-ocultado activado' : 'Auto-ocultado desactivado');
+                              return next;
+                            });
+                            setShowHistoryMenu(false);
+                          }}
+                          className="w-full flex items-center justify-between gap-2 px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left"
+                        >
+                          <span className="flex items-center gap-2">
+                            <MessageSquare size={14} />
+                            Auto-ocultar
+                          </span>
+                          <span
+                            className={cn(
+                              "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                              isAutoHideEnabled ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
+                            )}
+                            aria-hidden="true"
+                          >
+                            <span
+                              className={cn(
+                                "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                                isAutoHideEnabled ? "translate-x-4" : "translate-x-0.5"
+                              )}
+                            />
+                          </span>
+                        </button>
+                        <button
+                          onClick={hideAssistantManually}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left"
+                        >
+                          <X size={14} />
+                          Ocultar ahora
+                        </button>
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
                 <button 
-                  onClick={() => setIsMinimized(!isMinimized)}
-                  title={isMinimized ? "Expandir" : "Minimizar"}
-                  className="p-1.5 hover:bg-white/10 rounded-md transition-colors"
-                >
-                  {isMinimized ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
-                </button>
-                <button 
-                  onClick={() => setIsOpen(false)}
+                  onClick={hideAssistantManually}
                   title="Cerrar"
                   className="p-1.5 hover:bg-white/10 rounded-md transition-colors"
                 >
@@ -685,8 +533,7 @@ export default function AIChat() {
               </div>
             </div>
 
-            {!isMinimized && (
-              <>
+            <>
                 {/* Messages Area */}
                 <div 
                   ref={scrollContainerRef}
@@ -838,7 +685,6 @@ export default function AIChat() {
                   </p>
                 </div>
               </>
-            )}
           </motion.div>
         )}
       </AnimatePresence>
