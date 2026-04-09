@@ -456,16 +456,25 @@ export default function Dashboard() {
     return {
       id: p.id,
       name: p.name,
+      shortName: p.name.length > 24 ? `${p.name.substring(0, 21)}...` : p.name,
       startOffset,
       duration,
       physicalDuration: duration * physicalProgress / 100,
       financialDuration: duration * financialProgress / 100,
       physical: physicalProgress,
       financial: financialProgress,
+      physicalLabel: `${physicalProgress.toFixed(1)}%`,
+      financialLabel: `${financialProgress.toFixed(1)}%`,
       startDate: p.startDate,
       endDate: p.endDate
     };
   }).sort((a, b) => a.startOffset - b.startOffset);
+
+  const ganttChartData = progressChartScope === 'selected' && selectedQuickProjectId
+    ? ganttData.filter((p) => p.id === selectedQuickProjectId)
+    : ganttData;
+
+  const ganttChartHeight = Math.max(340, 120 + (ganttChartData.length * 30));
 
   const formatXAxis = (tickItem: number) => {
     const date = new Date(globalMinDate);
@@ -782,8 +791,8 @@ export default function Dashboard() {
           </div>
 
           {/* Gantt-style Progress Chart */}
-          <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
-            <div className="flex items-center justify-between mb-8">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-5">
               <div className="flex items-center gap-4">
                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
                   <TrendingUp size={18} className="text-primary" />
@@ -797,25 +806,38 @@ export default function Dashboard() {
                   <Edit3 size={14} />
                 </button>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-sky-500 to-indigo-500" />
                   <span className="text-[10px] font-bold text-slate-500 uppercase">Físico</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-rose-500 rounded-full" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-rose-500 to-amber-500" />
                   <span className="text-[10px] font-bold text-slate-500 uppercase">Financiero</span>
                 </div>
               </div>
             </div>
-            <div className="h-[450px]">
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Mostrando {ganttChartData.length} obra(s)
+            </p>
+            <div style={{ height: `${ganttChartHeight}px` }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={ganttData}
+                  data={ganttChartData}
                   layout="vertical"
-                  margin={{ top: 5, right: 30, left: 20, bottom: 20 }}
-                  barGap={-24} // Overlap bars
+                  margin={{ top: 6, right: 24, left: 6, bottom: 12 }}
+                  barGap={-14}
                 >
+                  <defs>
+                    <linearGradient id="ganttPhysicalGradient" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#0ea5e9" />
+                      <stop offset="100%" stopColor="#6366f1" />
+                    </linearGradient>
+                    <linearGradient id="ganttFinancialGradient" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#f43f5e" />
+                      <stop offset="100%" stopColor="#f59e0b" />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                   <XAxis 
                     type="number" 
@@ -827,9 +849,9 @@ export default function Dashboard() {
                     minTickGap={30}
                   />
                   <YAxis 
-                    dataKey="name" 
+                    dataKey="shortName" 
                     type="category" 
-                    width={180} 
+                    width={140} 
                     tick={({ x, y, payload }) => (
                       <g transform={`translate(${x},${y})`}>
                         <text
@@ -838,11 +860,11 @@ export default function Dashboard() {
                           dy={4}
                           textAnchor="end"
                           fill="#64748b"
-                          fontSize={10}
-                          fontWeight={700}
+                          fontSize={9}
+                          fontWeight={800}
                           className="dark:fill-slate-400"
                         >
-                          {payload.value.length > 25 ? `${payload.value.substring(0, 22)}...` : payload.value}
+                          {payload.value}
                         </text>
                       </g>
                     )}
@@ -860,19 +882,20 @@ export default function Dashboard() {
                             <div className="space-y-2">
                               <div className="flex items-center justify-between gap-8">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                                  <div className="w-2 h-2 bg-gradient-to-r from-sky-500 to-indigo-500 rounded-full" />
                                   <span className="text-xs font-bold text-white">Avance Físico</span>
                                 </div>
-                                <span className="text-xs font-black text-blue-400">{data.physical.toFixed(1)}%</span>
+                                <span className="text-xs font-black text-blue-300">{data.physical.toFixed(1)}%</span>
                               </div>
                               <div className="flex items-center justify-between gap-8">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 bg-rose-500 rounded-full" />
+                                  <div className="w-2 h-2 bg-gradient-to-r from-rose-500 to-amber-500 rounded-full" />
                                   <span className="text-xs font-bold text-white">Avance Financiero</span>
                                 </div>
-                                <span className="text-xs font-black text-rose-400">{data.financial.toFixed(1)}%</span>
+                                <span className="text-xs font-black text-rose-300">{data.financial.toFixed(1)}%</span>
                               </div>
                               <div className="pt-2 mt-2 border-t border-slate-800 flex flex-col gap-1">
+                                <p className="text-[9px] text-emerald-300 font-bold uppercase">Físico guardado: {data.physical.toFixed(1)}%</p>
                                 <p className="text-[9px] text-slate-400 font-bold uppercase">Inicio: {data.startDate || 'N/A'}</p>
                                 <p className="text-[9px] text-slate-400 font-bold uppercase">Fin: {data.endDate || 'N/A'}</p>
                               </div>
@@ -899,16 +922,16 @@ export default function Dashboard() {
                   
                   {/* Background Bar (Duration) */}
                   <Bar dataKey="startOffset" stackId="bg" fill="transparent" />
-                  <Bar dataKey="duration" stackId="bg" fill="#f1f5f9" className="dark:fill-slate-800/50" radius={[0, 4, 4, 0]} barSize={24} />
+                  <Bar dataKey="duration" stackId="bg" fill="#e2e8f0" className="dark:fill-slate-800/50" radius={[0, 6, 6, 0]} barSize={14} />
                   
                   {/* Physical Progress Bar */}
                   <Bar dataKey="startOffset" stackId="phys" fill="transparent" />
                   <Bar 
                     dataKey="physicalDuration" 
                     stackId="phys" 
-                    fill="#3b82f6" 
-                    radius={[0, 4, 4, 0]} 
-                    barSize={12} 
+                    fill="url(#ganttPhysicalGradient)" 
+                    radius={[0, 6, 6, 0]} 
+                    barSize={8} 
                     onClick={(data) => navigate(`/projects/${data.id}`)}
                     className="cursor-pointer hover:opacity-80 transition-opacity"
                   />
@@ -918,9 +941,9 @@ export default function Dashboard() {
                   <Bar 
                     dataKey="financialDuration" 
                     stackId="fin" 
-                    fill="#ef4444" 
-                    radius={[0, 4, 4, 0]} 
-                    barSize={6} 
+                    fill="url(#ganttFinancialGradient)" 
+                    radius={[0, 6, 6, 0]} 
+                    barSize={4} 
                     onClick={(data) => navigate(`/projects/${data.id}`)}
                     className="cursor-pointer hover:opacity-80 transition-opacity"
                   />
