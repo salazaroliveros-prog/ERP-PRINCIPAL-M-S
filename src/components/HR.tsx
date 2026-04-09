@@ -32,7 +32,6 @@ import { logAction } from '../lib/audit';
 import jsPDF from 'jspdf';
 import { ref, storage, uploadBytes, getDownloadURL } from '../lib/authStorageClient';
 import SignaturePad from './SignaturePad';
-import { createDocument } from '../lib/documentsApi';
 import {
   createAttendance,
   createEmployee,
@@ -207,54 +206,119 @@ export default function HR() {
 
   const buildContractPdf = (contract: EmploymentContractRecord, ownerSignDataUrl: string) => {
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    const left = 48;
-    let y = 56;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const left = 50;
+    const right = pageWidth - 50;
+    const contentWidth = right - left;
+    let y = 58;
+
+    const addParagraph = (text: string, spacing = 16, indent = 0) => {
+      const lines = doc.splitTextToSize(text, contentWidth - indent);
+      doc.text(lines, left + indent, y);
+      y += lines.length * spacing;
+    };
+
+    const ensureSpace = (required = 110) => {
+      const pageHeight = doc.internal.pageSize.getHeight();
+      if (y + required <= pageHeight - 70) return;
+      doc.addPage();
+      y = 58;
+    };
 
     drawLogo(doc, left, 18, 1.2);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(51, 65, 85);
-    doc.text('WM_M&S CONSTRUCTORA', left + 66, 34);
+    doc.setFontSize(10);
+    doc.setTextColor(30, 41, 59);
+    doc.text('WM_M&S CONSTRUCTORA', left + 66, 32);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Documento generado: ${new Date().toLocaleDateString('es-GT')}`, right, 32, { align: 'right' });
+
+    y = 84;
+    doc.setDrawColor(203, 213, 225);
+    doc.line(left, y - 14, right, y - 14);
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
+    doc.setFontSize(15);
     doc.setTextColor(0, 0, 0);
-    doc.text('CONTRATO INDIVIDUAL DE TRABAJO', left, y);
-
-    y += 28;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    const body = [
-      `Empresa: ${contract.companyName}`,
-      `Representante: ${contract.ownerName} (${contract.ownerTitle})`,
-      `Trabajador: ${contract.employeeName}`,
-      `Cargo: ${contract.employeeRole} - Departamento: ${contract.employeeDepartment}`,
-      `Tipo de contrato: ${contract.contractType}`,
-      `Fecha de inicio: ${contract.startDate}`,
-      `Salario mensual: ${formatCurrency(contract.salary)}`,
-      '',
-      'CLAUSULAS BASICAS:',
-      '1. El trabajador prestara sus servicios personales para WM_M&S Constructora.',
-      '2. Se cumplira el horario y reglamento interno de la empresa.',
-      '3. El pago de salario sera mensual conforme a la normativa laboral aplicable.',
-      '4. Ambas partes aceptan los terminos del presente contrato.',
-    ];
-
-    body.forEach((line) => {
-      doc.text(line, left, y);
-      y += 18;
-    });
+    doc.text('CONTRATO INDIVIDUAL DE TRABAJO', pageWidth / 2, y, { align: 'center' });
 
     y += 20;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(30, 41, 59);
+    addParagraph(
+      'En cumplimiento de la normativa laboral vigente en la Republica de Guatemala, comparecen por una parte WM_M&S Constructora, en calidad de Empleador, y por la otra el Trabajador identificado en este instrumento, quienes acuerdan celebrar el presente contrato individual de trabajo.',
+      15
+    );
+
+    y += 6;
     doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('I. DATOS DE LAS PARTES', left, y);
+
+    y += 18;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(30, 41, 59);
+    addParagraph(`Empleador: ${contract.companyName}`);
+    addParagraph(`Representante legal: ${contract.ownerName} (${contract.ownerTitle})`);
+    addParagraph(`Trabajador: ${contract.employeeName}`);
+    addParagraph(`Puesto y departamento: ${contract.employeeRole} - ${contract.employeeDepartment}`);
+    addParagraph(`Tipo de contrato: ${contract.contractType}`);
+    addParagraph(`Fecha de inicio de labores: ${contract.startDate}`);
+    addParagraph(`Salario mensual pactado: ${formatCurrency(contract.salary)}`);
+
+    ensureSpace(220);
+    y += 6;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('II. CLAUSULAS CONTRACTUALES', left, y);
+
+    y += 18;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(30, 41, 59);
+    addParagraph('1. Objeto del contrato: El trabajador se obliga a prestar sus servicios personales y subordinados en favor del empleador, con diligencia, buena fe y apego a los lineamientos operativos de la empresa.');
+    addParagraph('2. Jornada y disciplina: La jornada, descansos, medidas de seguridad industrial y lineamientos disciplinarios se regiran por el reglamento interno de trabajo y la legislacion laboral aplicable.');
+    addParagraph('3. Remuneracion: El empleador pagara al trabajador el salario pactado en forma mensual, en la fecha establecida por la empresa, con los descuentos y prestaciones de ley que correspondan.');
+    addParagraph('4. Confidencialidad: El trabajador se compromete a resguardar la informacion tecnica, operativa y administrativa a la que tenga acceso durante la relacion laboral.');
+    addParagraph('5. Terminacion: Cualquier terminacion del presente contrato se tramitara de conformidad con las causales y procedimientos establecidos por la normativa vigente.');
+    addParagraph('6. Aceptacion: Leido el presente documento, ambas partes manifiestan su conformidad y se obligan a su cumplimiento en todos sus extremos.');
+
+    ensureSpace(170);
+    y += 12;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('III. FIRMAS', left, y);
+
+    y += 20;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(51, 65, 85);
     doc.text('Firma del trabajador', left, y);
-    doc.text('Firma del empleador', 320, y);
+    doc.text('Firma del empleador', 330, y);
 
     y += 10;
     if (contract.workerSignatureDataUrl) {
       doc.addImage(contract.workerSignatureDataUrl, 'PNG', left, y, 180, 60);
     }
-    doc.addImage(ownerSignDataUrl, 'PNG', 320, y, 180, 60);
+    doc.addImage(ownerSignDataUrl, 'PNG', 330, y, 180, 60);
+
+    y += 76;
+    doc.setDrawColor(148, 163, 184);
+    doc.line(left, y, left + 220, y);
+    doc.line(330, y, 550, y);
+
+    y += 14;
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(contract.employeeName, left, y);
+    doc.text(contract.ownerName || 'Representante legal', 330, y);
 
     return doc;
   };
@@ -292,21 +356,11 @@ export default function HR() {
         signedFileName: fileName,
       } as any);
 
-      await createDocument({
-        name: fileName,
-        type: 'pdf',
-        size: `${(blob.size / 1024).toFixed(1)} KB`,
-        folder: 'Legal',
-        author: 'RRHH',
-        fileUrl,
-        date: new Date().toISOString().slice(0, 10),
-      });
-
       await logAction('Contrato firmado', 'RRHH', `Contrato firmado y archivado de ${contract.employeeName}`, 'update', {
         contractId: contract.id,
       });
 
-      toast.success('Contrato firmado por ambas partes y guardado en Archivos.');
+      toast.success('Contrato formal firmado y archivado automaticamente en Documentos > Legal.');
       setIsSigningOwner(false);
       setSelectedContractId('');
       setOwnerSignature('');

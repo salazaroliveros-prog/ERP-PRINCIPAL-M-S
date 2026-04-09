@@ -1111,10 +1111,10 @@ export default function Projects() {
         return;
       }
 
-      setCleanupCandidates(candidates);
       toast.success(
-        `Simulación: ${totalCandidates} registro(s) detectados. Proyectos: ${candidates.projects.length}, Clientes: ${candidates.clients.length}, Cotizaciones: ${candidates.quotes.length}, Transacciones: ${candidates.transactions.length}.`
+        `Validación completada: ${totalCandidates} registro(s) de prueba detectados. Iniciando limpieza automática...`
       );
+      await executeCleanupTestCandidates(candidates, true);
     } catch {
       toast.error('No se pudo ejecutar la simulación de limpieza');
     } finally {
@@ -1122,23 +1122,19 @@ export default function Projects() {
     }
   };
 
-  const confirmCleanupTestProjects = async () => {
+  const executeCleanupTestCandidates = async (candidates: CleanupCandidates, validatedBySimulation = false) => {
     const totalCandidates =
-      cleanupCandidates.projects.length +
-      cleanupCandidates.clients.length +
-      cleanupCandidates.quotes.length +
-      cleanupCandidates.transactions.length;
+      candidates.projects.length +
+      candidates.clients.length +
+      candidates.quotes.length +
+      candidates.transactions.length;
 
-    if (totalCandidates === 0) {
-      setIsCleanupConfirmOpen(false);
-      return;
-    }
+    if (totalCandidates === 0) return;
 
-    setIsCleaningTestData(true);
     let deleted = 0;
     let failed = 0;
 
-    for (const transaction of cleanupCandidates.transactions) {
+    for (const transaction of candidates.transactions) {
       try {
         await deleteTransactionById(transaction.id);
         deleted += 1;
@@ -1147,7 +1143,7 @@ export default function Projects() {
       }
     }
 
-    for (const quote of cleanupCandidates.quotes) {
+    for (const quote of candidates.quotes) {
       try {
         await deleteQuoteRecord(quote.id);
         deleted += 1;
@@ -1156,7 +1152,7 @@ export default function Projects() {
       }
     }
 
-    for (const project of cleanupCandidates.projects) {
+    for (const project of candidates.projects) {
       try {
         const budgetItems = await listProjectBudgetItemsDetailed(project.id);
         for (const budgetItem of budgetItems) {
@@ -1175,7 +1171,7 @@ export default function Projects() {
       }
     }
 
-    for (const client of cleanupCandidates.clients) {
+    for (const client of candidates.clients) {
       try {
         await deleteClient(client.id);
         deleted += 1;
@@ -1197,15 +1193,35 @@ export default function Projects() {
     }
 
     await loadProjectsFromApi();
-    setIsCleaningTestData(false);
     setIsCleanupConfirmOpen(false);
     setCleanupCandidates(EMPTY_CLEANUP_CANDIDATES);
 
     if (deleted > 0) {
-      toast.success(`Limpieza completada: ${deleted} registro(s) de prueba eliminado(s)`);
+      const mode = validatedBySimulation ? 'automática' : 'manual';
+      toast.success(`Limpieza ${mode} completada: ${deleted} registro(s) de prueba eliminado(s)`);
     }
     if (failed > 0) {
       toast.error(`${failed} proyecto(s) no se pudieron eliminar`);
+    }
+  };
+
+  const confirmCleanupTestProjects = async () => {
+    const totalCandidates =
+      cleanupCandidates.projects.length +
+      cleanupCandidates.clients.length +
+      cleanupCandidates.quotes.length +
+      cleanupCandidates.transactions.length;
+
+    if (totalCandidates === 0) {
+      setIsCleanupConfirmOpen(false);
+      return;
+    }
+
+    setIsCleaningTestData(true);
+    try {
+      await executeCleanupTestCandidates(cleanupCandidates, false);
+    } finally {
+      setIsCleaningTestData(false);
     }
   };
 
@@ -1576,10 +1592,10 @@ export default function Projects() {
                 onClick={simulateCleanupTestProjects}
                 disabled={isCleaningTestData}
                 className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2.5 sm:py-4 bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-black rounded-xl sm:rounded-2xl hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-all border border-sky-100 dark:border-sky-500/20 shadow-sm whitespace-nowrap text-[10px] sm:text-xs uppercase tracking-widest"
-                title="Analiza datos de prueba sin eliminarlos"
+                title="Valida datos de prueba y ejecuta limpieza automática"
               >
                 <Info size={14} className="sm:w-5 sm:h-5" />
-                <span className="sm:text-sm">Simular Limpieza</span>
+                <span className="sm:text-sm">Validar + Limpiar</span>
               </button>
 
               <button

@@ -5072,7 +5072,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           `,
           [
             String(req.body.signedFileName),
-            'pdf',
+            'PDF',
             String(req.body.fileSize || ''),
             String(req.body.signedFileUrl),
             'Legal',

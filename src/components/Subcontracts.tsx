@@ -36,6 +36,20 @@ import { createSubcontract, deleteSubcontract, listSubcontracts, updateSubcontra
 import { createTransaction, listTransactions } from '../lib/financialsApi';
 
 export default function Subcontracts() {
+  const toLocalISODate = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const parseLocalISODate = (value: string) => {
+    if (!value) return null;
+    const [y, m, d] = value.split('-').map(Number);
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d);
+  };
+
   const [subcontracts, setSubcontracts] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [budgetItems, setBudgetItems] = useState<any[]>([]);
@@ -49,6 +63,7 @@ export default function Subcontracts() {
   const [selectedSubDetails, setSelectedSubDetails] = useState<any>(null);
   const [subTransactions, setSubTransactions] = useState<any[]>([]);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentDate, setPaymentDate] = useState<string>(toLocalISODate(new Date()));
   const [subToDelete, setSubToDelete] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
@@ -261,6 +276,7 @@ export default function Subcontracts() {
     if (!newSub.projectId) errors.projectId = 'El proyecto es obligatorio';
     if (!newSub.contractor) errors.contractor = 'El contratista es obligatorio';
     if (!newSub.service) errors.service = 'El servicio es obligatorio';
+    if (!newSub.startDate) errors.startDate = 'La fecha de inicio de adquisición es obligatoria';
     if (!newSub.total || Number(newSub.total) <= 0) errors.total = 'El monto total debe ser mayor a cero';
     if (Number(newSub.paid) < 0) errors.paid = 'El monto pagado no puede ser negativo';
     if (Number(newSub.paid) > Number(newSub.total)) errors.paid = 'El monto pagado no puede exceder el total del contrato';
@@ -366,6 +382,10 @@ export default function Subcontracts() {
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSubForPayment || paymentAmount <= 0) return;
+    if (!paymentDate) {
+      toast.error('Selecciona una fecha de pago');
+      return;
+    }
 
     if (selectedSubForPayment.paid + paymentAmount > selectedSubForPayment.total) {
       toast.error('El monto total pagado no puede exceder el total del contrato');
@@ -381,7 +401,7 @@ export default function Subcontracts() {
         type: 'Expense',
         category: 'Subcontratos',
         amount: paymentAmount,
-        date: new Date().toISOString().split('T')[0],
+        date: paymentDate,
         description: `Pago parcial - ${selectedSubForPayment.service} (${selectedSubForPayment.contractor})`,
       });
 
@@ -393,6 +413,7 @@ export default function Subcontracts() {
       setIsPaymentModalOpen(false);
       setSelectedSubForPayment(null);
       setPaymentAmount(0);
+      setPaymentDate(toLocalISODate(new Date()));
       toast.success('Pago registrado correctamente');
     } catch (error) {
       handleApiError(error, OperationType.UPDATE, `subcontracts/${selectedSubForPayment.id}`);
@@ -567,6 +588,8 @@ export default function Subcontracts() {
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedSubForPayment(sub);
+                          setPaymentDate(toLocalISODate(new Date()));
+                          setPaymentAmount(0);
                           setIsPaymentModalOpen(true);
                         }}
                         className="flex-1 py-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-micro font-bold rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-all border border-emerald-100 dark:border-emerald-500/20"
@@ -679,6 +702,8 @@ export default function Subcontracts() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSelectedSubForPayment(sub);
+                                  setPaymentDate(toLocalISODate(new Date()));
+                                  setPaymentAmount(0);
                                   setIsPaymentModalOpen(true);
                                 }}
                                 className="p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 rounded-lg transition-all"
@@ -812,7 +837,11 @@ export default function Subcontracts() {
           <div className="flex flex-col sm:flex-row gap-4">
             <button 
               type="button"
-              onClick={() => setIsPaymentModalOpen(false)}
+              onClick={() => {
+                setIsPaymentModalOpen(false);
+                setPaymentDate(toLocalISODate(new Date()));
+                setPaymentAmount(0);
+              }}
               className="flex-1 py-4 px-6 bg-white text-slate-600 font-bold rounded-xl border border-slate-200 hover:bg-slate-50 transition-all order-2 sm:order-1"
             >
               Cancelar
@@ -828,6 +857,16 @@ export default function Subcontracts() {
         }
       >
         <form id="payment-form" onSubmit={handleRecordPayment} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">Fecha de Pago</label>
+            <DatePicker
+              selected={parseLocalISODate(paymentDate)}
+              onChange={(date) => setPaymentDate(date ? toLocalISODate(date) : '')}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholderText="Seleccionar fecha de pago"
+              dateFormat="dd/MM/yyyy"
+            />
+          </div>
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">Monto del Pago (GTQ)</label>
             <input 
@@ -898,6 +937,11 @@ export default function Subcontracts() {
                         toast.error('Por favor complete los campos obligatorios');
                         return;
                       }
+                    }
+                    if (currentStep === 1 && Number(newSub.total) <= 0) {
+                      validateField('total', newSub.total);
+                      toast.error('El monto total debe ser mayor a cero');
+                      return;
                     }
                     setCurrentStep(prev => prev + 1);
                   }}
@@ -1053,16 +1097,30 @@ export default function Subcontracts() {
                 <FormSection title="Fechas de Ejecución" icon={Calendar} description="Plazos estimados del servicio">
                   <div className="space-y-2 group">
                     <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1 group-focus-within:text-primary transition-colors">
-                      Fecha Inicio
+                      Fecha Inicio de Adquisición
                     </label>
                     <div className="relative">
                       <DatePicker
-                        selected={newSub.startDate ? new Date(newSub.startDate) : null}
-                        onChange={(date) => setNewSub({...newSub, startDate: date?.toISOString().split('T')[0] || ''})}
+                        selected={parseLocalISODate(newSub.startDate)}
+                        onChange={(date) => {
+                          const val = date ? toLocalISODate(date) : '';
+                          setNewSub({ ...newSub, startDate: val });
+                          setValidationErrors((prev) => ({ ...prev, startDate: val ? '' : 'La fecha de inicio de adquisición es obligatoria' }));
+                          if (val && newSub.endDate) {
+                            const start = parseLocalISODate(val);
+                            const end = parseLocalISODate(newSub.endDate);
+                            if (start && end && end < start) {
+                              setValidationErrors((prev) => ({ ...prev, endDate: 'La fecha de fin no puede ser anterior a la fecha de inicio' }));
+                            } else {
+                              setValidationErrors((prev) => ({ ...prev, endDate: '' }));
+                            }
+                          }
+                        }}
                         className="w-full px-5 py-4 bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/5 transition-all font-medium text-slate-900 dark:text-white"
-                        placeholderText="Seleccionar fecha"
+                        placeholderText="Seleccionar fecha de inicio"
                         dateFormat="dd/MM/yyyy"
                       />
+                      {validationErrors.startDate && <p className="text-[10px] text-rose-500 font-black mt-1.5 ml-1 uppercase tracking-wider">{validationErrors.startDate}</p>}
                     </div>
                   </div>
                   <div className="space-y-2 group">
@@ -1071,13 +1129,13 @@ export default function Subcontracts() {
                     </label>
                     <div className="relative">
                       <DatePicker
-                        selected={newSub.endDate ? new Date(newSub.endDate) : null}
+                        selected={parseLocalISODate(newSub.endDate)}
                         onChange={(date) => {
-                          const val = date?.toISOString().split('T')[0] || '';
+                          const val = date ? toLocalISODate(date) : '';
                           setNewSub({...newSub, endDate: val});
                           if (newSub.startDate && date) {
-                            const start = new Date(newSub.startDate);
-                            if (date < start) {
+                            const start = parseLocalISODate(newSub.startDate);
+                            if (start && date < start) {
                               setValidationErrors(prev => ({ ...prev, endDate: 'La fecha de fin no puede ser anterior a la fecha de inicio' }));
                             } else {
                               setValidationErrors(prev => ({ ...prev, endDate: '' }));
