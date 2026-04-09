@@ -50,10 +50,30 @@ const enforceCanonicalOrigin = () => {
 const installChunkLoadRecovery = () => {
   if (typeof window === 'undefined') return;
 
-  const reloadOnce = () => {
+  const clearRuntimeCaches = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.allSettled(registrations.map((registration) => registration.unregister()));
+      }
+
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.allSettled(cacheNames.map((name) => caches.delete(name)));
+      }
+    } catch {
+      // Ignore cleanup failures and still attempt reload.
+    }
+  };
+
+  const reloadOnce = async () => {
     if (sessionStorage.getItem(CHUNK_RECOVERY_FLAG) === '1') return;
     sessionStorage.setItem(CHUNK_RECOVERY_FLAG, '1');
-    window.location.reload();
+    await clearRuntimeCaches();
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('__chunk_recover', Date.now().toString());
+    window.location.replace(url.toString());
   };
 
   const isChunkLoadFailure = (value: unknown) => {
@@ -69,13 +89,13 @@ const installChunkLoadRecovery = () => {
   // Vite dispatches this when preload of a chunk fails after a new deploy.
   window.addEventListener('vite:preloadError', (event: Event) => {
     event.preventDefault();
-    reloadOnce();
+    void reloadOnce();
   });
 
   window.addEventListener('error', (event) => {
     const maybeMessage = event?.message || (event as ErrorEvent)?.error?.message;
     if (isChunkLoadFailure(maybeMessage)) {
-      reloadOnce();
+      void reloadOnce();
     }
   });
 
@@ -83,7 +103,7 @@ const installChunkLoadRecovery = () => {
     const reason = (event as PromiseRejectionEvent).reason;
     const maybeMessage = (reason && (reason.message || reason.toString?.())) || reason;
     if (isChunkLoadFailure(maybeMessage)) {
-      reloadOnce();
+      void reloadOnce();
     }
   });
 
