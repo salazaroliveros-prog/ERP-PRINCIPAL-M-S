@@ -109,6 +109,28 @@ export default function Quotes() {
   }, [loadQuotes, loadReferenceData]);
 
   useEffect(() => {
+    const handleQuickActionTrigger = (event: Event) => {
+      const customEvent = event as CustomEvent<{ action?: string }>;
+      if (customEvent.detail?.action !== 'new-quote') return;
+
+      setEditingQuoteId(null);
+      setNewQuote({
+        clientId: '',
+        projectId: '',
+        date: new Date(),
+        notes: '',
+        items: [{ description: '', quantity: 1, unitPrice: 0 }],
+        status: 'Pending'
+      });
+      setCurrentStep(0);
+      setIsModalOpen(true);
+    };
+
+    window.addEventListener('QUICK_ACTION_TRIGGER', handleQuickActionTrigger as EventListener);
+    return () => window.removeEventListener('QUICK_ACTION_TRIGGER', handleQuickActionTrigger as EventListener);
+  }, []);
+
+  useEffect(() => {
     if (newQuote.projectId) {
       listProjectBudgetItemsDetailed(newQuote.projectId)
         .then((items) => setProjectBudgetItems(items as any[]))

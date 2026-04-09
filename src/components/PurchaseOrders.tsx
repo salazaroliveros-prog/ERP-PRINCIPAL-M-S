@@ -96,6 +96,22 @@ export default function PurchaseOrders() {
   }, [loadPurchaseOrders, loadReferenceData]);
 
   useEffect(() => {
+    const handleQuickActionTrigger = (event: Event) => {
+      const customEvent = event as CustomEvent<{ action?: string }>;
+      if (customEvent.detail?.action !== 'new-purchase-order') return;
+
+      setPoToEdit(null);
+      setIsEditMode(false);
+      setNewPO({ projectId: '', budgetItemId: '', materialId: '', quantity: 0, supplier: '', supplierId: '', notes: '' });
+      setCurrentStep(0);
+      setIsModalOpen(true);
+    };
+
+    window.addEventListener('QUICK_ACTION_TRIGGER', handleQuickActionTrigger as EventListener);
+    return () => window.removeEventListener('QUICK_ACTION_TRIGGER', handleQuickActionTrigger as EventListener);
+  }, []);
+
+  useEffect(() => {
     if (newPO.projectId) {
       listProjectBudgetItemsDetailed(newPO.projectId)
         .then((items) => setBudgetItems(items as any[]))

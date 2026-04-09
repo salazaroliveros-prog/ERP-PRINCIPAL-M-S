@@ -208,6 +208,32 @@ export default function Financials() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleQuickActionTrigger = (event: Event) => {
+      const customEvent = event as CustomEvent<{ action?: string }>;
+      const action = customEvent.detail?.action;
+      if (action !== 'new-income' && action !== 'new-expense') return;
+
+      const type = action === 'new-income' ? 'Income' : 'Expense';
+      const category = type === 'Income' ? INCOME_CATEGORIES[0] : ALL_EXPENSE_CATEGORIES[0];
+
+      setNewTransaction({
+        projectId: '',
+        budgetItemId: '',
+        amount: '',
+        type,
+        category,
+        description: '',
+        date: new Date().toISOString().split('T')[0]
+      });
+      setCurrentStep(0);
+      setIsModalOpen(true);
+    };
+
+    window.addEventListener('QUICK_ACTION_TRIGGER', handleQuickActionTrigger as EventListener);
+    return () => window.removeEventListener('QUICK_ACTION_TRIGGER', handleQuickActionTrigger as EventListener);
+  }, []);
+
   const loadMoreTransactions = async () => {
     if (isLoadingMore || !hasMore) return;
     setIsLoadingMore(true);

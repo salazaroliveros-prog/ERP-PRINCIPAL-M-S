@@ -54,6 +54,9 @@ const Workflows = lazy(() => import('./components/Workflows'));
 const AuditLogs = lazy(() => import('./components/AuditLogs'));
 const RiskManagement = lazy(() => import('./components/RiskManagement'));
 const AIChat = lazy(() => import('./components/AIChat'));
+const QuickActionsLauncher = lazy(() =>
+  import('./components/QuickActionsLauncher').then((module) => ({ default: module.QuickActionsLauncher }))
+);
 const HRContractSignPage = lazy(() => import('./components/HRContractSignPage'));
 const NotificationManager = lazy(() =>
   import('./components/NotificationManager').then((module) => ({ default: module.NotificationManager }))
@@ -447,6 +450,9 @@ function AppContent({
           </Suspense>
           <Suspense fallback={null}>
             <AIChat />
+          </Suspense>
+          <Suspense fallback={null}>
+            <QuickActionsLauncher />
           </Suspense>
           {enhancementsReady && (
             <Suspense fallback={null}>

@@ -83,6 +83,30 @@ export default function Suppliers() {
   }, [loadSuppliers]);
 
   useEffect(() => {
+    const handleQuickActionTrigger = (event: Event) => {
+      const customEvent = event as CustomEvent<{ action?: string }>;
+      if (customEvent.detail?.action !== 'new-supplier') return;
+
+      setIsEditMode(false);
+      setEditingSupplierId(null);
+      setNewSupplier({
+        name: '',
+        category: 'Materiales',
+        contact: '',
+        email: '',
+        phone: '',
+        rating: 5.0,
+        status: 'Verified',
+        balance: 0
+      });
+      setIsModalOpen(true);
+    };
+
+    window.addEventListener('QUICK_ACTION_TRIGGER', handleQuickActionTrigger as EventListener);
+    return () => window.removeEventListener('QUICK_ACTION_TRIGGER', handleQuickActionTrigger as EventListener);
+  }, []);
+
+  useEffect(() => {
     if (!quickSupplierId && suppliers.length > 0) {
       setQuickSupplierId(suppliers[0].id);
     }

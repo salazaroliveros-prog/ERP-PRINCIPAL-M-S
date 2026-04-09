@@ -441,6 +441,37 @@ export default function Projects() {
     loadClientsFromApi();
   }, [loadProjectsFromApi, loadClientsFromApi]);
 
+  useEffect(() => {
+    const handleQuickActionTrigger = (event: Event) => {
+      const customEvent = event as CustomEvent<{ action?: string }>;
+      if (customEvent.detail?.action !== 'new-project') return;
+
+      setEditingProject(null);
+      setNewProject({
+        name: '',
+        location: '',
+        projectManager: '',
+        status: 'Planning',
+        budget: '',
+        spent: '0',
+        physicalProgress: '0',
+        area: '',
+        startDate: '',
+        endDate: '',
+        clientUid: '',
+        typology: 'RESIDENCIAL',
+        latitude: '',
+        longitude: ''
+      });
+      setValidationErrors({});
+      setCurrentStep(0);
+      setIsModalOpen(true);
+    };
+
+    window.addEventListener('QUICK_ACTION_TRIGGER', handleQuickActionTrigger as EventListener);
+    return () => window.removeEventListener('QUICK_ACTION_TRIGGER', handleQuickActionTrigger as EventListener);
+  }, []);
+
   const handleAISuggestions = async () => {
     if (!newProject.name) {
       toast.error('Por favor ingrese un nombre de proyecto antes de sugerir');

@@ -306,6 +306,17 @@ export default function Clients() {
     setIsModalOpen(true);
   };
 
+  useEffect(() => {
+    const handleQuickActionTrigger = (event: Event) => {
+      const customEvent = event as CustomEvent<{ action?: string }>;
+      if (customEvent.detail?.action !== 'new-client') return;
+      handleOpenModal();
+    };
+
+    window.addEventListener('QUICK_ACTION_TRIGGER', handleQuickActionTrigger as EventListener);
+    return () => window.removeEventListener('QUICK_ACTION_TRIGGER', handleQuickActionTrigger as EventListener);
+  }, []);
+
   const handleSubmitClient = async (e: React.FormEvent) => {
     e.preventDefault();
     
