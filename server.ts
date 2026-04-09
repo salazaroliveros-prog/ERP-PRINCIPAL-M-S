@@ -8,6 +8,7 @@ import { Pool } from "pg";
 import multer from "multer";
 import fs from "fs/promises";
 import { randomUUID } from "crypto";
+import { GoogleGenAI } from "@google/genai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1404,6 +1405,60 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       return res.json({ status: "ok", db: "connected" });
     } catch (error) {
       return res.status(500).json({ status: "error", db: "unavailable" });
+    }
+  });
+
+  app.get('/api/ai/health', async (req, res) => {
+    const runTest = ['1', 'true', 'yes'].includes(String(req.query.runTest || '').trim().toLowerCase());
+    const geminiApiKey = String(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+    const keySource = process.env.GEMINI_API_KEY
+      ? 'GEMINI_API_KEY'
+      : (process.env.VITE_GEMINI_API_KEY ? 'VITE_GEMINI_API_KEY' : null);
+
+    if (!geminiApiKey) {
+      return res.status(503).json({
+        status: 'error',
+        ai: 'gemini',
+        configured: false,
+        message: 'Gemini API key no configurada. Define GEMINI_API_KEY en el entorno del servidor.',
+      });
+    }
+
+    if (!runTest) {
+      return res.json({
+        status: 'ok',
+        ai: 'gemini',
+        configured: true,
+        keySource,
+        runTest: false,
+      });
+    }
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+      const result = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: 'Responde solo con la palabra OK',
+      });
+
+      return res.json({
+        status: 'ok',
+        ai: 'gemini',
+        configured: true,
+        keySource,
+        runTest: true,
+        model: 'gemini-3-flash-preview',
+        responsePreview: String(result.text || '').slice(0, 120),
+      });
+    } catch (error: any) {
+      return res.status(502).json({
+        status: 'error',
+        ai: 'gemini',
+        configured: true,
+        keySource,
+        runTest: true,
+        message: error?.message || 'No se pudo validar Gemini',
+      });
     }
   });
 
