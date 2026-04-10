@@ -152,6 +152,8 @@ function getDateKey(date: Date) {
 }
 
 export default function Financials() {
+  const projectCardEffectClass = 'rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-primary/30 transition-all duration-500';
+
   const PAGE_SIZE = 50;
   const getDefaultTransactionForm = () => ({
     projectId: '',
@@ -1144,80 +1146,84 @@ export default function Financials() {
       </AnimatePresence>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6 mb-8">
-        <div className="bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
+        <div className={cn("bg-white dark:bg-slate-900 glass-card p-6 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left min-h-[168px] hover:border-emerald-300 dark:hover:border-emerald-500/40", projectCardEffectClass)}>
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 hidden sm:block">
             <TrendingUp size={64} className="text-emerald-600" />
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-3 mb-4">
-            <div className="p-2 bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 rounded-lg">
+          <div className="flex flex-col sm:flex-row items-center gap-3 mb-4 w-full">
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 rounded-lg group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg group-hover:shadow-emerald-500/20 transition-all duration-200 sm:duration-300">
               <TrendingUp size={20} />
             </div>
-            <p className="text-micro text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Ingresos Totales</p>
+            <p className="text-micro text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider leading-tight break-words">Ingresos Totales</p>
           </div>
-          <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalIncome)}</p>
+          <p className="text-xl sm:text-2xl font-bold text-emerald-600 leading-tight break-words">{formatCurrency(totalIncome)}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
+        <div className={cn("bg-white dark:bg-slate-900 glass-card p-6 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left min-h-[168px] hover:border-rose-300 dark:hover:border-rose-500/40", projectCardEffectClass)}>
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 hidden sm:block">
             <TrendingDown size={64} className="text-rose-600" />
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-3 mb-4">
-            <div className="p-2 bg-rose-100 dark:bg-rose-500/10 text-rose-600 rounded-lg">
+          <div className="flex flex-col sm:flex-row items-center gap-3 mb-4 w-full">
+            <div className="p-2 bg-rose-100 dark:bg-rose-500/10 text-rose-600 rounded-lg group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg group-hover:shadow-rose-500/20 transition-all duration-200 sm:duration-300">
               <TrendingDown size={20} />
             </div>
-            <p className="text-micro text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Gastos Totales</p>
+            <p className="text-micro text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider leading-tight break-words">Gastos Totales</p>
           </div>
-          <p className="text-2xl font-bold text-rose-600">{formatCurrency(totalExpense)}</p>
+          <p className="text-xl sm:text-2xl font-bold text-rose-600 leading-tight break-words">{formatCurrency(totalExpense)}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
+        <div className={cn(
+          "bg-white dark:bg-slate-900 glass-card p-6 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left min-h-[168px]",
+          balance >= 0 ? "hover:border-emerald-300 dark:hover:border-emerald-500/40" : "hover:border-rose-300 dark:hover:border-rose-500/40",
+          projectCardEffectClass
+        )}>
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 hidden sm:block">
             <HandCoins size={64} className={balance >= 0 ? "text-emerald-600" : "text-rose-600"} />
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-3 mb-4">
-            <div className="p-2 bg-blue-100 dark:bg-blue-500/10 text-blue-600 rounded-lg">
+          <div className="flex flex-col sm:flex-row items-center gap-3 mb-4 w-full">
+            <div className="p-2 bg-blue-100 dark:bg-blue-500/10 text-blue-600 rounded-lg group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg group-hover:shadow-blue-500/20 transition-all duration-200 sm:duration-300">
               <HandCoins size={20} />
             </div>
-            <p className="text-micro text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Balance Neto</p>
+            <p className="text-micro text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider leading-tight break-words">Balance Neto</p>
           </div>
           <p className={cn(
-            "text-2xl font-bold",
+            "text-xl sm:text-2xl font-bold leading-tight break-words",
             balance >= 0 ? "text-emerald-600" : "text-rose-600"
           )}>{formatCurrency(balance)}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
+        <div className={cn("bg-white dark:bg-slate-900 glass-card p-6 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left min-h-[168px] hover:border-amber-300 dark:hover:border-amber-500/40", projectCardEffectClass)}>
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 hidden sm:block">
             <Percent size={64} className="text-amber-600" />
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-3 mb-4">
-            <div className="p-2 bg-amber-100 dark:bg-amber-500/10 text-amber-600 rounded-lg">
+          <div className="flex flex-col sm:flex-row items-center gap-3 mb-4 w-full">
+            <div className="p-2 bg-amber-100 dark:bg-amber-500/10 text-amber-600 rounded-lg group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg group-hover:shadow-amber-500/20 transition-all duration-200 sm:duration-300">
               <Percent size={20} />
             </div>
-            <p className="text-micro text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Margen de Ganancia</p>
+            <p className="text-micro text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider leading-tight break-words">Margen de Ganancia</p>
           </div>
-          <div className="flex items-baseline gap-2">
+          <div className="flex flex-wrap items-baseline justify-center sm:justify-start gap-2">
             <p className={cn(
-              "text-2xl font-bold",
+              "text-xl sm:text-2xl font-bold leading-tight",
               profitMargin >= 20 ? "text-emerald-600" : profitMargin >= 10 ? "text-amber-600" : "text-rose-600"
             )}>{profitMargin.toFixed(1)}%</p>
-            <span className="text-micro font-bold text-slate-400 dark:text-slate-500 uppercase">Sobre Ingresos</span>
+            <span className="text-micro font-bold text-slate-400 dark:text-slate-500 uppercase leading-tight">Sobre Ingresos</span>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
+        <div className={cn("bg-white dark:bg-slate-900 glass-card p-6 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left min-h-[168px] hover:border-violet-300 dark:hover:border-violet-500/40", projectCardEffectClass)}>
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 hidden sm:block">
             <Calculator size={64} className="text-violet-600" />
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-3 mb-4">
-            <div className="p-2 bg-violet-100 dark:bg-violet-500/10 text-violet-600 rounded-lg">
+          <div className="flex flex-col sm:flex-row items-center gap-3 mb-4 w-full">
+            <div className="p-2 bg-violet-100 dark:bg-violet-500/10 text-violet-600 rounded-lg group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg group-hover:shadow-violet-500/20 transition-all duration-200 sm:duration-300">
               <Calculator size={20} />
             </div>
-            <p className="text-micro text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Rubro Gastos Administrativos</p>
+            <p className="text-micro text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider leading-tight break-words">Rubro Gastos Administrativos</p>
           </div>
-          <p className="text-2xl font-bold text-violet-600">{formatCurrency(administrativeExpenseTotalGlobal)}</p>
+          <p className="text-xl sm:text-2xl font-bold text-violet-600 leading-tight break-words">{formatCurrency(administrativeExpenseTotalGlobal)}</p>
           <p className={cn(
-            "mt-2 text-micro font-black uppercase tracking-wider",
+            "mt-2 text-micro font-black uppercase tracking-wider leading-tight break-words",
             adminExpenseVsProfit <= 40 ? "text-emerald-600" : adminExpenseVsProfit <= 70 ? "text-amber-600" : "text-rose-600"
           )}>
             {activeProjectsProfit > 0

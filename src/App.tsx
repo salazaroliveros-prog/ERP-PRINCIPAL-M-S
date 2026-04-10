@@ -93,23 +93,76 @@ const Login = () => {
   const { isDarkMode } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
 
+  const allowLocalFallback = import.meta.env.DEV && (typeof window !== 'undefined') && (
+    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  );
+
+  const signInLocally = () => {
+    auth.setCurrentUser({
+      uid: typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}`,
+      email: 'local.dev@wmms.local',
+      displayName: 'Usuario Local',
+      photoURL: null,
+      emailVerified: true,
+      isAnonymous: false,
+      tenantId: null,
+      providerData: [
+        {
+          providerId: 'local-dev',
+          displayName: 'Usuario Local',
+          email: 'local.dev@wmms.local',
+          photoURL: null,
+        },
+      ],
+    });
+  };
+
   const handleLogin = async () => {
     if (isLoading) return;
     setIsLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      await Promise.race([
+        signInWithPopup(auth, provider),
+        new Promise((_, reject) => {
+          globalThis.setTimeout(() => {
+            reject(
+              Object.assign(new Error('Tiempo de espera agotado al abrir Google Sign-In'), {
+                code: 'auth/popup-timeout',
+              })
+            );
+          }, 15000);
+        }),
+      ]);
     } catch (error: any) {
       if (error.code === 'auth/google-client-id-missing') {
         toast.error('Configura Google Sign-In', {
           description: 'Falta VITE_GOOGLE_CLIENT_ID en Vercel para abrir el selector de cuentas de Google.'
         });
+        if (allowLocalFallback) {
+          toast.info('Accediendo en modo local (desarrollo)');
+          signInLocally();
+        }
       } else if (error.code === 'auth/cancelled-popup-request') {
-        // Silent fail for cancelled popup
+        toast.error('No se pudo abrir Google Sign-In', {
+          description: 'Revisa que el navegador permita popups para este sitio e intenta nuevamente.'
+        });
+        if (allowLocalFallback) {
+          toast.info('Accediendo en modo local (desarrollo)');
+          signInLocally();
+        }
       } else if (error.code === 'auth/popup-closed-by-user') {
         toast.error('Inicio de sesión cancelado', {
           description: 'Cerraste la ventana de Google antes de completar el proceso.'
         });
+      } else if (error.code === 'auth/popup-timeout') {
+        toast.error('Google tardó demasiado en responder', {
+          description: 'Intenta otra vez. Si persiste, habilita popups y cookies de terceros para este sitio.'
+        });
+        if (allowLocalFallback) {
+          toast.info('Accediendo en modo local (desarrollo)');
+          signInLocally();
+        }
       } else {
         toast.error('Error de inicio de sesión', {
           description: error.message || 'Ocurrió un error inesperado.'
@@ -125,6 +178,8 @@ const Login = () => {
       "min-h-screen flex items-center justify-center p-4 transition-colors duration-300",
       isDarkMode ? "bg-slate-950" : "bg-slate-50"
     )}>
+      <Toaster position="top-right" richColors closeButton />
+
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

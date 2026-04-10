@@ -38,6 +38,15 @@ import {
 } from '../lib/documentsApi';
 
 export default function Documents() {
+  const projectCardEffectClass = 'rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-primary/30 transition-all duration-500';
+  const getFolderHoverClass = (folderColor: string) => {
+    if (folderColor.includes('blue')) return 'hover:border-blue-300 dark:hover:border-blue-500/40';
+    if (folderColor.includes('emerald')) return 'hover:border-emerald-300 dark:hover:border-emerald-500/40';
+    if (folderColor.includes('rose')) return 'hover:border-rose-300 dark:hover:border-rose-500/40';
+    if (folderColor.includes('purple')) return 'hover:border-purple-300 dark:hover:border-purple-500/40';
+    return 'hover:border-slate-300 dark:hover:border-slate-600';
+  };
+
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -545,11 +554,13 @@ export default function Documents() {
             transition={{ delay: i * 0.1 }}
             onClick={() => setSelectedFolder(folder.name)}
             className={cn(
-              "p-6 bg-white dark:bg-slate-900 glass-card rounded-2xl border transition-all cursor-pointer group",
-              selectedFolder === folder.name ? "border-primary ring-2 ring-primary/10 shadow-lg" : "border-slate-100 dark:border-slate-800 shadow-sm hover:border-primary"
+              "p-6 bg-white dark:bg-slate-900 glass-card cursor-pointer group",
+              projectCardEffectClass,
+              getFolderHoverClass(folder.color),
+              selectedFolder === folder.name ? "border-primary ring-2 ring-primary/10 shadow-lg" : ""
             )}
           >
-            <div className={cn("p-3 rounded-xl bg-slate-50 dark:bg-slate-800 mb-4 inline-block transition-colors group-hover:bg-primary group-hover:text-white", folder.color)}>
+            <div className={cn("p-3 rounded-xl bg-slate-50 dark:bg-slate-800 mb-4 inline-block transition-all duration-200 sm:duration-300 group-hover:bg-primary group-hover:text-white group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg group-hover:shadow-primary/20", folder.color)}>
               <folder.icon size={24} />
             </div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">{folder.name}</h3>
@@ -701,9 +712,9 @@ export default function Documents() {
         {/* Sidebar Widgets */}
         <div className="space-y-6">
           {/* Storage Usage */}
-          <div className="bg-white dark:bg-slate-900 glass-card rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
+          <div className={cn("bg-white dark:bg-slate-900 glass-card p-6 group", projectCardEffectClass)}>
             <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-              <Activity size={16} className="text-primary" />
+              <Activity size={16} className="text-primary transition-transform duration-200 sm:duration-300 group-hover:scale-110" />
               Almacenamiento
             </h3>
             <div className="space-y-6">
@@ -746,9 +757,9 @@ export default function Documents() {
               resetForm();
               setIsModalOpen(true);
             }}
-            className="bg-slate-900 glass-card rounded-2xl p-8 text-white border-2 border-dashed border-white/10 flex flex-col items-center justify-center text-center group cursor-pointer hover:border-primary transition-all"
+            className="bg-slate-900 glass-card rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] p-8 text-white border-2 border-dashed border-white/10 flex flex-col items-center justify-center text-center group cursor-pointer hover:border-primary hover:shadow-lg transition-all duration-500"
           >
-            <div className="p-4 bg-white/5 rounded-2xl mb-4 group-hover:bg-primary/20 transition-colors">
+            <div className="p-4 bg-white/5 rounded-2xl mb-4 group-hover:bg-primary/20 group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg group-hover:shadow-primary/20 transition-all duration-200 sm:duration-300">
               <Upload size={32} className="text-primary" />
             </div>
             <h3 className="text-sm font-black uppercase tracking-widest mb-2">Subida Rápida</h3>

@@ -60,6 +60,8 @@ L.Icon.Default.mergeOptions({
 });
 
 export default function Clients() {
+  const projectCardEffectClass = 'rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-primary/30 transition-all duration-500';
+
   const [clients, setClients] = useState<any[]>(cachedClients);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -495,10 +497,13 @@ export default function Clients() {
                     setIsDetailOpen(true);
                   }}
                   className={cn(
-                    "bg-white dark:bg-slate-900 glass-card p-4 sm:p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border transition-all group cursor-pointer relative overflow-hidden",
+                    "bg-white dark:bg-slate-900 glass-card p-4 sm:p-6 group cursor-pointer relative overflow-hidden",
+                    projectCardEffectClass,
                     selectedClient?.id === client.id && isDetailOpen 
                       ? "border-primary ring-2 ring-primary/10 shadow-md" 
-                      : "border-slate-100 dark:border-slate-800 hover:shadow-lg"
+                      : client.status === 'Active'
+                        ? "hover:border-emerald-300 dark:hover:border-emerald-500/40"
+                        : "hover:border-primary/40 dark:hover:border-primary/50"
                   )}
                 >
                   <div className="absolute top-0 right-0 p-3 sm:p-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
@@ -507,7 +512,7 @@ export default function Clients() {
 
                   <div className="flex items-start justify-between mb-4 sm:mb-6">
                     <div className="flex items-center gap-3 sm:gap-4">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-base sm:text-lg group-hover:bg-primary group-hover:text-white transition-colors">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-base sm:text-lg group-hover:bg-primary group-hover:text-white group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg group-hover:shadow-primary/20 transition-all duration-200 sm:duration-300">
                         {client.name.charAt(0)}
                       </div>
                       <div>

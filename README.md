@@ -13,6 +13,7 @@ Backend en PostgreSQL (Express + SQL migrations).
 1. Instala dependencias: npm install
 2. Crea un archivo .env.local (opcional) con:
    - VITE_GEMINI_API_KEY=tu_clave_gemini
+   - VITE_GOOGLE_CLIENT_ID=tu_client_id_oauth_web_google
 3. Ejecuta en desarrollo: npm run dev
 
 ## Despliegue del frontend en GitHub Pages
@@ -26,6 +27,7 @@ Pasos:
 3. En Settings > Secrets and variables > Actions, agrega:
    - VITE_GEMINI_API_KEY (opcional, para funciones IA del frontend)
    - VITE_API_BASE_URL (URL publica del backend, ejemplo: https://api.tudominio.com)
+   - VITE_GOOGLE_CLIENT_ID (obligatorio si deseas login real con Google en el frontend)
 4. Haz push a main y espera el workflow de Pages.
 
 ## Backend PostgreSQL (fase 1)
@@ -110,6 +112,7 @@ GitHub Actions (Settings > Secrets and variables > Actions):
 
 - `VITE_API_BASE_URL=https://erp-principal-m-s.vercel.app`
 - `VITE_GEMINI_API_KEY=...` (opcional)
+- `VITE_GOOGLE_CLIENT_ID=...` (obligatorio para login Google en frontend)
 
 Vercel (Project Settings > Environment Variables):
 

@@ -39,6 +39,8 @@ import { createSupplierPayment, listSuppliers, updateSupplier } from '../lib/sup
 import { createTransaction } from '../lib/financialsApi';
 
 export default function PurchaseOrders() {
+  const projectCardEffectClass = 'rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-primary/30 transition-all duration-500';
+
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
@@ -515,8 +517,8 @@ export default function PurchaseOrders() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white glass-card p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-          <div className="p-3 bg-primary-light text-primary rounded-xl">
+        <div className={cn("bg-white glass-card p-6 flex items-center gap-4 group hover:border-primary/40", projectCardEffectClass)}>
+          <div className="p-3 bg-primary-light text-primary rounded-xl group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg group-hover:shadow-primary/20 transition-all duration-200 sm:duration-300">
             <Clock size={24} />
           </div>
           <div>
@@ -524,8 +526,8 @@ export default function PurchaseOrders() {
             <p className="text-2xl font-bold text-slate-900">{purchaseOrders.filter(po => po.status === 'Pending').length}</p>
           </div>
         </div>
-        <div className="bg-white glass-card p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-          <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
+        <div className={cn("bg-white glass-card p-6 flex items-center gap-4 group hover:border-emerald-300", projectCardEffectClass)}>
+          <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg group-hover:shadow-emerald-500/20 transition-all duration-200 sm:duration-300">
             <CheckCircle2 size={24} />
           </div>
           <div>
@@ -533,8 +535,8 @@ export default function PurchaseOrders() {
             <p className="text-2xl font-bold text-slate-900">{purchaseOrders.filter(po => po.status === 'Completed' || po.status === 'Paid').length}</p>
           </div>
         </div>
-        <div className="bg-white glass-card p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-          <div className="p-3 bg-blue-100 text-blue-600 rounded-xl">
+        <div className={cn("bg-white glass-card p-6 flex items-center gap-4 group hover:border-blue-300", projectCardEffectClass)}>
+          <div className="p-3 bg-blue-100 text-blue-600 rounded-xl group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg group-hover:shadow-blue-500/20 transition-all duration-200 sm:duration-300">
             <ShoppingBag size={24} />
           </div>
           <div>
@@ -565,8 +567,13 @@ export default function PurchaseOrders() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-              "bg-white dark:bg-slate-900 glass-card rounded-2xl shadow-sm border overflow-hidden transition-all",
-              po.status === 'Pending' ? "border-primary-light dark:border-primary/30 ring-1 ring-primary-light dark:ring-primary/20 shadow-primary-shadow/10" : "border-slate-100 dark:border-slate-800"
+              "bg-white dark:bg-slate-900 glass-card overflow-hidden group",
+              projectCardEffectClass,
+              po.status === 'Pending'
+                ? "border-primary-light dark:border-primary/30 ring-1 ring-primary-light dark:ring-primary/20 shadow-primary-shadow/10 hover:border-primary/50"
+                : po.status === 'Completed' || po.status === 'Paid'
+                  ? "hover:border-emerald-300 dark:hover:border-emerald-500/40"
+                  : "hover:border-rose-300 dark:hover:border-rose-500/40"
             )}
           >
             <div className={cn(
@@ -575,7 +582,7 @@ export default function PurchaseOrders() {
             )}>
               <div className="flex items-center gap-4">
                 <div className={cn(
-                  "p-3 rounded-xl",
+                  "p-3 rounded-xl group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg transition-all duration-200 sm:duration-300",
                   po.status === 'Pending' ? "bg-primary-light dark:bg-primary/20 text-primary" :
                   po.status === 'Completed' || po.status === 'Paid' ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600" :
                   "bg-rose-50 dark:bg-rose-500/10 text-rose-600"

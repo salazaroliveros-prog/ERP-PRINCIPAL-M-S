@@ -30,6 +30,15 @@ import { createSupplier, createSupplierPayment, deleteSupplier, deleteSupplierPa
 import { escapeCsvCell, getBrandedCsvPreamble } from '../lib/reportBranding';
 
 export default function Suppliers() {
+  const projectCardEffectClass = 'rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-primary/30 transition-all duration-500';
+  const getStatHoverClass = (color: string) => {
+    if (color.includes('blue')) return 'hover:border-blue-300 dark:hover:border-blue-500/40';
+    if (color.includes('rose')) return 'hover:border-rose-300 dark:hover:border-rose-500/40';
+    if (color.includes('emerald')) return 'hover:border-emerald-300 dark:hover:border-emerald-500/40';
+    if (color.includes('amber')) return 'hover:border-amber-300 dark:hover:border-amber-500/40';
+    return 'hover:border-primary/40 dark:hover:border-primary/50';
+  };
+
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -694,10 +703,10 @@ export default function Suppliers() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
-            className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm"
+            className={cn("p-6 bg-white dark:bg-slate-900 group", projectCardEffectClass, getStatHoverClass(stat.color))}
           >
             <div className="flex items-center justify-between mb-4">
-              <div className={cn("p-3 rounded-xl text-white shadow-lg", stat.color)}>
+              <div className={cn("p-3 rounded-xl text-white shadow-lg group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg transition-all duration-200 sm:duration-300", stat.color)}>
                 <stat.icon size={20} />
               </div>
               <TrendingUp size={16} className="text-emerald-500" />
