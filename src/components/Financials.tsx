@@ -36,6 +36,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { 
   AreaChart, 
   Area, 
+  LineChart,
+  Line,
+  ComposedChart,
   XAxis, 
   YAxis, 
   CartesianGrid, 
@@ -66,6 +69,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Calculator, FileBarChart, Info, DollarSign, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getBrandedCsvPreamble, escapeCsvCell } from '../lib/reportBranding';
+import { useTheme } from '../contexts/ThemeContext';
 
 const EXPENSE_CATEGORIES = [
   'Materiales',
@@ -147,11 +151,56 @@ const ADAPTIVE_CHIP_CLASS = 'inline-flex items-center w-fit max-w-full whitespac
 
 const FINANCE_ALERT_STORAGE_PREFIX = 'finance_traffic_light';
 
+const FINANCIAL_THEME_VISUALS: Record<string, {
+  trendType: 'area' | 'line' | 'bar' | 'composed';
+  expenseType: 'donut' | 'pie' | 'bar';
+  incomeColor: string;
+  expenseColor: string;
+  balanceColor: string;
+}> = {
+  sunset: {
+    trendType: 'area',
+    expenseType: 'donut',
+    incomeColor: '#ea580c',
+    expenseColor: '#dc2626',
+    balanceColor: '#7c3aed',
+  },
+  ocean: {
+    trendType: 'line',
+    expenseType: 'pie',
+    incomeColor: '#0ea5e9',
+    expenseColor: '#ef4444',
+    balanceColor: '#2563eb',
+  },
+  forest: {
+    trendType: 'bar',
+    expenseType: 'bar',
+    incomeColor: '#10b981',
+    expenseColor: '#f97316',
+    balanceColor: '#059669',
+  },
+  aurora: {
+    trendType: 'composed',
+    expenseType: 'donut',
+    incomeColor: '#8b5cf6',
+    expenseColor: '#f43f5e',
+    balanceColor: '#3b82f6',
+  },
+  ember: {
+    trendType: 'bar',
+    expenseType: 'pie',
+    incomeColor: '#f59e0b',
+    expenseColor: '#ef4444',
+    balanceColor: '#f97316',
+  },
+};
+
 function getDateKey(date: Date) {
   return date.toISOString().split('T')[0];
 }
 
 export default function Financials() {
+  const { currentTheme } = useTheme();
   const projectCardEffectClass = 'rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-primary/30 transition-all duration-500';
 
   const PAGE_SIZE = 50;
@@ -874,6 +923,8 @@ export default function Financials() {
     'bg-lime-500',
   ];
 
+  const financialThemeVisual = FINANCIAL_THEME_VISUALS[currentTheme.id] || FINANCIAL_THEME_VISUALS.sunset;
+
   const financialTotals = useMemo(() => {
     let totalIncome = 0;
     let totalExpense = 0;
@@ -1407,99 +1458,78 @@ export default function Financials() {
             </div>
             <div className="hidden sm:flex items-center gap-4 text-micro font-bold uppercase tracking-wider">
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: financialThemeVisual.incomeColor }}></div>
                 <span className="text-slate-500 dark:text-slate-400">Ingresos</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-rose-500"></div>
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: financialThemeVisual.expenseColor }}></div>
                 <span className="text-slate-500 dark:text-slate-400">Gastos</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: financialThemeVisual.balanceColor }}></div>
                 <span className="text-slate-500 dark:text-slate-400">Balance Neto</span>
               </div>
             </div>
           </div>
           <div className="h-64 sm:h-80 min-w-0">
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-              <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorIngresos" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3CB44B" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#3CB44B" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorGastos" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#E6194B" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#E6194B" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4363D8" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#4363D8" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
-                <XAxis 
-                  dataKey="date" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#64748b', fontSize: 10 }}
-                  minTickGap={30}
-                  dy={10}
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#64748b', fontSize: 10 }}
-                  tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    borderRadius: '16px', 
-                    border: 'none', 
-                    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
-                    padding: '12px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(8px)'
-                  }}
-                  itemStyle={{ padding: '2px 0' }}
-                  formatter={(value: number, name: string) => [
-                    <span className="font-bold text-slate-900">{formatCurrency(value)}</span>,
-                    <span className="text-slate-500 font-medium">{name}</span>
-                  ]}
-                  labelStyle={{ fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }}
-                  cursor={{ stroke: '#cbd5e1', strokeWidth: 2, strokeDasharray: '5 5' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="ingresos" 
-                  stroke="#3CB44B" 
-                  strokeWidth={2}
-                  fillOpacity={1} 
-                  fill="url(#colorIngresos)" 
-                  name="Ingresos" 
-                  activeDot={{ r: 6, strokeWidth: 0, fill: '#3CB44B' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="gastos" 
-                  stroke="#E6194B" 
-                  strokeWidth={2}
-                  fillOpacity={1} 
-                  fill="url(#colorGastos)" 
-                  name="Gastos" 
-                  activeDot={{ r: 6, strokeWidth: 0, fill: '#E6194B' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="profit" 
-                  stroke="#4363D8" 
-                  strokeWidth={3}
-                  fillOpacity={1} 
-                  fill="url(#colorBalance)" 
-                  name="Balance Neto" 
-                  activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff', fill: '#4363D8' }}
-                />
-              </AreaChart>
+              {financialThemeVisual.trendType === 'line' ? (
+                <LineChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} minTickGap={30} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} />
+                  <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', padding: '12px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)' }} itemStyle={{ padding: '2px 0' }} formatter={(value: number) => [formatCurrency(value), '']} labelStyle={{ fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }} cursor={{ stroke: '#cbd5e1', strokeWidth: 2, strokeDasharray: '5 5' }} />
+                  <Line type="monotone" dataKey="ingresos" stroke={financialThemeVisual.incomeColor} strokeWidth={2.5} dot={false} name="Ingresos" />
+                  <Line type="monotone" dataKey="gastos" stroke={financialThemeVisual.expenseColor} strokeWidth={2.5} dot={false} name="Gastos" />
+                  <Line type="monotone" dataKey="profit" stroke={financialThemeVisual.balanceColor} strokeWidth={3} dot={{ r: 2 }} name="Balance Neto" />
+                </LineChart>
+              ) : financialThemeVisual.trendType === 'bar' ? (
+                <BarChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} minTickGap={30} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} />
+                  <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', padding: '12px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)' }} itemStyle={{ padding: '2px 0' }} formatter={(value: number) => [formatCurrency(value), '']} labelStyle={{ fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }} cursor={{ stroke: '#cbd5e1', strokeWidth: 2, strokeDasharray: '5 5' }} />
+                  <Legend />
+                  <Bar dataKey="ingresos" fill={financialThemeVisual.incomeColor} radius={[4, 4, 0, 0]} name="Ingresos" />
+                  <Bar dataKey="gastos" fill={financialThemeVisual.expenseColor} radius={[4, 4, 0, 0]} name="Gastos" />
+                  <Bar dataKey="profit" fill={financialThemeVisual.balanceColor} radius={[4, 4, 0, 0]} name="Balance Neto" />
+                </BarChart>
+              ) : financialThemeVisual.trendType === 'composed' ? (
+                <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} minTickGap={30} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} />
+                  <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', padding: '12px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)' }} itemStyle={{ padding: '2px 0' }} formatter={(value: number) => [formatCurrency(value), '']} labelStyle={{ fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }} cursor={{ stroke: '#cbd5e1', strokeWidth: 2, strokeDasharray: '5 5' }} />
+                  <Legend />
+                  <Bar dataKey="ingresos" fill={financialThemeVisual.incomeColor} radius={[4, 4, 0, 0]} name="Ingresos" opacity={0.45} />
+                  <Bar dataKey="gastos" fill={financialThemeVisual.expenseColor} radius={[4, 4, 0, 0]} name="Gastos" opacity={0.45} />
+                  <Line type="monotone" dataKey="profit" stroke={financialThemeVisual.balanceColor} strokeWidth={3} name="Balance Neto" dot={{ r: 2 }} />
+                </ComposedChart>
+              ) : (
+                <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorIngresos" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={financialThemeVisual.incomeColor} stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor={financialThemeVisual.incomeColor} stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorGastos" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={financialThemeVisual.expenseColor} stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor={financialThemeVisual.expenseColor} stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={financialThemeVisual.balanceColor} stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor={financialThemeVisual.balanceColor} stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} minTickGap={30} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} />
+                  <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', padding: '12px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)' }} itemStyle={{ padding: '2px 0' }} formatter={(value: number) => [formatCurrency(value), '']} labelStyle={{ fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }} cursor={{ stroke: '#cbd5e1', strokeWidth: 2, strokeDasharray: '5 5' }} />
+                  <Area type="monotone" dataKey="ingresos" stroke={financialThemeVisual.incomeColor} strokeWidth={2} fillOpacity={1} fill="url(#colorIngresos)" name="Ingresos" activeDot={{ r: 6, strokeWidth: 0, fill: financialThemeVisual.incomeColor }} />
+                  <Area type="monotone" dataKey="gastos" stroke={financialThemeVisual.expenseColor} strokeWidth={2} fillOpacity={1} fill="url(#colorGastos)" name="Gastos" activeDot={{ r: 6, strokeWidth: 0, fill: financialThemeVisual.expenseColor }} />
+                  <Area type="monotone" dataKey="profit" stroke={financialThemeVisual.balanceColor} strokeWidth={3} fillOpacity={1} fill="url(#colorBalance)" name="Balance Neto" activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff', fill: financialThemeVisual.balanceColor }} />
+                </AreaChart>
+              )}
             </ResponsiveContainer>
           </div>
         </div>
@@ -1509,31 +1539,45 @@ export default function Financials() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 items-center">
             <div className="h-48 sm:h-64 min-w-0">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-                <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                  <Pie
-                    data={expenseByCategoryData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {expenseByCategoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      borderRadius: '16px', 
-                      border: 'none', 
-                      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                      backdropFilter: 'blur(8px)'
-                    }}
-                    formatter={(value: number) => [formatCurrency(value), "Total"]}
-                  />
-                </PieChart>
+                {financialThemeVisual.expenseType === 'bar' ? (
+                  <BarChart data={expenseByCategoryData} margin={{ top: 8, right: 8, left: 0, bottom: 30 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 9 }} angle={-22} textAnchor="end" height={55} interval={0} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 9 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                    <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)' }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                      {expenseByCategoryData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                ) : (
+                  <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                    <Pie
+                      data={expenseByCategoryData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={financialThemeVisual.expenseType === 'pie' ? 0 : 60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {expenseByCategoryData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ 
+                        borderRadius: '16px', 
+                        border: 'none', 
+                        boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        backdropFilter: 'blur(8px)'
+                      }}
+                      formatter={(value: number) => [formatCurrency(value), "Total"]}
+                    />
+                  </PieChart>
+                )}
               </ResponsiveContainer>
             </div>
             <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
