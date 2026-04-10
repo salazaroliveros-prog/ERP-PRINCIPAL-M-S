@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState, Suspense, lazy } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User, auth } from './lib/authStorageClient';
 import { 
@@ -165,12 +165,22 @@ const Login = () => {
   );
 };
 
-const PageTransition = ({ children }: { children: React.ReactNode }) => {
+const PageTransition = ({
+  children,
+  reduceMotion,
+}: {
+  children: React.ReactNode;
+  reduceMotion: boolean;
+}) => {
   const location = useLocation();
 
   useEffect(() => {
     markNavigationComplete(location.pathname);
   }, [location.pathname]);
+
+  if (reduceMotion) {
+    return <div className="w-full">{children}</div>;
+  }
 
   return (
     <motion.div
@@ -216,6 +226,19 @@ function AppContent({
   const prefetchedRoutesRef = useRef<Set<string>>(new Set());
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { unreadCount } = useNotifications();
+
+  const reduceMotion = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const connection = getBrowserConnection();
+    const effectiveType = connection?.effectiveType || '';
+    const hasSlowConnection = effectiveType === 'slow-2g' || effectiveType === '2g';
+    const saveDataEnabled = connection?.saveData === true;
+    const lowCpu = typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 2;
+
+    return prefersReducedMotion || hasSlowConnection || saveDataEnabled || lowCpu;
+  }, []);
 
   const canPrefetch = useCallback(() => {
     if (!PREFETCH_ENABLED) {
@@ -332,15 +355,32 @@ function AppContent({
         return;
       }
 
-      void Promise.allSettled([loadProjects(), loadInventory(), loadFinancials()]);
+      // Prefetch sequentially to avoid long main-thread bursts on initial load.
+      const preloaders = [loadProjects, loadInventory, loadFinancials];
+      let cancelled = false;
+
+      const runNext = (index: number) => {
+        if (cancelled || index >= preloaders.length) return;
+
+        void preloaders[index]().finally(() => {
+          if (cancelled) return;
+          globalThis.setTimeout(() => runNext(index + 1), 250);
+        });
+      };
+
+      runNext(0);
+
+      return () => {
+        cancelled = true;
+      };
     };
 
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      const idleId = (window as any).requestIdleCallback(runDeferredLoad, { timeout: 1200 });
+      const idleId = (window as any).requestIdleCallback(runDeferredLoad, { timeout: 1500 });
       return () => (window as any).cancelIdleCallback?.(idleId);
     }
 
-    const timeoutId = globalThis.setTimeout(runDeferredLoad, 1200);
+    const timeoutId = globalThis.setTimeout(runDeferredLoad, 1500);
     return () => globalThis.clearTimeout(timeoutId);
   }, [canPrefetch]);
 
@@ -423,30 +463,30 @@ function AppContent({
         </Suspense>
         
         <main className={cn(
-          "flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 lg:p-8 pb-24 lg:pb-8 transition-all duration-300",
+          "flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar perf-content p-4 lg:p-8 pb-24 lg:pb-8 transition-[margin] duration-300",
           isSidebarCollapsed ? "lg:ml-20" : "lg:ml-64"
         )}>
           <Suspense fallback={<LoadingFallback />}>
             <AnimatePresence mode="wait">
               <Routes>
-                <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
-                <Route path="/projects" element={<PageTransition><Projects /></PageTransition>} />
-                <Route path="/clients" element={<PageTransition><Clients /></PageTransition>} />
-                <Route path="/inventory" element={<PageTransition><Inventory /></PageTransition>} />
-                <Route path="/purchase-orders" element={<PageTransition><PurchaseOrders /></PageTransition>} />
-                <Route path="/financials" element={<PageTransition><Financials /></PageTransition>} />
-                <Route path="/subcontracts" element={<PageTransition><Subcontracts /></PageTransition>} />
-                <Route path="/equipment" element={<PageTransition><Equipment /></PageTransition>} />
-                <Route path="/quotes" element={<PageTransition><Quotes /></PageTransition>} />
-                <Route path="/hr" element={<PageTransition><HR /></PageTransition>} />
-                <Route path="/analytics" element={<PageTransition><Analytics /></PageTransition>} />
-                <Route path="/suppliers" element={<PageTransition><Suppliers /></PageTransition>} />
-                <Route path="/safety" element={<PageTransition><Safety /></PageTransition>} />
-                <Route path="/documents" element={<PageTransition><Documents /></PageTransition>} />
-                <Route path="/workflows" element={<PageTransition><Workflows /></PageTransition>} />
-                <Route path="/audit-logs" element={<PageTransition><AuditLogs /></PageTransition>} />
-                <Route path="/risks" element={<PageTransition><RiskManagement /></PageTransition>} />
-                <Route path="/settings" element={<PageTransition><Settings /></PageTransition>} />
+                <Route path="/" element={<PageTransition reduceMotion={reduceMotion}><Dashboard /></PageTransition>} />
+                <Route path="/projects" element={<PageTransition reduceMotion={reduceMotion}><Projects /></PageTransition>} />
+                <Route path="/clients" element={<PageTransition reduceMotion={reduceMotion}><Clients /></PageTransition>} />
+                <Route path="/inventory" element={<PageTransition reduceMotion={reduceMotion}><Inventory /></PageTransition>} />
+                <Route path="/purchase-orders" element={<PageTransition reduceMotion={reduceMotion}><PurchaseOrders /></PageTransition>} />
+                <Route path="/financials" element={<PageTransition reduceMotion={reduceMotion}><Financials /></PageTransition>} />
+                <Route path="/subcontracts" element={<PageTransition reduceMotion={reduceMotion}><Subcontracts /></PageTransition>} />
+                <Route path="/equipment" element={<PageTransition reduceMotion={reduceMotion}><Equipment /></PageTransition>} />
+                <Route path="/quotes" element={<PageTransition reduceMotion={reduceMotion}><Quotes /></PageTransition>} />
+                <Route path="/hr" element={<PageTransition reduceMotion={reduceMotion}><HR /></PageTransition>} />
+                <Route path="/analytics" element={<PageTransition reduceMotion={reduceMotion}><Analytics /></PageTransition>} />
+                <Route path="/suppliers" element={<PageTransition reduceMotion={reduceMotion}><Suppliers /></PageTransition>} />
+                <Route path="/safety" element={<PageTransition reduceMotion={reduceMotion}><Safety /></PageTransition>} />
+                <Route path="/documents" element={<PageTransition reduceMotion={reduceMotion}><Documents /></PageTransition>} />
+                <Route path="/workflows" element={<PageTransition reduceMotion={reduceMotion}><Workflows /></PageTransition>} />
+                <Route path="/audit-logs" element={<PageTransition reduceMotion={reduceMotion}><AuditLogs /></PageTransition>} />
+                <Route path="/risks" element={<PageTransition reduceMotion={reduceMotion}><RiskManagement /></PageTransition>} />
+                <Route path="/settings" element={<PageTransition reduceMotion={reduceMotion}><Settings /></PageTransition>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </AnimatePresence>

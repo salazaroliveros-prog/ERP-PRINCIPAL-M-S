@@ -31,7 +31,7 @@
     --logo-text-primary: #1e293b;
     --logo-text-secondary: #334155;
     
-    transition: all 0.3s ease-in-out;
+    transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
   }
 
   .dark {
@@ -177,7 +177,8 @@
     backdrop-filter: blur(14px);
     border: 1px solid rgba(148, 163, 184, 0.22);
     box-shadow: 0 10px 30px -16px rgba(15, 23, 42, 0.35);
-    transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+    will-change: transform;
   }
 
   .glass-card:hover {
@@ -190,6 +191,11 @@
     background: rgba(15, 23, 42, 0.68);
     border: 1px solid rgba(148, 163, 184, 0.16);
     box-shadow: 0 18px 36px -24px rgba(2, 6, 23, 0.7);
+  }
+
+  .perf-content {
+    content-visibility: auto;
+    contain-intrinsic-size: 900px;
   }
 
   /* Bento Grid */
@@ -289,6 +295,27 @@
     
     .rounded-3xl { border-radius: 1.25rem !important; }
     .rounded-2xl { border-radius: 1rem !important; }
+
+    .glass,
+    .glass-card {
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    .glass,
+    .glass-card {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
   }
 
   .recharts-responsive-container {
