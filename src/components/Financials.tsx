@@ -795,31 +795,38 @@ export default function Financials() {
       .slice(0, 5);
   }, [projects, transactions]);
 
-  const filteredTransactions = transactions.filter(t => {
-    const matchesProject = filterProject === 'all' || t.projectId === filterProject;
-    const matchesExpenseCategory = quickExpenseFilter === 'all'
-      ? true
-      : quickExpenseFilter === 'admin'
-        ? t.type === 'Expense' && ADMINISTRATIVE_EXPENSE_CATEGORIES.includes(t.category)
-        : t.type === 'Expense' && PERSONAL_EXPENSE_CATEGORIES.includes(t.category);
-    
-    let matchesDate = true;
-    const tDate = parseISO(t.date);
+  const filteredTransactions = useMemo(() => {
     const now = new Date();
+    const weekInterval = { start: startOfWeek(now), end: endOfWeek(now) };
+    const monthInterval = { start: startOfMonth(now), end: endOfMonth(now) };
+    const customInterval =
+      dateFilter === 'custom' && customRange.start && customRange.end
+        ? { start: parseISO(customRange.start), end: parseISO(customRange.end) }
+        : null;
 
-    if (dateFilter === 'week') {
-      matchesDate = isWithinInterval(tDate, { start: startOfWeek(now), end: endOfWeek(now) });
-    } else if (dateFilter === 'month') {
-      matchesDate = isWithinInterval(tDate, { start: startOfMonth(now), end: endOfMonth(now) });
-    } else if (dateFilter === 'custom' && customRange.start && customRange.end) {
-      matchesDate = isWithinInterval(tDate, { 
-        start: parseISO(customRange.start), 
-        end: parseISO(customRange.end) 
-      });
-    }
+    return transactions.filter((t) => {
+      const matchesProject = filterProject === 'all' || t.projectId === filterProject;
+      const matchesExpenseCategory =
+        quickExpenseFilter === 'all'
+          ? true
+          : quickExpenseFilter === 'admin'
+            ? t.type === 'Expense' && ADMINISTRATIVE_EXPENSE_CATEGORIES.includes(t.category)
+            : t.type === 'Expense' && PERSONAL_EXPENSE_CATEGORIES.includes(t.category);
 
-    return matchesProject && matchesDate && matchesExpenseCategory;
-  });
+      let matchesDate = true;
+      const tDate = parseISO(t.date);
+
+      if (dateFilter === 'week') {
+        matchesDate = isWithinInterval(tDate, weekInterval);
+      } else if (dateFilter === 'month') {
+        matchesDate = isWithinInterval(tDate, monthInterval);
+      } else if (customInterval) {
+        matchesDate = isWithinInterval(tDate, customInterval);
+      }
+
+      return matchesProject && matchesDate && matchesExpenseCategory;
+    });
+  }, [transactions, filterProject, quickExpenseFilter, dateFilter, customRange.start, customRange.end]);
 
   // Prepare chart data
   const chartData = useMemo(() => {
@@ -865,9 +872,26 @@ export default function Financials() {
     'bg-lime-500',
   ];
 
-  const totalIncome = filteredTransactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + t.amount, 0);
-  const totalExpense = filteredTransactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + t.amount, 0);
-  const balance = totalIncome - totalExpense;
+  const financialTotals = useMemo(() => {
+    let totalIncome = 0;
+    let totalExpense = 0;
+
+    for (const transaction of filteredTransactions) {
+      if (transaction.type === 'Income') {
+        totalIncome += transaction.amount;
+      } else if (transaction.type === 'Expense') {
+        totalExpense += transaction.amount;
+      }
+    }
+
+    return {
+      totalIncome,
+      totalExpense,
+      balance: totalIncome - totalExpense,
+    };
+  }, [filteredTransactions]);
+
+  const { totalIncome, totalExpense, balance } = financialTotals;
 
   const ownerIncomeTransactions = useMemo(
     () => transactions.filter(t => t.type === 'Income'),

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useDeferredValue, useEffect, useState } from 'react';
 import { storage, ref, uploadBytes, getDownloadURL } from '../lib/authStorageClient';
 import { 
   Plus, 
@@ -76,6 +76,7 @@ export default function Clients() {
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -362,12 +363,14 @@ export default function Clients() {
   };
 
   const filteredClients = React.useMemo(() => {
+    const normalizedSearch = deferredSearchTerm.toLowerCase();
+
     return clients.filter(c => 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (c.company && c.company.toLowerCase().includes(searchTerm.toLowerCase()))
+      c.name.toLowerCase().includes(normalizedSearch) ||
+      c.email.toLowerCase().includes(normalizedSearch) ||
+      (c.company && c.company.toLowerCase().includes(normalizedSearch))
     );
-  }, [clients, searchTerm]);
+  }, [clients, deferredSearchTerm]);
 
   const sortedClients = React.useMemo(() => {
     return [...filteredClients].sort((a, b) => {
