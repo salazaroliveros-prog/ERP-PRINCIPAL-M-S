@@ -306,7 +306,43 @@ const tools = {
 
 export async function getAIResponse(message: string, history: { role: string, text: string }[]) {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const preferredModel = (import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash').trim();
+  const fallbackModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
+  const candidateModels = Array.from(new Set([preferredModel, ...fallbackModels]));
   const DIAGNOSTIC_PREFIX = '[GEMINI_DIAGNOSTIC]';
+
+  const isModelUnavailableError = (errorText: string) => {
+    const messageLower = errorText.toLowerCase();
+    return (
+      messageLower.includes('404') ||
+      messageLower.includes('not found') ||
+      messageLower.includes('model') ||
+      messageLower.includes('unsupported') ||
+      messageLower.includes('permission_denied')
+    );
+  };
+
+  const generateWithModelFallback = async (ai: GoogleGenAI, payload: { contents: Content[]; config: any }) => {
+    let lastError: unknown;
+
+    for (const modelName of candidateModels) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          ...payload,
+        });
+        return { response, modelUsed: modelName };
+      } catch (error) {
+        lastError = error;
+        const raw = String((error as any)?.message || error || '');
+        if (!isModelUnavailableError(raw)) {
+          throw error;
+        }
+      }
+    }
+
+    throw lastError || new Error('No model available for this project/region.');
+  };
   
   if (!apiKey) {
     return `${DIAGNOSTIC_PREFIX} Clave no configurada. Falta VITE_GEMINI_API_KEY en variables de entorno.`;
@@ -364,8 +400,7 @@ export async function getAIResponse(message: string, history: { role: string, te
       calculateEstimatedBudgetTool
     ];
 
-    let response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+    let { response, modelUsed } = await generateWithModelFallback(ai, {
       contents,
       config: {
         systemInstruction,
@@ -419,14 +454,13 @@ export async function getAIResponse(message: string, history: { role: string, te
           }))
         });
 
-        response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
+        ({ response, modelUsed } = await generateWithModelFallback(ai, {
           contents,
           config: {
             systemInstruction,
             tools: [{ functionDeclarations: toolDeclarations }],
           },
-        });
+        }));
         
         functionCalls = response.functionCalls;
       } else {
@@ -434,7 +468,7 @@ export async function getAIResponse(message: string, history: { role: string, te
       }
     }
 
-    return response.text || "No pude generar una respuesta clara. ¿Podrías reformular tu pregunta?";
+    return response.text || `Respuesta vacía de Gemini (modelo usado: ${modelUsed}). ¿Podrías reformular tu pregunta?`;
   } catch (error: any) {
     const rawError = String(error?.message || error || '');
     const errorMessage = rawError.toLowerCase();
@@ -444,7 +478,7 @@ export async function getAIResponse(message: string, history: { role: string, te
       return diagnostic('API key inválida o mal escrita. Revise VITE_GEMINI_API_KEY y regenere la clave en Google AI Studio/Cloud.');
     }
     if (errorMessage.includes('403') || errorMessage.includes('permission_denied') || errorMessage.includes('forbidden')) {
-      return diagnostic('Permisos insuficientes (403). Verifique API habilitada, restricciones de clave (HTTP referrer/API restrictions) y acceso al modelo gemini-2.5-flash.');
+      return diagnostic(`Permisos insuficientes (403). Verifique API habilitada, restricciones de clave (HTTP referrer/API restrictions) y acceso al modelo configurado (${preferredModel}).`);
     }
     if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('rate') || errorMessage.includes('limit')) {
       return diagnostic('Límite de cuota/rate alcanzado (429). Espere unos minutos o aumente cuota en Google Cloud.');
@@ -452,8 +486,8 @@ export async function getAIResponse(message: string, history: { role: string, te
     if (errorMessage.includes('billing') || errorMessage.includes('payment') || errorMessage.includes('account_disabled')) {
       return diagnostic('Problema de billing en Google Cloud. Active facturación del proyecto y confirme método de pago.');
     }
-    if (errorMessage.includes('not found') || errorMessage.includes('404') || errorMessage.includes('model')) {
-      return diagnostic('Modelo no disponible en su proyecto/región. Revise el modelo configurado y permisos del proyecto.');
+    if (errorMessage.includes('not found') || errorMessage.includes('404') || errorMessage.includes('model') || errorMessage.includes('unsupported')) {
+      return diagnostic(`Modelo no disponible en su proyecto/región. Modelo configurado: ${preferredModel}. Modelos probados automáticamente: ${candidateModels.join(', ')}. Defina VITE_GEMINI_MODEL con uno habilitado en su proyecto.`);
     }
     if (errorMessage.includes('network') || errorMessage.includes('failed to fetch') || errorMessage.includes('timeout')) {
       return diagnostic('Error de red o timeout al conectar con Gemini. Revise conectividad, firewall/proxy y vuelva a intentar.');
