@@ -77,6 +77,8 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   const [isQuickView, setIsQuickView] = useState(false);
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
   const [isAPUImportModalOpen, setIsAPUImportModalOpen] = useState(false);
+  const [apuImportTypology, setApuImportTypology] = useState<string>(project.typology || 'RESIDENCIAL');
+  const [apuImportSearchTerm, setApuImportSearchTerm] = useState('');
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
@@ -459,6 +461,39 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
       });
     });
     return allMaterials.sort((a, b) => a.name.localeCompare(b.name));
+  }, []);
+
+  const filteredApuTemplates = useMemo(() => {
+    const templates = APU_TEMPLATES[apuImportTypology] || [];
+    const normalizedQuery = apuImportSearchTerm.toLowerCase().trim();
+    if (!normalizedQuery) {
+      return templates;
+    }
+
+    return templates.filter((template: any) =>
+      String(template.description || '').toLowerCase().includes(normalizedQuery)
+    );
+  }, [apuImportSearchTerm, apuImportTypology]);
+
+  const openApuImportModal = useCallback(() => {
+    setApuImportTypology(project.typology || 'RESIDENCIAL');
+    setApuImportSearchTerm('');
+    setIsAPUImportModalOpen(true);
+  }, [project.typology]);
+
+  const importFromApuTemplate = useCallback((template: any) => {
+    setNewItem((prev) => ({
+      ...prev,
+      description: template.description,
+      unit: template.unit,
+      materials: template.materials,
+      labor: template.labor,
+      indirectFactor: template.indirectFactor,
+      materialCost: template.materials.reduce((sum: number, m: any) => sum + (m.quantity * m.unitPrice), 0),
+      laborCost: template.labor.reduce((sum: number, l: any) => sum + (l.dailyRate / l.yield), 0)
+    }));
+    setIsAPUImportModalOpen(false);
+    toast.success('Plantilla cargada correctamente');
   }, []);
 
   const laborLibrary = useMemo(() => {
@@ -1549,107 +1584,6 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
     } catch (error) {
       handleApiError(error, OperationType.WRITE, `projects/${project.id}/budgetItems`);
     }
-  };
-
-  const APUImportModal = () => {
-    const [typology, setTypology] = useState<string>(project.typology || 'RESIDENCIAL');
-    const [searchTerm, setSearchTerm] = useState('');
-
-    const filteredTemplates = (APU_TEMPLATES[typology] || []).filter(t => 
-      t.description.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const handleImport = (template: any) => {
-      setNewItem({
-        ...newItem,
-        description: template.description,
-        unit: template.unit,
-        materials: template.materials,
-        labor: template.labor,
-        indirectFactor: template.indirectFactor,
-        materialCost: template.materials.reduce((sum: number, m: any) => sum + (m.quantity * m.unitPrice), 0),
-        laborCost: template.labor.reduce((sum: number, l: any) => sum + (l.dailyRate / l.yield), 0)
-      });
-      setIsAPUImportModalOpen(false);
-      toast.success('Plantilla cargada correctamente');
-    };
-
-    return (
-      <FormModal
-        isOpen={isAPUImportModalOpen}
-        onClose={() => setIsAPUImportModalOpen(false)}
-        title="Importar desde Plantillas APU"
-        maxWidth="max-w-4xl"
-      >
-        <div className="space-y-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Tipología</label>
-              <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                {Object.keys(APU_TEMPLATES).map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setTypology(t)}
-                    className={cn(
-                      "px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border",
-                      typology === t 
-                        ? "bg-primary text-white border-primary shadow-lg shadow-primary-shadow" 
-                        : "bg-white text-slate-600 border-slate-200 hover:border-primary/30"
-                    )}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="md:w-1/3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Buscar Item</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                <input 
-                  type="text"
-                  placeholder="Ej: Cimentación..."
-                  className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-            {filteredTemplates.map((template, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleImport(template)}
-                className="text-left p-4 bg-white border border-slate-200 rounded-2xl hover:border-primary hover:shadow-md transition-all group"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className="text-sm font-black text-slate-900 group-hover:text-primary transition-colors">{template.description}</h4>
-                  <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-md uppercase">{template.unit}</span>
-                </div>
-                <div className="flex gap-4 text-[10px] text-slate-500 font-medium">
-                  <div className="flex items-center gap-1">
-                    <Package size={12} />
-                    {template.materials.length} Materiales
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <UsersIcon size={12} />
-                    {template.labor.length} Roles M.O.
-                  </div>
-                </div>
-                <div className="mt-3 pt-3 border-t border-slate-50 flex justify-between items-center">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Costo Estimado Unit.</span>
-                  <span className="text-xs font-black text-primary">
-                    {formatCurrency((template.materials.reduce((sum: number, m: any) => sum + (m.quantity * m.unitPrice), 0) + template.labor.reduce((sum: number, l: any) => sum + (l.dailyRate / l.yield), 0)) * (1 + template.indirectFactor))}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </FormModal>
-    );
   };
 
   const addSanitaryInstallation = async () => {
@@ -3436,7 +3370,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                 <div className="md:w-2/3">
                   <button
                     type="button"
-                    onClick={() => setIsAPUImportModalOpen(true)}
+                    onClick={openApuImportModal}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-bold text-slate-700 dark:text-slate-200 text-sm transition-all flex items-center justify-between group"
                   >
                     <span className={newItem.description ? "text-primary" : "text-slate-400"}>
@@ -3963,7 +3897,82 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
         </FormModal>
 
         {/* APU Import Modal */}
-        <APUImportModal />
+        <FormModal
+          isOpen={isAPUImportModalOpen}
+          onClose={() => setIsAPUImportModalOpen(false)}
+          title="Importar desde Plantillas APU"
+          maxWidth="max-w-4xl"
+        >
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Tipología</label>
+                <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                  {Object.keys(APU_TEMPLATES).map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setApuImportTypology(t)}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border",
+                        apuImportTypology === t
+                          ? "bg-primary text-white border-primary shadow-lg shadow-primary-shadow"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-primary/30"
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="md:w-1/3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Buscar Item</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                  <input
+                    type="text"
+                    placeholder="Ej: Cimentación..."
+                    className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    value={apuImportSearchTerm}
+                    onChange={(e) => setApuImportSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+              {filteredApuTemplates.map((template: any) => (
+                <button
+                  key={`${apuImportTypology}-${template.description}`}
+                  type="button"
+                  onClick={() => importFromApuTemplate(template)}
+                  className="text-left p-4 bg-white border border-slate-200 rounded-2xl hover:border-primary hover:shadow-md transition-all group"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="text-sm font-black text-slate-900 group-hover:text-primary transition-colors">{template.description}</h4>
+                    <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-md uppercase">{template.unit}</span>
+                  </div>
+                  <div className="flex gap-4 text-[10px] text-slate-500 font-medium">
+                    <div className="flex items-center gap-1">
+                      <Package size={12} />
+                      {template.materials.length} Materiales
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <UsersIcon size={12} />
+                      {template.labor.length} Roles M.O.
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-50 flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Costo Estimado Unit.</span>
+                    <span className="text-xs font-black text-primary">
+                      {formatCurrency((template.materials.reduce((sum: number, m: any) => sum + (m.quantity * m.unitPrice), 0) + template.labor.reduce((sum: number, l: any) => sum + (l.dailyRate / l.yield), 0)) * (1 + template.indirectFactor))}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </FormModal>
 
         {/* Edit Item Modal */}
         <FormModal
