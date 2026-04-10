@@ -61,10 +61,32 @@ export default function Settings() {
         </div>
 
         <div className="p-4 sm:p-8 space-y-4 sm:space-y-8">
+          <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/70 bg-slate-50/70 dark:bg-slate-800/40 p-4 sm:p-5">
+            <p className="text-[10px] sm:text-xs uppercase tracking-[0.18em] font-black text-slate-500 dark:text-slate-400">Vista previa activa</p>
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-[11px] sm:text-xs">
+              <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-slate-400 dark:text-slate-500 uppercase font-black tracking-wider text-[9px]">Tarjetas</p>
+                <p className="text-slate-800 dark:text-slate-100 font-semibold mt-1">{selectedTheme.cardEffect}</p>
+              </div>
+              <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-slate-400 dark:text-slate-500 uppercase font-black tracking-wider text-[9px]">Tablas</p>
+                <p className="text-slate-800 dark:text-slate-100 font-semibold mt-1">{selectedTheme.tableStyle}</p>
+              </div>
+              <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-slate-400 dark:text-slate-500 uppercase font-black tracking-wider text-[9px]">Formularios</p>
+                <p className="text-slate-800 dark:text-slate-100 font-semibold mt-1">{selectedTheme.formStyle}</p>
+              </div>
+              <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3">
+                <p className="text-slate-400 dark:text-slate-500 uppercase font-black tracking-wider text-[9px]">Iconografía</p>
+                <p className="text-slate-800 dark:text-slate-100 font-semibold mt-1">{selectedTheme.iconStyle}</p>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
             {THEME_COLORS.map((theme) => (
               <button
-                key={theme.name}
+                key={theme.id}
                 onClick={() => setSelectedTheme(theme)}
                 className={`flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 transition-all ${
                   selectedTheme.name === theme.name
@@ -72,14 +94,19 @@ export default function Settings() {
                     : 'border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 bg-slate-50 dark:bg-slate-800/50'
                 }`}
               >
-                <div className="flex items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 text-left min-w-0">
                   <div 
                     className="w-6 h-6 sm:w-8 sm:h-8 rounded-full shadow-sm" 
                     style={{ backgroundColor: theme.color }}
                   />
-                  <span className={`text-xs sm:text-sm font-bold ${selectedTheme.name === theme.name ? 'text-primary' : 'text-slate-600 dark:text-slate-400'}`}>
-                    {theme.name}
-                  </span>
+                  <div className="min-w-0">
+                    <p className={`text-xs sm:text-sm font-bold truncate ${selectedTheme.name === theme.name ? 'text-primary' : 'text-slate-700 dark:text-slate-300'}`}>
+                      {theme.name}
+                    </p>
+                    <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                      {theme.headingFont.split(',')[0]} + {theme.fontFamily.split(',')[0]}
+                    </p>
+                  </div>
                 </div>
                 {selectedTheme.name === theme.name && (
                   <Check className="text-primary sm:w-5 sm:h-5" size={16} />
