@@ -45,12 +45,49 @@ export function QuickActionsLauncher() {
 
   React.useEffect(() => {
     const handleOpenQuickActions = () => {
+      window.dispatchEvent(new CustomEvent('SIDE_TOOL_WINDOW_OPEN', { detail: { source: 'quick-actions' } }));
       setIsOpen(true);
     };
 
+    const handleSideToolOpen = (event: Event) => {
+      const customEvent = event as CustomEvent<{ source?: string }>;
+      if (customEvent.detail?.source && customEvent.detail.source !== 'quick-actions') {
+        setIsOpen(false);
+      }
+    };
+
     window.addEventListener('OPEN_QUICK_ACTIONS', handleOpenQuickActions);
-    return () => window.removeEventListener('OPEN_QUICK_ACTIONS', handleOpenQuickActions);
+    window.addEventListener('SIDE_TOOL_WINDOW_OPEN', handleSideToolOpen);
+    return () => {
+      window.removeEventListener('OPEN_QUICK_ACTIONS', handleOpenQuickActions);
+      window.removeEventListener('SIDE_TOOL_WINDOW_OPEN', handleSideToolOpen);
+    };
   }, []);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    let inactivityTimer: number | null = null;
+
+    const closePanel = () => setIsOpen(false);
+    const resetTimer = () => {
+      if (inactivityTimer) {
+        window.clearTimeout(inactivityTimer);
+      }
+      inactivityTimer = window.setTimeout(closePanel, 5000);
+    };
+
+    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    events.forEach((eventName) => window.addEventListener(eventName, resetTimer, { passive: true }));
+    resetTimer();
+
+    return () => {
+      if (inactivityTimer) {
+        window.clearTimeout(inactivityTimer);
+      }
+      events.forEach((eventName) => window.removeEventListener(eventName, resetTimer));
+    };
+  }, [isOpen]);
 
   const triggerQuickAction = (action: QuickAction) => {
     const targetHash = `#${action.route}`;
@@ -84,7 +121,7 @@ export function QuickActionsLauncher() {
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 30 }}
-            className="fixed z-[95] right-4 top-1/2 -translate-y-1/2 w-[300px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden"
+            className="fixed z-[95] right-16 top-1/2 -translate-y-1/2 w-[300px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden"
           >
             <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">

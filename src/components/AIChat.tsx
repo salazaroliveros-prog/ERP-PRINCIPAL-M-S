@@ -252,12 +252,56 @@ export default function AIChat() {
 
   useEffect(() => {
     const handleOpenAIChat = () => {
+      window.dispatchEvent(new CustomEvent('SIDE_TOOL_WINDOW_OPEN', { detail: { source: 'ai-chat' } }));
       setIsOpen(true);
     };
 
+    const handleSideToolOpen = (event: Event) => {
+      const customEvent = event as CustomEvent<{ source?: string }>;
+      if (customEvent.detail?.source && customEvent.detail.source !== 'ai-chat') {
+        setShowQuickActions(false);
+        setShowHistoryMenu(false);
+        setIsOpen(false);
+      }
+    };
+
     window.addEventListener('OPEN_AI_CHAT', handleOpenAIChat);
-    return () => window.removeEventListener('OPEN_AI_CHAT', handleOpenAIChat);
+    window.addEventListener('SIDE_TOOL_WINDOW_OPEN', handleSideToolOpen);
+    return () => {
+      window.removeEventListener('OPEN_AI_CHAT', handleOpenAIChat);
+      window.removeEventListener('SIDE_TOOL_WINDOW_OPEN', handleSideToolOpen);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let inactivityTimer: number | null = null;
+
+    const closePanel = () => {
+      setShowQuickActions(false);
+      setShowHistoryMenu(false);
+      setIsOpen(false);
+    };
+
+    const resetTimer = () => {
+      if (inactivityTimer) {
+        window.clearTimeout(inactivityTimer);
+      }
+      inactivityTimer = window.setTimeout(closePanel, 5000);
+    };
+
+    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    events.forEach((eventName) => window.addEventListener(eventName, resetTimer, { passive: true }));
+    resetTimer();
+
+    return () => {
+      if (inactivityTimer) {
+        window.clearTimeout(inactivityTimer);
+      }
+      events.forEach((eventName) => window.removeEventListener(eventName, resetTimer));
+    };
+  }, [isOpen]);
 
   const handleSend = async () => {
     // Validation: Prevent empty or whitespace-only messages, ensure valid characters
@@ -420,7 +464,7 @@ export default function AIChat() {
               "fixed z-[100] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden",
               isMobile
                 ? "inset-x-3 top-16 bottom-3"
-                : "right-4 top-1/2 -translate-y-1/2"
+                : "right-16 top-1/2 -translate-y-1/2"
             )}
             style={!isMobile ? { width: CHAT_PANEL_WIDTH, height: CHAT_PANEL_HEIGHT } : undefined}
           >
