@@ -16,6 +16,15 @@ interface Message {
   timestamp: Date;
 }
 
+const GEMINI_DIAGNOSTIC_PREFIX = '[GEMINI_DIAGNOSTIC]';
+
+const parseGeminiDiagnostic = (text: string) => {
+  if (!text.startsWith(GEMINI_DIAGNOSTIC_PREFIX)) {
+    return null;
+  }
+  return text.replace(GEMINI_DIAGNOSTIC_PREFIX, '').trim();
+};
+
 export default function AIChat() {
   const CHAT_AUTO_HIDE_STORAGE_KEY = 'wm_ai_chat_auto_hide';
   const CHAT_PANEL_WIDTH = 400;
@@ -215,7 +224,12 @@ export default function AIChat() {
         
         try {
           const response = await getAIResponse(prompt, messages.map(m => ({ role: m.role, text: m.text })));
-          setMessages(prev => [...prev, { role: 'assistant', text: response || "Error en el análisis.", timestamp: new Date() }]);
+          const diagnostic = response ? parseGeminiDiagnostic(response) : null;
+          if (diagnostic) {
+            setError(diagnostic);
+          } else {
+            setMessages(prev => [...prev, { role: 'assistant', text: response || "Error en el análisis.", timestamp: new Date() }]);
+          }
         } catch (err) {
           setError("Error al procesar el análisis de riesgos.");
         } finally {
@@ -373,13 +387,17 @@ export default function AIChat() {
       
       // We let the normal AI flow handle this but with a more specific prompt to trigger the tool
       const response = await getAIResponse("Realiza un análisis de riesgos exhaustivo de todos los proyectos activos. Identifica desviaciones, predice sobrecostos futuros y sugiere acciones correctivas inmediatas.", messages.map(m => ({ role: m.role, text: m.text })));
-      
-      const aiMessage: Message = {
-        role: 'assistant',
-        text: response || "No se pudo completar el análisis en este momento.",
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, aiMessage]);
+      const diagnostic = response ? parseGeminiDiagnostic(response) : null;
+      if (diagnostic) {
+        setError(diagnostic);
+      } else {
+        const aiMessage: Message = {
+          role: 'assistant',
+          text: response || "No se pudo completar el análisis en este momento.",
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, aiMessage]);
+      }
       setIsLoading(false);
       autoHideAssistant();
       return;
@@ -414,6 +432,11 @@ export default function AIChat() {
     try {
       const history = messages.map(m => ({ role: m.role, text: m.text }));
       const response = await getAIResponse(trimmedInput, history);
+      const diagnostic = response ? parseGeminiDiagnostic(response) : null;
+      if (diagnostic) {
+        setError(diagnostic);
+        return;
+      }
 
       if (!response) {
         throw new Error('EMPTY_RESPONSE');

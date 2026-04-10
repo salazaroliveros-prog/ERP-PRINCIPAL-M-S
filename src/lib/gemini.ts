@@ -306,9 +306,10 @@ const tools = {
 
 export async function getAIResponse(message: string, history: { role: string, text: string }[]) {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const DIAGNOSTIC_PREFIX = '[GEMINI_DIAGNOSTIC]';
   
   if (!apiKey) {
-    return "Error: La clave de API de Gemini no está configurada. Por favor, verifica las variables de entorno.";
+    return `${DIAGNOSTIC_PREFIX} Clave no configurada. Falta VITE_GEMINI_API_KEY en variables de entorno.`;
   }
 
   try {
@@ -435,13 +436,29 @@ export async function getAIResponse(message: string, history: { role: string, te
 
     return response.text || "No pude generar una respuesta clara. ¿Podrías reformular tu pregunta?";
   } catch (error: any) {
-    const errorMessage = String(error?.message || '').toLowerCase();
+    const rawError = String(error?.message || error || '');
+    const errorMessage = rawError.toLowerCase();
+    const diagnostic = (messageText: string) => `${DIAGNOSTIC_PREFIX} ${messageText}`;
+
+    if (errorMessage.includes('api_key') || errorMessage.includes('apikey') || errorMessage.includes('invalid key') || errorMessage.includes('credential')) {
+      return diagnostic('API key inválida o mal escrita. Revise VITE_GEMINI_API_KEY y regenere la clave en Google AI Studio/Cloud.');
+    }
     if (errorMessage.includes('403') || errorMessage.includes('permission_denied') || errorMessage.includes('forbidden')) {
-      return 'Error de permisos con Gemini (403). Verifica que la API key tenga acceso al modelo configurado, que la API esté habilitada y que no haya restricciones de dominio/referer en la clave.';
+      return diagnostic('Permisos insuficientes (403). Verifique API habilitada, restricciones de clave (HTTP referrer/API restrictions) y acceso al modelo gemini-2.5-flash.');
     }
-    if (errorMessage.includes('quota') || errorMessage.includes('limit')) {
-      return "Lo siento, se ha alcanzado el límite de capacidad de la IA. Por favor, intenta de nuevo en unos momentos.";
+    if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('rate') || errorMessage.includes('limit')) {
+      return diagnostic('Límite de cuota/rate alcanzado (429). Espere unos minutos o aumente cuota en Google Cloud.');
     }
-    return "Lo siento, hubo un error al procesar tu solicitud. Por favor, intenta de nuevo.";
+    if (errorMessage.includes('billing') || errorMessage.includes('payment') || errorMessage.includes('account_disabled')) {
+      return diagnostic('Problema de billing en Google Cloud. Active facturación del proyecto y confirme método de pago.');
+    }
+    if (errorMessage.includes('not found') || errorMessage.includes('404') || errorMessage.includes('model')) {
+      return diagnostic('Modelo no disponible en su proyecto/región. Revise el modelo configurado y permisos del proyecto.');
+    }
+    if (errorMessage.includes('network') || errorMessage.includes('failed to fetch') || errorMessage.includes('timeout')) {
+      return diagnostic('Error de red o timeout al conectar con Gemini. Revise conectividad, firewall/proxy y vuelva a intentar.');
+    }
+
+    return diagnostic(`Error no clasificado de Gemini. Detalle: ${rawError}`);
   }
 }
