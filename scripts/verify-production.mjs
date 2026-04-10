@@ -2,6 +2,7 @@
 
 const apiBaseUrl = (process.env.API_BASE_URL || process.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
 const frontendOrigin = (process.env.FRONTEND_ORIGIN || 'https://salazaroliveros-prog.github.io').trim();
+const verifyUserEmail = (process.env.VERIFY_USER_EMAIL || 'ci-check@local.test').trim().toLowerCase();
 
 if (!apiBaseUrl) {
   console.error('ERROR: API_BASE_URL no esta configurado.');
@@ -31,6 +32,7 @@ async function fetchCheck(label, url) {
     const response = await fetch(url, {
       headers: {
         Origin: frontendOrigin,
+        'x-user-email': verifyUserEmail,
       },
       redirect: 'manual',
     });
@@ -57,7 +59,7 @@ async function preflightCheck(url) {
       headers: {
         Origin: frontendOrigin,
         'Access-Control-Request-Method': 'GET',
-        'Access-Control-Request-Headers': 'content-type,authorization',
+        'Access-Control-Request-Headers': 'content-type,authorization,x-user-email',
       },
       redirect: 'manual',
     });
@@ -88,6 +90,7 @@ async function sseCheck(url) {
       headers: {
         Origin: frontendOrigin,
         Accept: 'text/event-stream',
+        'x-user-email': verifyUserEmail,
       },
       redirect: 'manual',
     });
@@ -112,6 +115,7 @@ async function sseCheck(url) {
 (async () => {
   console.log(`API_BASE_URL=${apiBaseUrl}`);
   console.log(`FRONTEND_ORIGIN=${frontendOrigin}`);
+  console.log(`VERIFY_USER_EMAIL=${verifyUserEmail}`);
 
   let passed = true;
 
