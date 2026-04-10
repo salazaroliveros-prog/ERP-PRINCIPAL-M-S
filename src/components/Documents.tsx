@@ -545,7 +545,7 @@ export default function Documents() {
             transition={{ delay: i * 0.1 }}
             onClick={() => setSelectedFolder(folder.name)}
             className={cn(
-              "p-6 bg-white dark:bg-slate-900 rounded-2xl border transition-all cursor-pointer group",
+              "p-6 bg-white dark:bg-slate-900 glass-card rounded-2xl border transition-all cursor-pointer group",
               selectedFolder === folder.name ? "border-primary ring-2 ring-primary/10 shadow-lg" : "border-slate-100 dark:border-slate-800 shadow-sm hover:border-primary"
             )}
           >
@@ -562,7 +562,7 @@ export default function Documents() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
         {/* File List */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden min-w-0">
+          <div className="bg-white dark:bg-slate-900 glass-card rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden min-w-0">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white">
@@ -701,7 +701,7 @@ export default function Documents() {
         {/* Sidebar Widgets */}
         <div className="space-y-6">
           {/* Storage Usage */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
+          <div className="bg-white dark:bg-slate-900 glass-card rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
             <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white mb-6 flex items-center gap-2">
               <Activity size={16} className="text-primary" />
               Almacenamiento
@@ -746,7 +746,7 @@ export default function Documents() {
               resetForm();
               setIsModalOpen(true);
             }}
-            className="bg-slate-900 rounded-2xl p-8 text-white border-2 border-dashed border-white/10 flex flex-col items-center justify-center text-center group cursor-pointer hover:border-primary transition-all"
+            className="bg-slate-900 glass-card rounded-2xl p-8 text-white border-2 border-dashed border-white/10 flex flex-col items-center justify-center text-center group cursor-pointer hover:border-primary transition-all"
           >
             <div className="p-4 bg-white/5 rounded-2xl mb-4 group-hover:bg-primary/20 transition-colors">
               <Upload size={32} className="text-primary" />

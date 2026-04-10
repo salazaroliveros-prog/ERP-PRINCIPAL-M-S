@@ -1007,7 +1007,7 @@ export default function HR() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
-            className="p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm"
+            className="p-4 sm:p-6 bg-white dark:bg-slate-900 glass-card rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm"
           >
             <div className="flex items-center justify-between mb-3 sm:mb-4">
               <div className={cn("p-2 sm:p-3 rounded-xl text-white shadow-lg", stat.color)}>

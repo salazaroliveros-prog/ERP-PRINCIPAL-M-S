@@ -13,6 +13,7 @@ interface FormModalProps {
   maxWidth?: string;
   isFullscreen?: boolean;
   fullVertical?: boolean;
+  closeOnOverlayClick?: boolean;
 }
 
 export const FormModal = ({ 
@@ -23,7 +24,8 @@ export const FormModal = ({
   footer,
   maxWidth = "max-w-4xl",
   isFullscreen: initialFullscreen = false,
-  fullVertical = false
+  fullVertical = false,
+  closeOnOverlayClick = true
 }: FormModalProps) => {
   const [isFullscreen, setIsFullscreen] = useState(initialFullscreen);
   const [isZoomEnabled, setIsZoomEnabled] = useState(false);
@@ -51,7 +53,7 @@ export const FormModal = ({
         isFullscreen ? "p-0" : "p-0 md:p-4"
       )}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (closeOnOverlayClick && e.target === e.currentTarget) onClose();
       }}
     >
       <motion.div

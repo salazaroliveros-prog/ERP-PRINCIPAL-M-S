@@ -492,7 +492,7 @@ export default function Clients() {
                     setIsDetailOpen(true);
                   }}
                   className={cn(
-                    "bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border transition-all group cursor-pointer relative overflow-hidden",
+                    "bg-white dark:bg-slate-900 glass-card p-4 sm:p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border transition-all group cursor-pointer relative overflow-hidden",
                     selectedClient?.id === client.id && isDetailOpen 
                       ? "border-primary ring-2 ring-primary/10 shadow-md" 
                       : "border-slate-100 dark:border-slate-800 hover:shadow-lg"
@@ -573,7 +573,7 @@ export default function Clients() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm mt-8">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm mt-8">
               <div className="flex items-center gap-4">
                 <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">
                   Mostrando {paginatedClients.length} de {filteredClients.length} clientes

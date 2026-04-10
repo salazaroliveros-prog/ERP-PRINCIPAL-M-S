@@ -324,7 +324,7 @@ export default function Equipment() {
       </header>
 
       {viewMode === 'table' ? (
-        <div className="bg-white dark:bg-slate-900 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 overflow-hidden min-w-0">
+        <div className="bg-white dark:bg-slate-900 glass-card rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 overflow-hidden min-w-0">
           <div className="overflow-x-auto lg:overflow-x-hidden">
             <table className="w-full text-left border-collapse table-fixed">
               <thead>
@@ -409,7 +409,7 @@ export default function Equipment() {
                 key={item.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 relative overflow-hidden group hover:shadow-lg transition-all duration-300"
+                className="bg-white dark:bg-slate-900 glass-card p-4 sm:p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 relative overflow-hidden group hover:shadow-lg transition-all duration-300"
               >
               <div className="absolute top-0 right-0 p-3 sm:p-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
                 {item.type === 'Owned' ? <Wrench size={48} className="sm:w-16 sm:h-16" /> : <Truck size={48} className="sm:w-16 sm:h-16" />}
@@ -470,7 +470,7 @@ export default function Equipment() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-[var(--radius-theme)] border border-slate-100 dark:border-slate-800 shadow-[var(--shadow-theme)] mt-8">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 glass-card p-6 rounded-[var(--radius-theme)] border border-slate-100 dark:border-slate-800 shadow-[var(--shadow-theme)] mt-8">
           <div className="flex items-center gap-4">
             <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">
               Mostrando {paginatedEquipment.length} de {filteredEquipment.length} equipos

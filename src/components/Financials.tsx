@@ -1120,7 +1120,7 @@ export default function Financials() {
       </AnimatePresence>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6 mb-8">
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
+        <div className="bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 hidden sm:block">
             <TrendingUp size={64} className="text-emerald-600" />
           </div>
@@ -1133,7 +1133,7 @@ export default function Financials() {
           <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalIncome)}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
+        <div className="bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 hidden sm:block">
             <TrendingDown size={64} className="text-rose-600" />
           </div>
@@ -1146,7 +1146,7 @@ export default function Financials() {
           <p className="text-2xl font-bold text-rose-600">{formatCurrency(totalExpense)}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
+        <div className="bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 hidden sm:block">
             <HandCoins size={64} className={balance >= 0 ? "text-emerald-600" : "text-rose-600"} />
           </div>
@@ -1162,7 +1162,7 @@ export default function Financials() {
           )}>{formatCurrency(balance)}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
+        <div className="bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 hidden sm:block">
             <Percent size={64} className="text-amber-600" />
           </div>
@@ -1181,7 +1181,7 @@ export default function Financials() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
+        <div className="bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group flex flex-col items-center sm:items-start text-center sm:text-left">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500 hidden sm:block">
             <Calculator size={64} className="text-violet-600" />
           </div>
@@ -1892,6 +1892,7 @@ export default function Financials() {
         title={editingTransactionId ? 'Editar Registro Financiero' : 'Nuevo Registro Financiero'}
         maxWidth="max-w-2xl"
         fullVertical
+        closeOnOverlayClick={false}
         footer={
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
             <div className="flex gap-2 order-2 sm:order-1">

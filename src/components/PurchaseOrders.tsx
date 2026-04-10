@@ -515,7 +515,7 @@ export default function PurchaseOrders() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+        <div className="bg-white glass-card p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
           <div className="p-3 bg-primary-light text-primary rounded-xl">
             <Clock size={24} />
           </div>
@@ -524,7 +524,7 @@ export default function PurchaseOrders() {
             <p className="text-2xl font-bold text-slate-900">{purchaseOrders.filter(po => po.status === 'Pending').length}</p>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+        <div className="bg-white glass-card p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
           <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
             <CheckCircle2 size={24} />
           </div>
@@ -533,7 +533,7 @@ export default function PurchaseOrders() {
             <p className="text-2xl font-bold text-slate-900">{purchaseOrders.filter(po => po.status === 'Completed' || po.status === 'Paid').length}</p>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+        <div className="bg-white glass-card p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
           <div className="p-3 bg-blue-100 text-blue-600 rounded-xl">
             <ShoppingBag size={24} />
           </div>
@@ -565,7 +565,7 @@ export default function PurchaseOrders() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-              "bg-white dark:bg-slate-900 rounded-2xl shadow-sm border overflow-hidden transition-all",
+              "bg-white dark:bg-slate-900 glass-card rounded-2xl shadow-sm border overflow-hidden transition-all",
               po.status === 'Pending' ? "border-primary-light dark:border-primary/30 ring-1 ring-primary-light dark:ring-primary/20 shadow-primary-shadow/10" : "border-slate-100 dark:border-slate-800"
             )}
           >
@@ -714,7 +714,7 @@ export default function PurchaseOrders() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm mt-8">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm mt-8">
           <div className="flex items-center gap-4">
             <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">
               Mostrando {paginatedPurchaseOrders.length} de {filteredPurchaseOrders.length} órdenes

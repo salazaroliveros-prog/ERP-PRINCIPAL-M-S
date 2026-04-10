@@ -518,7 +518,7 @@ export default function Subcontracts() {
                   setSelectedSubDetails(sub);
                   setIsDetailsModalOpen(true);
                 }}
-                className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-primary/30 transition-all group relative overflow-hidden"
+                className="bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-primary/30 transition-all group relative overflow-hidden"
               >
                 <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
                   <HardHat size={64} className="text-slate-400" />
@@ -644,7 +644,7 @@ export default function Subcontracts() {
           })}
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 glass-card rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -758,7 +758,7 @@ export default function Subcontracts() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm mt-8">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm mt-8">
           <div className="flex items-center gap-4">
             <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">
               Mostrando {paginatedSubcontracts.length} de {filteredSubcontracts.length} subcontratos
