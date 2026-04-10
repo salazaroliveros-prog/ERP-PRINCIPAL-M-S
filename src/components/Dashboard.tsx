@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -25,7 +25,13 @@ import {
   AreaChart,
   Area,
   Legend,
-  ReferenceLine
+  ReferenceLine,
+  ComposedChart,
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis
 } from 'recharts';
 import { 
   TrendingUp, 
@@ -60,6 +66,7 @@ import { listTransactions } from '../lib/financialsApi';
 import { listInventory } from '../lib/operationsApi';
 import { listSubcontracts } from '../lib/subcontractsApi';
 import { listWorkflows } from '../lib/workflowsApi';
+import { useTheme } from '../contexts/ThemeContext';
 
 const COLORS = [
   '#3b82f6', // Blue
@@ -73,6 +80,101 @@ const COLORS = [
   '#6366f1', // Indigo
   '#14b8a6', // Teal
 ];
+
+type DashboardChartKey =
+  | 'profitTrend'
+  | 'projectHealth'
+  | 'projectStatus'
+  | 'expenseCategory'
+  | 'progressComparison'
+  | 'scheduleProgress';
+
+type DashboardChartPreferences = Record<DashboardChartKey, string>;
+
+const CHART_TYPE_OPTIONS: Record<DashboardChartKey, Array<{ value: string; label: string }>> = {
+  profitTrend: [
+    { value: 'area', label: 'Area' },
+    { value: 'line', label: 'Línea' },
+    { value: 'bar', label: 'Barras' },
+    { value: 'composed', label: 'Combinada' },
+    { value: 'step', label: 'Step' },
+  ],
+  projectHealth: [
+    { value: 'grouped-bar', label: 'Barras agrupadas' },
+    { value: 'stacked-bar', label: 'Barras apiladas' },
+    { value: 'line', label: 'Líneas' },
+    { value: 'area', label: 'Área' },
+    { value: 'composed', label: 'Combinada' },
+  ],
+  projectStatus: [
+    { value: 'donut', label: 'Donut' },
+    { value: 'pie', label: 'Pastel' },
+    { value: 'bar', label: 'Barras' },
+    { value: 'radar', label: 'Radar' },
+  ],
+  expenseCategory: [
+    { value: 'donut', label: 'Donut' },
+    { value: 'pie', label: 'Pastel' },
+    { value: 'bar', label: 'Barras' },
+    { value: 'radar', label: 'Radar' },
+    { value: 'line', label: 'Línea' },
+  ],
+  progressComparison: [
+    { value: 'stacked-bar', label: 'Apilada' },
+    { value: 'grouped-bar', label: 'Agrupada' },
+    { value: 'line', label: 'Líneas' },
+    { value: 'area', label: 'Área' },
+    { value: 'radar', label: 'Radar' },
+  ],
+  scheduleProgress: [
+    { value: 'gantt', label: 'Cronograma' },
+    { value: 'horizontal-bars', label: 'Barras horizontales' },
+    { value: 'radar', label: 'Radar avance' },
+  ],
+};
+
+const THEME_DEFAULT_CHARTS: Record<string, DashboardChartPreferences> = {
+  sunset: {
+    profitTrend: 'area',
+    projectHealth: 'grouped-bar',
+    projectStatus: 'donut',
+    expenseCategory: 'donut',
+    progressComparison: 'stacked-bar',
+    scheduleProgress: 'gantt',
+  },
+  ocean: {
+    profitTrend: 'line',
+    projectHealth: 'composed',
+    projectStatus: 'pie',
+    expenseCategory: 'bar',
+    progressComparison: 'line',
+    scheduleProgress: 'horizontal-bars',
+  },
+  forest: {
+    profitTrend: 'composed',
+    projectHealth: 'stacked-bar',
+    projectStatus: 'radar',
+    expenseCategory: 'radar',
+    progressComparison: 'grouped-bar',
+    scheduleProgress: 'gantt',
+  },
+  aurora: {
+    profitTrend: 'step',
+    projectHealth: 'area',
+    projectStatus: 'donut',
+    expenseCategory: 'line',
+    progressComparison: 'area',
+    scheduleProgress: 'radar',
+  },
+  ember: {
+    profitTrend: 'bar',
+    projectHealth: 'grouped-bar',
+    projectStatus: 'bar',
+    expenseCategory: 'bar',
+    progressComparison: 'stacked-bar',
+    scheduleProgress: 'horizontal-bars',
+  },
+};
 
 const StatCard = ({ title, value, icon: Icon, trend, trendValue, color }: any) => (
   <motion.div 
@@ -115,6 +217,7 @@ const QuickActionButton = ({ icon: Icon, label, onClick, color }: any) => (
 );
 
 export default function Dashboard() {
+  const { currentTheme } = useTheme();
   const [projects, setProjects] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
@@ -129,7 +232,43 @@ export default function Dashboard() {
   const [isLoadingQuickItems, setIsLoadingQuickItems] = useState(false);
   const [quickSearchTerm, setQuickSearchTerm] = useState('');
   const [progressChartScope, setProgressChartScope] = useState<'all' | 'selected'>('all');
+  const [chartPreferences, setChartPreferences] = useState<DashboardChartPreferences>(
+    THEME_DEFAULT_CHARTS.sunset
+  );
   const navigate = useNavigate();
+
+  const updateChartPreference = (chartKey: DashboardChartKey, value: string) => {
+    setChartPreferences((prev) => ({
+      ...prev,
+      [chartKey]: value,
+    }));
+  };
+
+  useEffect(() => {
+    const storageKey = 'dashboard-chart-preferences-by-theme';
+    const fallback = THEME_DEFAULT_CHARTS[currentTheme.id] || THEME_DEFAULT_CHARTS.sunset;
+
+    try {
+      const raw = localStorage.getItem(storageKey);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const persistedForTheme = parsed?.[currentTheme.id];
+      setChartPreferences(persistedForTheme ? { ...fallback, ...persistedForTheme } : fallback);
+    } catch {
+      setChartPreferences(fallback);
+    }
+  }, [currentTheme.id]);
+
+  useEffect(() => {
+    const storageKey = 'dashboard-chart-preferences-by-theme';
+    try {
+      const raw = localStorage.getItem(storageKey);
+      const parsed = raw ? JSON.parse(raw) : {};
+      parsed[currentTheme.id] = chartPreferences;
+      localStorage.setItem(storageKey, JSON.stringify(parsed));
+    } catch {
+      // Ignore persistence errors and keep runtime preferences.
+    }
+  }, [chartPreferences, currentTheme.id]);
 
   const clampPercent = (value: any) => {
     const numericValue = Number(value);
@@ -413,6 +552,16 @@ export default function Dashboard() {
     { name: 'En Pausa', value: projects.filter(p => p.status === 'On Hold').length },
   ].filter(d => d.value > 0);
 
+  const statusRadarData = statusData.map((item) => ({
+    subject: item.name,
+    value: item.value,
+  }));
+
+  const expenseRadarData = expenseByCategoryData.map((item) => ({
+    subject: item.name,
+    value: item.value,
+  }));
+
   const activeProjectsList = projects.filter(p => p.status === 'In Progress' || p.status === 'Active');
   
   const progressComparisonData = projects
@@ -473,6 +622,19 @@ export default function Dashboard() {
   const ganttChartData = progressChartScope === 'selected' && selectedQuickProjectId
     ? ganttData.filter((p) => p.id === selectedQuickProjectId)
     : ganttData;
+
+  const scheduleRadarData = ganttChartData.slice(0, 8).map((item) => ({
+    subject: item.shortName,
+    physical: item.physical,
+    financial: item.financial,
+  }));
+
+  const scheduleTrendData = ganttChartData.map((item) => ({
+    name: item.shortName,
+    physical: item.physical,
+    financial: item.financial,
+    duration: item.duration,
+  }));
 
   const ganttChartHeight = Math.max(340, 120 + (ganttChartData.length * 30));
 
@@ -574,152 +736,248 @@ export default function Dashboard() {
         <div className="lg:col-span-2 space-y-8 min-w-0">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 min-w-0">
             <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all duration-300">
-              <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest">Tendencia de Ganancia Global</h3>
+              <div className="mb-6 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Tendencia de Ganancia Global</h3>
+                <select
+                  value={chartPreferences.profitTrend}
+                  onChange={(e) => updateChartPreference('profitTrend', e.target.value)}
+                  className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
+                >
+                  {CHART_TYPE_OPTIONS.profitTrend.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
               <div className="h-64 min-w-0">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-                  <AreaChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                    <XAxis 
-                      dataKey="date" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
-                      dy={10}
-                    />
-                    <YAxis 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
-                      tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`}
-                    />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }}
-                      itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }}
-                      labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}
-                      formatter={(value: number) => [formatCurrency(value), "Ganancia"]}
-                    />
-                    <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorProfit)" dot={{ r: 0 }} activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} name="Ganancia" />
-                  </AreaChart>
+                  {chartPreferences.profitTrend === 'line' ? (
+                    <LineChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), 'Ganancia']} />
+                      <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={3} dot={{ r: 2 }} activeDot={{ r: 6 }} />
+                    </LineChart>
+                  ) : chartPreferences.profitTrend === 'bar' ? (
+                    <BarChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), 'Ganancia']} />
+                      <Bar dataKey="profit" fill="#10b981" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  ) : chartPreferences.profitTrend === 'composed' ? (
+                    <ComposedChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), 'Ganancia']} />
+                      <Bar dataKey="profit" fill="#34d399" radius={[6, 6, 0, 0]} opacity={0.55} />
+                      <Line type="monotone" dataKey="profit" stroke="#059669" strokeWidth={3} dot={false} />
+                    </ComposedChart>
+                  ) : chartPreferences.profitTrend === 'step' ? (
+                    <LineChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), 'Ganancia']} />
+                      <Line type="stepAfter" dataKey="profit" stroke="#10b981" strokeWidth={3} dot={{ r: 2 }} />
+                    </LineChart>
+                  ) : (
+                    <AreaChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), 'Ganancia']} />
+                      <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorProfit)" dot={{ r: 0 }} activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} name="Ganancia" />
+                    </AreaChart>
+                  )}
                 </ResponsiveContainer>
               </div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
-              <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest">Salud Financiera por Proyecto</h3>
+              <div className="mb-6 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Salud Financiera por Proyecto</h3>
+                <select
+                  value={chartPreferences.projectHealth}
+                  onChange={(e) => updateChartPreference('projectHealth', e.target.value)}
+                  className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
+                >
+                  {CHART_TYPE_OPTIONS.projectHealth.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
               <div className="h-64 min-w-0">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-                  <BarChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                    <XAxis 
-                      dataKey="name" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} 
-                      interval={0}
-                      minTickGap={10}
-                      angle={-45}
-                      textAnchor="end"
-                      height={80}
-                    />
-                    <YAxis 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }}
-                      tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`}
-                    />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }}
-                      itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }}
-                      labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}
-                      formatter={(value: number) => [formatCurrency(value), ""]}
-                    />
-                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
-                    <Bar dataKey="presupuesto" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Presupuesto" barSize={20} />
-                    <Bar dataKey="gastado" fill="#ef4444" radius={[4, 4, 0, 0]} name="Gastado" barSize={20} />
-                  </BarChart>
+                  {chartPreferences.projectHealth === 'line' ? (
+                    <LineChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
+                      <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
+                      <Line type="monotone" dataKey="presupuesto" stroke="#3b82f6" strokeWidth={2.5} name="Presupuesto" />
+                      <Line type="monotone" dataKey="gastado" stroke="#ef4444" strokeWidth={2.5} name="Gastado" />
+                    </LineChart>
+                  ) : chartPreferences.projectHealth === 'area' ? (
+                    <AreaChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
+                      <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
+                      <Area type="monotone" dataKey="presupuesto" stroke="#3b82f6" fill="#93c5fd" fillOpacity={0.3} name="Presupuesto" />
+                      <Area type="monotone" dataKey="gastado" stroke="#ef4444" fill="#fda4af" fillOpacity={0.3} name="Gastado" />
+                    </AreaChart>
+                  ) : chartPreferences.projectHealth === 'composed' ? (
+                    <ComposedChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
+                      <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
+                      <Bar dataKey="gastado" fill="#ef4444" radius={[4, 4, 0, 0]} name="Gastado" barSize={16} />
+                      <Line type="monotone" dataKey="presupuesto" stroke="#2563eb" strokeWidth={3} name="Presupuesto" />
+                    </ComposedChart>
+                  ) : (
+                    <BarChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
+                      <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
+                      <Bar dataKey="presupuesto" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Presupuesto" barSize={chartPreferences.projectHealth === 'stacked-bar' ? 22 : 20} stackId={chartPreferences.projectHealth === 'stacked-bar' ? 'health' : undefined} />
+                      <Bar dataKey="gastado" fill="#ef4444" radius={[4, 4, 0, 0]} name="Gastado" barSize={chartPreferences.projectHealth === 'stacked-bar' ? 22 : 20} stackId={chartPreferences.projectHealth === 'stacked-bar' ? 'health' : undefined} />
+                    </BarChart>
+                  )}
                 </ResponsiveContainer>
               </div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
-              <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest">Estado de los Proyectos</h3>
+              <div className="mb-6 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Estado de los Proyectos</h3>
+                <select
+                  value={chartPreferences.projectStatus}
+                  onChange={(e) => updateChartPreference('projectStatus', e.target.value)}
+                  className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
+                >
+                  {CHART_TYPE_OPTIONS.projectStatus.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
               <div className="h-64 min-w-0">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-                  <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 20 }}>
-                    <Pie
-                      data={statusData}
-                      cx="50%"
-                      cy="45%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={8}
-                      dataKey="value"
-                    >
-                      {statusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }}
-                      itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }}
-                    />
-                    <Legend 
-                      verticalAlign="bottom" 
-                      align="center"
-                      iconType="circle" 
-                      wrapperStyle={{ 
-                        fontSize: '9px', 
-                        fontWeight: 800, 
-                        textTransform: 'uppercase',
-                        paddingTop: '20px'
-                      }} 
-                    />
-                  </PieChart>
+                  {chartPreferences.projectStatus === 'bar' ? (
+                    <BarChart data={statusData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} allowDecimals={false} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} />
+                      <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                        {statusData.map((entry, index) => <Cell key={`status-bar-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                      </Bar>
+                    </BarChart>
+                  ) : chartPreferences.projectStatus === 'radar' ? (
+                    <RadarChart data={statusRadarData} outerRadius={90}>
+                      <PolarGrid stroke="#334155" strokeOpacity={0.3} />
+                      <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                      <PolarRadiusAxis tick={{ fill: '#94a3b8', fontSize: 9 }} allowDecimals={false} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} />
+                      <Radar name="Estados" dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
+                    </RadarChart>
+                  ) : (
+                    <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 20 }}>
+                      <Pie
+                        data={statusData}
+                        cx="50%"
+                        cy="45%"
+                        innerRadius={chartPreferences.projectStatus === 'pie' ? 0 : 60}
+                        outerRadius={80}
+                        paddingAngle={8}
+                        dataKey="value"
+                      >
+                        {statusData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} />
+                      <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingTop: '20px' }} />
+                    </PieChart>
+                  )}
                 </ResponsiveContainer>
               </div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
-              <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest">Gastos por Categoría</h3>
+              <div className="mb-6 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Gastos por Categoría</h3>
+                <select
+                  value={chartPreferences.expenseCategory}
+                  onChange={(e) => updateChartPreference('expenseCategory', e.target.value)}
+                  className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
+                >
+                  {CHART_TYPE_OPTIONS.expenseCategory.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
               <div className="h-64 min-w-0">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-                  <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 20 }}>
-                    <Pie
-                      data={expenseByCategoryData}
-                      cx="50%"
-                      cy="45%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={8}
-                      dataKey="value"
-                    >
-                      {expenseByCategoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }}
-                      itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }}
-                      formatter={(value: number) => [formatCurrency(value), "Total"]}
-                    />
-                    <Legend 
-                      verticalAlign="bottom" 
-                      align="center"
-                      iconType="circle" 
-                      wrapperStyle={{ 
-                        fontSize: '9px', 
-                        fontWeight: 800, 
-                        textTransform: 'uppercase',
-                        paddingTop: '20px'
-                      }} 
-                    />
-                  </PieChart>
+                  {chartPreferences.expenseCategory === 'bar' ? (
+                    <BarChart data={expenseByCategoryData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} angle={-30} textAnchor="end" height={70} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
+                      <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                        {expenseByCategoryData.map((entry, index) => <Cell key={`expense-bar-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                      </Bar>
+                    </BarChart>
+                  ) : chartPreferences.expenseCategory === 'radar' ? (
+                    <RadarChart data={expenseRadarData} outerRadius={90}>
+                      <PolarGrid stroke="#334155" strokeOpacity={0.3} />
+                      <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
+                      <PolarRadiusAxis tick={{ fill: '#94a3b8', fontSize: 9 }} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
+                      <Radar name="Total" dataKey="value" stroke="#f97316" fill="#f97316" fillOpacity={0.3} />
+                    </RadarChart>
+                  ) : chartPreferences.expenseCategory === 'line' ? (
+                    <LineChart data={expenseByCategoryData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} angle={-30} textAnchor="end" height={70} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
+                      <Line type="monotone" dataKey="value" stroke="#f97316" strokeWidth={3} />
+                    </LineChart>
+                  ) : (
+                    <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 20 }}>
+                      <Pie
+                        data={expenseByCategoryData}
+                        cx="50%"
+                        cy="45%"
+                        innerRadius={chartPreferences.expenseCategory === 'pie' ? 0 : 60}
+                        outerRadius={80}
+                        paddingAngle={8}
+                        dataKey="value"
+                      >
+                        {expenseByCategoryData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
+                      <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingTop: '20px' }} />
+                    </PieChart>
+                  )}
                 </ResponsiveContainer>
               </div>
             </div>
@@ -744,6 +1002,15 @@ export default function Dashboard() {
                     Solo proyecto seleccionado
                   </option>
                 </select>
+                <select
+                  value={chartPreferences.progressComparison}
+                  onChange={(e) => updateChartPreference('progressComparison', e.target.value)}
+                  className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
+                >
+                  {CHART_TYPE_OPTIONS.progressComparison.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
               </div>
             </div>
             {progressChartScope === 'selected' && !selectedQuickProjectId && (
@@ -753,39 +1020,52 @@ export default function Dashboard() {
             )}
             <div className="h-80 min-w-0">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-                <BarChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
-                    angle={-45}
-                    textAnchor="end"
-                    interval={0}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
-                    tickFormatter={(value) => `${value.toFixed(1)}%`}
-                    domain={[0, 100]}
-                  />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }}
-                    itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }}
-                    labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}
-                    formatter={(value: number, name: string) => {
+                {chartPreferences.progressComparison === 'line' ? (
+                  <LineChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} angle={-45} textAnchor="end" interval={0} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `${value.toFixed(1)}%`} domain={[0, 100]} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
+                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
+                    <Line type="monotone" dataKey="fisico" stroke="#3b82f6" name="Avance Físico" strokeWidth={3} />
+                    <Line type="monotone" dataKey="financiero" stroke="#ef4444" name="Avance Financiero" strokeWidth={3} />
+                  </LineChart>
+                ) : chartPreferences.progressComparison === 'area' ? (
+                  <AreaChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} angle={-45} textAnchor="end" interval={0} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `${value.toFixed(1)}%`} domain={[0, 100]} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
+                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
+                    <Area type="monotone" dataKey="fisico" stroke="#3b82f6" fill="#93c5fd" fillOpacity={0.3} name="Avance Físico" />
+                    <Area type="monotone" dataKey="financiero" stroke="#ef4444" fill="#fda4af" fillOpacity={0.3} name="Avance Financiero" />
+                  </AreaChart>
+                ) : chartPreferences.progressComparison === 'radar' ? (
+                  <RadarChart data={progressComparisonChartData.slice(0, 8)} outerRadius={95}>
+                    <PolarGrid stroke="#334155" strokeOpacity={0.3} />
+                    <PolarAngleAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
+                    <PolarRadiusAxis domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 9 }} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
+                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
+                    <Radar dataKey="fisico" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.25} name="Avance Físico" />
+                    <Radar dataKey="financiero" stroke="#ef4444" fill="#ef4444" fillOpacity={0.2} name="Avance Financiero" />
+                  </RadarChart>
+                ) : (
+                  <BarChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} angle={-45} textAnchor="end" interval={0} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `${value.toFixed(1)}%`} domain={[0, 100]} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number, name: string) => {
                       if (name.includes('Restante') || name.includes('Pendiente')) return null;
                       return [`${value.toFixed(1)}%`, name];
-                    }}
-                  />
-                  <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
-                  <Bar dataKey="fisico" stackId="a" name="Avance Físico" fill="#3b82f6" barSize={30} />
-                  <Bar dataKey="fisicoRestante" stackId="a" name="Pendiente Físico" fill="#dbeafe" barSize={30} radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="financiero" stackId="b" name="Avance Financiero" fill="#ef4444" barSize={30} />
-                  <Bar dataKey="financieroRestante" stackId="b" name="Pendiente Financiero" fill="#fee2e2" barSize={30} radius={[4, 4, 0, 0]} />
-                </BarChart>
+                    }} />
+                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
+                    <Bar dataKey="fisico" stackId={chartPreferences.progressComparison === 'stacked-bar' ? 'a' : undefined} name="Avance Físico" fill="#3b82f6" barSize={30} />
+                    <Bar dataKey="fisicoRestante" stackId={chartPreferences.progressComparison === 'stacked-bar' ? 'a' : undefined} name="Pendiente Físico" fill="#dbeafe" barSize={30} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="financiero" stackId={chartPreferences.progressComparison === 'stacked-bar' ? 'b' : undefined} name="Avance Financiero" fill="#ef4444" barSize={30} />
+                    <Bar dataKey="financieroRestante" stackId={chartPreferences.progressComparison === 'stacked-bar' ? 'b' : undefined} name="Pendiente Financiero" fill="#fee2e2" barSize={30} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                )}
               </ResponsiveContainer>
             </div>
           </div>
@@ -807,6 +1087,15 @@ export default function Dashboard() {
                 </button>
               </div>
               <div className="flex items-center gap-3">
+                <select
+                  value={chartPreferences.scheduleProgress}
+                  onChange={(e) => updateChartPreference('scheduleProgress', e.target.value)}
+                  className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
+                >
+                  {CHART_TYPE_OPTIONS.scheduleProgress.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-sky-500 to-indigo-500" />
                   <span className="text-[10px] font-bold text-slate-500 uppercase">Físico</span>
@@ -822,132 +1111,168 @@ export default function Dashboard() {
             </p>
             <div style={{ height: `${ganttChartHeight}px` }} className="min-w-0">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-                <BarChart
-                  data={ganttChartData}
-                  layout="vertical"
-                  margin={{ top: 6, right: 24, left: 6, bottom: 12 }}
-                  barGap={-14}
-                >
-                  <defs>
-                    <linearGradient id="ganttPhysicalGradient" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#0ea5e9" />
-                      <stop offset="100%" stopColor="#6366f1" />
-                    </linearGradient>
-                    <linearGradient id="ganttFinancialGradient" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#f43f5e" />
-                      <stop offset="100%" stopColor="#f59e0b" />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                  <XAxis 
-                    type="number" 
-                    domain={[0, totalDays]} 
-                    tickFormatter={formatXAxis} 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
-                    minTickGap={30}
-                  />
-                  <YAxis 
-                    dataKey="shortName" 
-                    type="category" 
-                    width={140} 
-                    tick={({ x, y, payload }) => (
-                      <g transform={`translate(${x},${y})`}>
-                        <text
-                          x={-10}
-                          y={0}
-                          dy={4}
-                          textAnchor="end"
-                          fill="#64748b"
-                          fontSize={9}
-                          fontWeight={800}
-                          className="dark:fill-slate-400"
-                        >
-                          {payload.value}
-                        </text>
-                      </g>
-                    )}
-                    axisLine={false} 
-                    tickLine={false}
-                  />
-                  <Tooltip 
-                    cursor={{ fill: 'rgba(241, 245, 249, 0.5)' }}
-                    content={({ active, payload, label }) => {
-                      if (active && payload && payload.length) {
-                        const data = payload[0].payload;
-                        return (
-                          <div className="bg-slate-900/95 backdrop-blur-md p-4 rounded-2xl border border-slate-800 shadow-2xl">
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{label}</p>
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between gap-8">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 bg-gradient-to-r from-sky-500 to-indigo-500 rounded-full" />
-                                  <span className="text-xs font-bold text-white">Avance Físico</span>
+                {chartPreferences.scheduleProgress === 'radar' ? (
+                  <RadarChart data={scheduleRadarData} outerRadius={120}>
+                    <PolarGrid stroke="#334155" strokeOpacity={0.3} />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
+                    <PolarRadiusAxis domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 9 }} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} />
+                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
+                    <Radar dataKey="physical" stroke="#0ea5e9" fill="#0ea5e9" fillOpacity={0.25} name="Físico" />
+                    <Radar dataKey="financial" stroke="#f43f5e" fill="#f43f5e" fillOpacity={0.18} name="Financiero" />
+                  </RadarChart>
+                ) : chartPreferences.scheduleProgress === 'line' ? (
+                  <LineChart data={scheduleTrendData} margin={{ top: 10, right: 24, left: 12, bottom: 42 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} angle={-25} textAnchor="end" height={56} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
+                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
+                    <Line type="monotone" dataKey="physical" stroke="#0ea5e9" name="Físico" strokeWidth={3} />
+                    <Line type="monotone" dataKey="financial" stroke="#f43f5e" name="Financiero" strokeWidth={3} />
+                  </LineChart>
+                ) : chartPreferences.scheduleProgress === 'area' ? (
+                  <AreaChart data={scheduleTrendData} margin={{ top: 10, right: 24, left: 12, bottom: 42 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} angle={-25} textAnchor="end" height={56} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
+                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
+                    <Area type="monotone" dataKey="physical" stroke="#0ea5e9" fill="#7dd3fc" fillOpacity={0.3} name="Físico" />
+                    <Area type="monotone" dataKey="financial" stroke="#f43f5e" fill="#fda4af" fillOpacity={0.22} name="Financiero" />
+                  </AreaChart>
+                ) : chartPreferences.scheduleProgress === 'horizontal-bars' ? (
+                  <BarChart data={scheduleTrendData} layout="vertical" margin={{ top: 10, right: 24, left: 12, bottom: 12 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                    <XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${value}%`} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
+                    <YAxis dataKey="name" type="category" width={140} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 9, fontWeight: 800 }} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
+                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
+                    <Bar dataKey="physical" fill="#0ea5e9" radius={[0, 6, 6, 0]} name="Físico" barSize={10} />
+                    <Bar dataKey="financial" fill="#f43f5e" radius={[0, 6, 6, 0]} name="Financiero" barSize={10} />
+                  </BarChart>
+                ) : (
+                  <BarChart
+                    data={ganttChartData}
+                    layout="vertical"
+                    margin={{ top: 6, right: 24, left: 6, bottom: 12 }}
+                    barGap={-14}
+                  >
+                    <defs>
+                      <linearGradient id="ganttPhysicalGradient" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#0ea5e9" />
+                        <stop offset="100%" stopColor="#6366f1" />
+                      </linearGradient>
+                      <linearGradient id="ganttFinancialGradient" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#f43f5e" />
+                        <stop offset="100%" stopColor="#f59e0b" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                    <XAxis
+                      type="number"
+                      domain={[0, totalDays]}
+                      tickFormatter={formatXAxis}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                      minTickGap={30}
+                    />
+                    <YAxis
+                      dataKey="shortName"
+                      type="category"
+                      width={140}
+                      tick={({ x, y, payload }) => (
+                        <g transform={`translate(${x},${y})`}>
+                          <text
+                            x={-10}
+                            y={0}
+                            dy={4}
+                            textAnchor="end"
+                            fill="#64748b"
+                            fontSize={9}
+                            fontWeight={800}
+                            className="dark:fill-slate-400"
+                          >
+                            {payload.value}
+                          </text>
+                        </g>
+                      )}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(241, 245, 249, 0.5)' }}
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-slate-900/95 backdrop-blur-md p-4 rounded-2xl border border-slate-800 shadow-2xl">
+                              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{label}</p>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-8">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-gradient-to-r from-sky-500 to-indigo-500 rounded-full" />
+                                    <span className="text-xs font-bold text-white">Avance Físico</span>
+                                  </div>
+                                  <span className="text-xs font-black text-blue-300">{data.physical.toFixed(1)}%</span>
                                 </div>
-                                <span className="text-xs font-black text-blue-300">{data.physical.toFixed(1)}%</span>
-                              </div>
-                              <div className="flex items-center justify-between gap-8">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 bg-gradient-to-r from-rose-500 to-amber-500 rounded-full" />
-                                  <span className="text-xs font-bold text-white">Avance Financiero</span>
+                                <div className="flex items-center justify-between gap-8">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-gradient-to-r from-rose-500 to-amber-500 rounded-full" />
+                                    <span className="text-xs font-bold text-white">Avance Financiero</span>
+                                  </div>
+                                  <span className="text-xs font-black text-rose-300">{data.financial.toFixed(1)}%</span>
                                 </div>
-                                <span className="text-xs font-black text-rose-300">{data.financial.toFixed(1)}%</span>
-                              </div>
-                              <div className="pt-2 mt-2 border-t border-slate-800 flex flex-col gap-1">
-                                <p className="text-[9px] text-emerald-300 font-bold uppercase">Físico guardado: {data.physical.toFixed(1)}%</p>
-                                <p className="text-[9px] text-slate-400 font-bold uppercase">Inicio: {data.startDate || 'N/A'}</p>
-                                <p className="text-[9px] text-slate-400 font-bold uppercase">Fin: {data.endDate || 'N/A'}</p>
+                                <div className="pt-2 mt-2 border-t border-slate-800 flex flex-col gap-1">
+                                  <p className="text-[9px] text-emerald-300 font-bold uppercase">Físico guardado: {data.physical.toFixed(1)}%</p>
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase">Inicio: {data.startDate || 'N/A'}</p>
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase">Fin: {data.endDate || 'N/A'}</p>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <ReferenceLine 
-                    x={todayOffset} 
-                    stroke="#10b981" 
-                    strokeDasharray="3 3" 
-                    label={{ 
-                      position: 'top', 
-                      value: 'Hoy', 
-                      fill: '#10b981', 
-                      fontSize: 10, 
-                      fontWeight: 800,
-                      offset: 10
-                    }} 
-                  />
-                  
-                  {/* Background Bar (Duration) */}
-                  <Bar dataKey="startOffset" stackId="bg" fill="transparent" />
-                  <Bar dataKey="duration" stackId="bg" fill="#e2e8f0" className="dark:fill-slate-800/50" radius={[0, 6, 6, 0]} barSize={14} />
-                  
-                  {/* Physical Progress Bar */}
-                  <Bar dataKey="startOffset" stackId="phys" fill="transparent" />
-                  <Bar 
-                    dataKey="physicalDuration" 
-                    stackId="phys" 
-                    fill="url(#ganttPhysicalGradient)" 
-                    radius={[0, 6, 6, 0]} 
-                    barSize={8} 
-                    onClick={(data) => navigate(`/projects/${data.id}`)}
-                    className="cursor-pointer hover:opacity-80 transition-opacity"
-                  />
-                  
-                  {/* Financial Progress Bar */}
-                  <Bar dataKey="startOffset" stackId="fin" fill="transparent" />
-                  <Bar 
-                    dataKey="financialDuration" 
-                    stackId="fin" 
-                    fill="url(#ganttFinancialGradient)" 
-                    radius={[0, 6, 6, 0]} 
-                    barSize={4} 
-                    onClick={(data) => navigate(`/projects/${data.id}`)}
-                    className="cursor-pointer hover:opacity-80 transition-opacity"
-                  />
-                </BarChart>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <ReferenceLine
+                      x={todayOffset}
+                      stroke="#10b981"
+                      strokeDasharray="3 3"
+                      label={{
+                        position: 'top',
+                        value: 'Hoy',
+                        fill: '#10b981',
+                        fontSize: 10,
+                        fontWeight: 800,
+                        offset: 10,
+                      }}
+                    />
+                    <Bar dataKey="startOffset" stackId="bg" fill="transparent" />
+                    <Bar dataKey="duration" stackId="bg" fill="#e2e8f0" className="dark:fill-slate-800/50" radius={[0, 6, 6, 0]} barSize={14} />
+                    <Bar dataKey="startOffset" stackId="phys" fill="transparent" />
+                    <Bar
+                      dataKey="physicalDuration"
+                      stackId="phys"
+                      fill="url(#ganttPhysicalGradient)"
+                      radius={[0, 6, 6, 0]}
+                      barSize={8}
+                      onClick={(data) => navigate(`/projects/${data.id}`)}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                    />
+                    <Bar dataKey="startOffset" stackId="fin" fill="transparent" />
+                    <Bar
+                      dataKey="financialDuration"
+                      stackId="fin"
+                      fill="url(#ganttFinancialGradient)"
+                      radius={[0, 6, 6, 0]}
+                      barSize={4}
+                      onClick={(data) => navigate(`/projects/${data.id}`)}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                    />
+                  </BarChart>
+                )}
               </ResponsiveContainer>
             </div>
           </div>
