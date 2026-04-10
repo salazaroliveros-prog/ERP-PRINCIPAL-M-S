@@ -2555,7 +2555,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                   min="0"
                                   step="any"
                                   title="Cantidad del renglón"
-                                  className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-[11px] font-black focus:ring-2 focus:ring-primary outline-none transition-all"
+                                  className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[11px] font-black text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary outline-none transition-all"
                                   value={item.quantity}
                                   onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
                                 />
@@ -2587,7 +2587,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                   min="0"
                                   step="any"
                                   title="Cantidad del renglón"
-                                  className="w-full px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-bold focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full px-1.5 py-0.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[10px] font-bold text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={item.quantity}
                                   onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
                                 />
@@ -2644,7 +2644,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                   min="0"
                                   step="any"
                                   title="Cantidad del renglón"
-                                  className="w-full px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-black focus:ring-1 focus:ring-primary outline-none transition-all"
+                                  className="w-full px-1 py-0.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[10px] font-black text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-primary outline-none transition-all"
                                   value={item.quantity}
                                   onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
                                 />
@@ -2723,7 +2723,7 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                                     min="0"
                                     step="any"
                                     title="Cantidad del renglón"
-                                    className="w-full pl-2 pr-6 py-1 bg-slate-50 border border-slate-200 rounded text-[10px] font-black focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    className="w-full pl-2 pr-6 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[10px] font-black text-slate-900 dark:text-slate-100 focus:ring-1 focus:ring-primary outline-none transition-all"
                                     value={item.quantity}
                                     onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
                                   />
