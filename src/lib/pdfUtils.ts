@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { COMPANY_DISPLAY_NAME, COMPANY_TAGLINE } from './reportBranding';
 
 const sharedLogoImage = (() => {
@@ -192,7 +193,7 @@ export const generateExecutiveReport = (data: {
   const balance = financials.totalIncome - financials.totalExpense;
   const margin = financials.totalIncome > 0 ? (balance / financials.totalIncome) * 100 : 0;
 
-  (doc as any).autoTable({
+  autoTable(doc, {
     startY: headerBottom + 13,
     head: [['Concepto', 'Valor']],
     body: [
@@ -210,7 +211,7 @@ export const generateExecutiveReport = (data: {
   doc.setFontSize(14);
   doc.text('2. Estado de Proyectos Activos', 20, (doc as any).lastAutoTable.finalY + 15);
   
-  (doc as any).autoTable({
+  autoTable(doc, {
     startY: (doc as any).lastAutoTable.finalY + 20,
     head: [['Proyecto', 'Ubicación', 'Presupuesto', 'Avance Físico', 'Estado']],
     body: projects.map(p => [
@@ -236,7 +237,7 @@ export const generateExecutiveReport = (data: {
       ...inventoryAlerts.map(i => ['Stock Bajo', `Material: ${i.name} (Quedan ${i.stock} ${i.unit})`, 'Media'])
     ];
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 25,
       head: [['Tipo de Alerta', 'Detalle', 'Prioridad']],
       body: alertRows,

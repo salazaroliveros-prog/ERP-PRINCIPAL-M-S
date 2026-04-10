@@ -576,7 +576,7 @@ export default function Dashboard() {
             <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all duration-300">
               <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest">Tendencia de Ganancia Global</h3>
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <AreaChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
@@ -613,7 +613,7 @@ export default function Dashboard() {
             <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
               <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest">Salud Financiera por Proyecto</h3>
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <BarChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                     <XAxis 
@@ -650,7 +650,7 @@ export default function Dashboard() {
             <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
               <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest">Estado de los Proyectos</h3>
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 20 }}>
                     <Pie
                       data={statusData}
@@ -688,7 +688,7 @@ export default function Dashboard() {
             <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
               <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest">Gastos por Categoría</h3>
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 20 }}>
                     <Pie
                       data={expenseByCategoryData}
@@ -752,7 +752,7 @@ export default function Dashboard() {
               </p>
             )}
             <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 <BarChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                   <XAxis 
@@ -821,7 +821,7 @@ export default function Dashboard() {
               Mostrando {ganttChartData.length} obra(s)
             </p>
             <div style={{ height: `${ganttChartHeight}px` }}>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 <BarChart
                   data={ganttChartData}
                   layout="vertical"

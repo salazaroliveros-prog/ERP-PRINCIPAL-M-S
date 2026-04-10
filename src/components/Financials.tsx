@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
-import { formatCurrency, formatDate, cn } from '../lib/utils';
+import { formatCurrency, formatDate, cn, parseAIClientError } from '../lib/utils';
 import { logAction } from '../lib/audit';
 import { drawReportHeader } from '../lib/pdfUtils';
 import { FormModal } from './FormModal';
@@ -577,8 +577,9 @@ export default function Financials() {
       toast.success('Análisis financiero generado con éxito');
       await logAction('Análisis IA', 'Finanzas', 'Se generó un análisis financiero utilizando IA', 'read');
     } catch (error) {
-      console.error('Error generating AI analysis:', error);
-      toast.error('Error al generar análisis con IA');
+      const aiError = parseAIClientError(error);
+      console.error('Error generating AI analysis:', aiError.technicalMessage, error);
+      toast.error(aiError.userMessage);
     } finally {
       setIsGenerating(false);
     }

@@ -47,6 +47,12 @@ export interface ApiErrorInfo {
   }
 }
 
+export interface AIClientErrorInfo {
+  userMessage: string;
+  technicalMessage: string;
+  isPermissionDenied: boolean;
+}
+
 import { toast } from 'sonner';
 
 export function handleApiError(error: unknown, operationType: OperationType, path: string | null) {
@@ -81,6 +87,48 @@ export function handleApiError(error: unknown, operationType: OperationType, pat
   });
 
   throw new Error(JSON.stringify(errInfo));
+}
+
+export function parseAIClientError(error: unknown): AIClientErrorInfo {
+  const technicalMessage = error instanceof Error ? error.message : String(error);
+  const normalized = technicalMessage.toLowerCase();
+
+  const isPermissionDenied =
+    normalized.includes('permission_denied') ||
+    normalized.includes('forbidden') ||
+    normalized.includes('denied access') ||
+    normalized.includes('403');
+
+  if (isPermissionDenied) {
+    return {
+      isPermissionDenied: true,
+      technicalMessage,
+      userMessage:
+        'Gemini devolvio un error 403 de permisos. Tu proyecto/API key no tiene acceso al modelo. Verifica habilitacion de API, restricciones de clave y permisos del proyecto en Google AI Studio/Cloud.',
+    };
+  }
+
+  if (normalized.includes('api key') || normalized.includes('api_key') || normalized.includes('unauthenticated') || normalized.includes('401')) {
+    return {
+      isPermissionDenied: false,
+      technicalMessage,
+      userMessage: 'La clave de Gemini es invalida o no esta configurada correctamente.',
+    };
+  }
+
+  if (normalized.includes('quota') || normalized.includes('rate limit') || normalized.includes('resource_exhausted') || normalized.includes('429')) {
+    return {
+      isPermissionDenied: false,
+      technicalMessage,
+      userMessage: 'Se alcanzo el limite de uso de la IA. Intenta de nuevo en unos minutos.',
+    };
+  }
+
+  return {
+    isPermissionDenied: false,
+    technicalMessage,
+    userMessage: 'No fue posible completar la operacion con IA en este momento. Intenta nuevamente.',
+  };
 }
 
 export function getMitigationSuggestions(deviation: number): string[] {

@@ -394,7 +394,7 @@ export default function Analytics() {
             </div>
           </div>
           <div className="h-60 sm:h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
@@ -433,7 +433,7 @@ export default function Analytics() {
           <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white mb-8">Distribución por Tipo de Proyecto</h3>
           <div className="h-80 w-full flex flex-col sm:flex-row items-center">
             <div className="h-full w-full sm:w-2/3">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 20 }}>
                   <Pie
                     data={projectDistribution}
@@ -480,7 +480,7 @@ export default function Analytics() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
           <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white mb-8">Distribución de Riesgos por Tipo (Proyectos Activos)</h3>
           <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <BarChart data={riskDistributionData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
                 <XAxis 

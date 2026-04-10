@@ -30,7 +30,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
-import { formatCurrency, formatDate, cn, handleApiError, OperationType } from '../lib/utils';
+import { formatCurrency, formatDate, cn, handleApiError, OperationType, parseAIClientError } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendNotification } from '../lib/notifications';
 import { logAction } from '../lib/audit';
@@ -603,8 +603,9 @@ export default function Inventory() {
         setNewMaterial(prev => ({ ...prev, minStock: suggestions.recommendedMinStock }));
       }
     } catch (error) {
-      console.error('Error generating AI suggestions:', error);
-      toast.error('Error al generar sugerencias con IA');
+      const aiError = parseAIClientError(error);
+      console.error('Error generating AI suggestions:', aiError.technicalMessage, error);
+      toast.error(aiError.userMessage);
     } finally {
       setIsGenerating(false);
     }
@@ -680,8 +681,9 @@ export default function Inventory() {
       toast.success('Sugerencia de IA generada');
       toast.info(`Razón: ${suggestions.reasoning}`, { duration: 8000 });
     } catch (error) {
-      console.error('Error generating PO AI suggestions:', error);
-      toast.error('Error al generar sugerencias de compra con IA');
+      const aiError = parseAIClientError(error);
+      console.error('Error generating PO AI suggestions:', aiError.technicalMessage, error);
+      toast.error(aiError.userMessage);
     } finally {
       setIsGeneratingPO(false);
     }
@@ -1162,8 +1164,9 @@ export default function Inventory() {
       setOptimizationResults(results);
       toast.success('Optimización de inventario completada');
     } catch (error) {
-      console.error('Error in inventory optimization:', error);
-      toast.error('Error al ejecutar la optimización de inventario');
+      const aiError = parseAIClientError(error);
+      console.error('Error in inventory optimization:', aiError.technicalMessage, error);
+      toast.error(aiError.userMessage);
       setIsOptimizationModalOpen(false);
     } finally {
       setIsOptimizing(false);
@@ -1254,8 +1257,9 @@ export default function Inventory() {
       setIsOptimizationModalOpen(false);
       await logAction('Generación de POs IA', 'Inventario', `Se generaron ${suggestedPOs.length} órdenes de compra sugeridas por IA`, 'create');
     } catch (error) {
-      console.error('Error generating AI POs:', error);
-      toast.error('Error al generar las órdenes de compra sugeridas');
+      const aiError = parseAIClientError(error);
+      console.error('Error generating AI POs:', aiError.technicalMessage, error);
+      toast.error(aiError.userMessage);
     } finally {
       setIsGeneratingPOs(false);
     }
