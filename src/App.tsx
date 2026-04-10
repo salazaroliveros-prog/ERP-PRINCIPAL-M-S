@@ -550,18 +550,19 @@ function AppContent({
           <Suspense fallback={null}>
             <AIChat />
           </Suspense>
-          <Suspense fallback={null}>
-            <QuickActionsLauncher />
-          </Suspense>
-          <Suspense fallback={null}>
-            <SideToolsDock />
-          </Suspense>
           {enhancementsReady && (
             <Suspense fallback={null}>
               <SyncStatus />
             </Suspense>
           )}
         </main>
+
+        <Suspense fallback={null}>
+          <QuickActionsLauncher />
+        </Suspense>
+        <Suspense fallback={null}>
+          <SideToolsDock />
+        </Suspense>
 
         <Suspense fallback={null}>
           <BottomNav 
