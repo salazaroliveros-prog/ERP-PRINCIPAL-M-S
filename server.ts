@@ -23,6 +23,7 @@ const DB_HEALTH_FAIL_CACHE_MS = Number(process.env.DB_HEALTH_FAIL_CACHE_MS || 15
 const DB_HEALTH_RETRY_ATTEMPTS = Number(process.env.DB_HEALTH_RETRY_ATTEMPTS || 2);
 const UPLOADS_PUBLIC_DIR = path.join(process.cwd(), "public", "uploads");
 const UPLOADS_FALLBACK_DIR = path.join(process.env.TMPDIR || "/tmp", "uploads");
+const LEGACY_OWNER_EMAIL = String(process.env.LEGACY_OWNER_EMAIL || 'salazaroliveros@gmai.com').trim().toLowerCase();
 
 const pool = DATABASE_URL
   ? new Pool({
@@ -1163,11 +1164,29 @@ function itemBelongsToUser(item: any, userEmail: string) {
   return false;
 }
 
+function itemHasOwnershipMarker(item: any) {
+  if (!item || typeof item !== 'object') return false;
+
+  const markerKeys = [
+    'ownerEmail',
+    'owner_email',
+    'userEmail',
+    'user_email',
+    'authorEmail',
+    'author_email',
+    'createdBy',
+    'created_by',
+  ];
+
+  return markerKeys.some((key) => String((item as any)[key] || '').trim() !== '');
+}
+
 async function ensureOwnerEmailColumn(db: Pool, tableName: string) {
   if (ownerEmailColumnReady.has(tableName)) return;
 
   await db.query(`alter table ${tableName} add column if not exists owner_email text`);
   await db.query(`create index if not exists idx_${tableName}_owner_email on ${tableName}(owner_email)`);
+  await db.query(`update ${tableName} set owner_email = $1 where owner_email is null`, [LEGACY_OWNER_EMAIL]);
   ownerEmailColumnReady.add(tableName);
 }
 
@@ -1425,6 +1444,13 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       );
 
       if (!isSqlScoped && payload && typeof payload === 'object' && Array.isArray(payload.items)) {
+        const isLegacyUser = userEmail === LEGACY_OWNER_EMAIL;
+        const hasAnyOwnershipMarkers = payload.items.some((item: any) => itemHasOwnershipMarker(item));
+
+        if (isLegacyUser && !hasAnyOwnershipMarkers) {
+          return originalJson(payload);
+        }
+
         payload.items = payload.items.filter((item: any) => itemBelongsToUser(item, userEmail));
         if (typeof payload.hasMore === 'boolean') {
           payload.hasMore = false;
