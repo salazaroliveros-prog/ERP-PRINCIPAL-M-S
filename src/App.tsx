@@ -556,15 +556,16 @@ function AppContent({
               </Routes>
             </AnimatePresence>
           </Suspense>
-          <Suspense fallback={null}>
-            <AIChat />
-          </Suspense>
           {enhancementsReady && (
             <Suspense fallback={null}>
               <SyncStatus />
             </Suspense>
           )}
         </main>
+
+        <Suspense fallback={null}>
+          <AIChat />
+        </Suspense>
 
         <Suspense fallback={null}>
           <QuickActionsLauncher />
