@@ -28,6 +28,7 @@ import { exportNavMetricsSnapshot, markNavigationComplete, markNavigationStart }
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { Toaster, toast } from 'sonner';
+import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
 
 // Lazy Loaded Components for Performance
 const loadDashboard = () => import('./components/Dashboard');
@@ -651,6 +652,7 @@ export default function App() {
             deferredPrompt={deferredPrompt}
             onInstall={handleInstall}
           />
+          <VercelAnalytics />
         </NotificationProvider>
       </ThemeProvider>
     </ErrorBoundary>
