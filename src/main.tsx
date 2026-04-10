@@ -86,6 +86,16 @@ const installChunkLoadRecovery = () => {
     );
   };
 
+  const isStaleHashedAssetUrl = (value: string) => {
+    try {
+      const url = new URL(value, window.location.origin);
+      if (!url.pathname.includes('/assets/')) return false;
+      return /-[a-z0-9]{8,}\.(css|js)$/i.test(url.pathname);
+    } catch {
+      return false;
+    }
+  };
+
   // Vite dispatches this when preload of a chunk fails after a new deploy.
   window.addEventListener('vite:preloadError', (event: Event) => {
     event.preventDefault();
@@ -96,6 +106,24 @@ const installChunkLoadRecovery = () => {
     const maybeMessage = event?.message || (event as ErrorEvent)?.error?.message;
     if (isChunkLoadFailure(maybeMessage)) {
       void reloadOnce();
+      return;
+    }
+
+    const target = (event as ErrorEvent).target as Element | null;
+    if (!target) return;
+
+    if (target instanceof HTMLLinkElement) {
+      const isStylesheet = (target.rel || '').toLowerCase().includes('stylesheet');
+      if (isStylesheet && isStaleHashedAssetUrl(target.href || '')) {
+        void reloadOnce();
+      }
+      return;
+    }
+
+    if (target instanceof HTMLScriptElement) {
+      if (isStaleHashedAssetUrl(target.src || '')) {
+        void reloadOnce();
+      }
     }
   });
 
