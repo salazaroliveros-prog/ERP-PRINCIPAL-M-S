@@ -1119,6 +1119,58 @@ function requireDatabase() {
   return pool;
 }
 
+const ownerEmailColumnReady = new Set<string>();
+
+function getRequestUserEmail(req: Request) {
+  const headerEmail = String(req.header('x-user-email') || '').trim().toLowerCase();
+  if (headerEmail) return headerEmail;
+
+  const bodyEmail = String((req.body as any)?.userEmail || '').trim().toLowerCase();
+  if (bodyEmail) return bodyEmail;
+
+  const queryEmail = String((req.query as any)?.userEmail || '').trim().toLowerCase();
+  if (queryEmail) return queryEmail;
+
+  return '';
+}
+
+function shouldSkipUserIsolation(req: Request) {
+  if (req.path === '/auth/login' && req.method === 'POST') return true;
+  if (req.path === '/health') return true;
+  if (req.path === '/gemini-status') return true;
+  return false;
+}
+
+function itemBelongsToUser(item: any, userEmail: string) {
+  if (!item || typeof item !== 'object') return false;
+
+  const candidates = [
+    item.ownerEmail,
+    item.owner_email,
+    item.userEmail,
+    item.user_email,
+    item.authorEmail,
+    item.author_email,
+    item.createdBy,
+    item.created_by,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = String(candidate || '').trim().toLowerCase();
+    if (normalized && normalized === userEmail) return true;
+  }
+
+  return false;
+}
+
+async function ensureOwnerEmailColumn(db: Pool, tableName: string) {
+  if (ownerEmailColumnReady.has(tableName)) return;
+
+  await db.query(`alter table ${tableName} add column if not exists owner_email text`);
+  await db.query(`create index if not exists idx_${tableName}_owner_email on ${tableName}(owner_email)`);
+  ownerEmailColumnReady.add(tableName);
+}
+
 let dbAvailabilityCache: { ok: boolean; checkedAt: number } = { ok: !!pool, checkedAt: 0 };
 let dbHealthStats = {
   checks: 0,
@@ -1350,6 +1402,41 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
     return res.status(503).json({ error: 'Base de datos no disponible temporalmente' });
   });
 
+  app.use('/api', (req, res, next) => {
+    if (shouldSkipUserIsolation(req)) return next();
+
+    const userEmail = getRequestUserEmail(req);
+    if (!userEmail) {
+      return res.status(401).json({ error: 'userEmail requerido' });
+    }
+
+    const originalJson = res.json.bind(res);
+    res.json = ((payload: any) => {
+      const path = req.path || '';
+      const sqlScopedPaths = [
+        '/projects',
+        '/clients',
+        '/quotes',
+        '/transactions',
+      ];
+
+      const isSqlScoped = sqlScopedPaths.some((scopedPath) =>
+        path === scopedPath || path.startsWith(`${scopedPath}/`)
+      );
+
+      if (!isSqlScoped && payload && typeof payload === 'object' && Array.isArray(payload.items)) {
+        payload.items = payload.items.filter((item: any) => itemBelongsToUser(item, userEmail));
+        if (typeof payload.hasMore === 'boolean') {
+          payload.hasMore = false;
+        }
+      }
+
+      return originalJson(payload);
+    }) as any;
+
+    return next();
+  });
+
   app.get('/api/notifications/stream', (req, res) => {
     if (!pool) {
       return res.status(503).json({ error: 'DATABASE_URL no esta configurado' });
@@ -1576,6 +1663,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.get("/api/transactions", async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'financial_transactions');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
       const offset = Math.max(Number(req.query.offset || 0), 0);
       const projectId = String(req.query.projectId || "").trim();
@@ -1585,6 +1677,9 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
 
       const where: string[] = [];
       const values: Array<string | number> = [];
+
+      values.push(userEmail);
+      where.push(`owner_email = $${values.length}`);
 
       if (projectId) {
         values.push(projectId);
@@ -1635,6 +1730,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.get("/api/projects", async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'projects');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const result = await db.query<ProjectRow>(
         `
           select
@@ -1656,8 +1756,10 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             longitude,
             created_at
           from projects
+          where owner_email = $1
           order by created_at desc
-        `
+        `,
+        [userEmail]
       );
 
       return res.json({ items: result.rows.map(mapProject) });
@@ -1669,6 +1771,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.post('/api/projects', async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'projects');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const body = req.body || {};
 
       const name = String(body.name || '').trim();
@@ -1708,9 +1815,10 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             client_uid,
             typology,
             latitude,
-            longitude
+            longitude,
+            owner_email
           )
-          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::date,$11::date,$12,$13,$14,$15)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::date,$11::date,$12,$13,$14,$15,$16)
           returning
             id,
             name,
@@ -1746,6 +1854,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           typology,
           latitude,
           longitude,
+          userEmail,
         ]
       );
 
@@ -1758,6 +1867,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.put('/api/projects/:projectId', async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'projects');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const projectId = String(req.params.projectId || '').trim();
       const body = req.body || {};
 
@@ -1766,8 +1880,8 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       }
 
       const existingProject = await db.query<{ budget: string | null }>(
-        'select budget from projects where id = $1',
-        [projectId]
+        'select budget from projects where id = $1 and owner_email = $2',
+        [projectId, userEmail]
       );
       if (!existingProject.rows[0]) {
         return res.status(404).json({ error: 'Proyecto no encontrado' });
@@ -1812,7 +1926,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             typology = $14,
             latitude = $15,
             longitude = $16
-          where id = $1
+          where id = $1 and owner_email = $17
           returning
             id,
             name,
@@ -1849,6 +1963,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           typology,
           latitude,
           longitude,
+          userEmail,
         ]
       );
 
@@ -1865,12 +1980,17 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.delete('/api/projects/:projectId', async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'projects');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const projectId = String(req.params.projectId || '').trim();
       if (!projectId) {
         return res.status(400).json({ error: 'projectId requerido' });
       }
 
-      const deleted = await db.query('delete from projects where id = $1', [projectId]);
+      const deleted = await db.query('delete from projects where id = $1 and owner_email = $2', [projectId, userEmail]);
       if (deleted.rowCount === 0) {
         return res.status(404).json({ error: 'Proyecto no encontrado' });
       }
@@ -3144,12 +3264,19 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.get('/api/quotes', async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'quotes');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const clientId = String(req.query.clientId || '').trim();
       const projectId = String(req.query.projectId || '').trim();
       const status = String(req.query.status || '').trim();
 
       const where: string[] = [];
       const values: any[] = [];
+      values.push(userEmail);
+      where.push(`owner_email = $${values.length}`);
       if (clientId) {
         values.push(clientId);
         where.push(`client_id = $${values.length}`);
@@ -3194,6 +3321,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.post('/api/quotes', async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'quotes');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const clientId = String(req.body?.clientId || '').trim();
       const projectId = String(req.body?.projectId || '').trim();
       const date = String(req.body?.date || '').trim();
@@ -3217,8 +3349,9 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             total,
             items,
             notes,
-            sent_at
-          ) values ($1,$2,$3::timestamptz,$4,$5,$6::jsonb,$7,$8::timestamptz)
+            sent_at,
+            owner_email
+          ) values ($1,$2,$3::timestamptz,$4,$5,$6::jsonb,$7,$8::timestamptz,$9)
           returning
             id,
             client_id,
@@ -3241,6 +3374,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           JSON.stringify(items),
           notes || null,
           sentAt,
+          userEmail,
         ]
       );
 
@@ -3253,6 +3387,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.patch('/api/quotes/:id', async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'quotes');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const id = String(req.params.id || '').trim();
       if (!id) return res.status(400).json({ error: 'id requerido' });
 
@@ -3284,12 +3423,13 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
       sets.push('updated_at = now()');
       values.push(id);
+      values.push(userEmail);
 
       const updated = await db.query<QuoteRow>(
         `
           update quotes
           set ${sets.join(', ')}
-          where id = $${values.length}
+          where id = $${values.length - 1} and owner_email = $${values.length}
           returning
             id,
             client_id,
@@ -3316,10 +3456,15 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.delete('/api/quotes/:id', async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'quotes');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const id = String(req.params.id || '').trim();
       if (!id) return res.status(400).json({ error: 'id requerido' });
 
-      const deleted = await db.query('delete from quotes where id = $1', [id]);
+      const deleted = await db.query('delete from quotes where id = $1 and owner_email = $2', [id, userEmail]);
       if (deleted.rowCount === 0) return res.status(404).json({ error: 'Cotizacion no encontrada' });
       return res.status(204).send();
     } catch (error: any) {
@@ -4177,6 +4322,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.get('/api/clients', async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'clients');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const result = await db.query<ClientRow>(
         `
           select
@@ -4195,8 +4345,10 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             created_at,
             updated_at
           from clients
+          where owner_email = $1
           order by created_at desc
-        `
+        `,
+        [userEmail]
       );
 
       return res.json({ items: result.rows.map(mapClient) });
@@ -4208,6 +4360,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.post('/api/clients', async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'clients');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const name = String(req.body?.name || '').trim();
       const email = String(req.body?.email || '').trim();
       const phone = String(req.body?.phone || '').trim();
@@ -4234,8 +4391,9 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             status,
             notes,
             location,
-            last_interaction
-          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb, now())
+            last_interaction,
+            owner_email
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb, now(), $10)
           returning
             id,
             name,
@@ -4252,7 +4410,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             created_at,
             updated_at
         `,
-        [name, email || null, phone || null, company || null, contactPerson || null, contacto || null, status, notes || null, location ? JSON.stringify(location) : null]
+        [name, email || null, phone || null, company || null, contactPerson || null, contacto || null, status, notes || null, location ? JSON.stringify(location) : null, userEmail]
       );
 
       return res.status(201).json(mapClient(insert.rows[0]));
@@ -4264,6 +4422,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.patch('/api/clients/:id', async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'clients');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const id = String(req.params.id || '').trim();
       if (!id) return res.status(400).json({ error: 'id requerido' });
 
@@ -4293,12 +4456,13 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
       sets.push('updated_at = now()');
       values.push(id);
+      values.push(userEmail);
 
       const updated = await db.query<ClientRow>(
         `
           update clients
           set ${sets.join(', ')}
-          where id = $${values.length}
+          where id = $${values.length - 1} and owner_email = $${values.length}
           returning
             id,
             name,
@@ -4393,10 +4557,15 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.delete('/api/clients/:id', async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'clients');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const id = String(req.params.id || '').trim();
       if (!id) return res.status(400).json({ error: 'id requerido' });
 
-      const deleted = await db.query('delete from clients where id = $1', [id]);
+      const deleted = await db.query('delete from clients where id = $1 and owner_email = $2', [id, userEmail]);
       if (deleted.rowCount === 0) return res.status(404).json({ error: 'Cliente no encontrado' });
       return res.status(204).send();
     } catch (error: any) {
@@ -6332,6 +6501,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.post("/api/transactions", async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'financial_transactions');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const projectId = String(req.body?.projectId || "").trim();
       const budgetItemId = String(req.body?.budgetItemId || "").trim();
       const subcontractId = String(req.body?.subcontractId || "").trim();
@@ -6370,8 +6544,9 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             description,
             account_type,
             income_origin,
-            funding_source
-          ) values ($1, $2, $3, $4, $5, $6, $7::date, $8, $9, $10, $11)
+            funding_source,
+            owner_email
+          ) values ($1, $2, $3, $4, $5, $6, $7::date, $8, $9, $10, $11, $12)
           returning id, project_id, budget_item_id, subcontract_id, type, category, amount, date::text, description, account_type, income_origin, funding_source, created_at
         `,
         [
@@ -6386,6 +6561,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           accountType,
           incomeOrigin || null,
           fundingSource || null,
+          userEmail,
         ]
       );
 
@@ -6398,6 +6574,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.patch("/api/transactions/:id", async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'financial_transactions');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const id = String(req.params.id || "").trim();
       if (!id) {
         return res.status(400).json({ error: "Id requerido" });
@@ -6441,7 +6622,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             account_type = $8,
             income_origin = $9,
             funding_source = $10
-          where id = $11
+          where id = $11 and owner_email = $12
           returning id, project_id, budget_item_id, subcontract_id, type, category, amount, date::text, description, account_type, income_origin, funding_source, created_at
         `,
         [
@@ -6456,6 +6637,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           incomeOrigin || null,
           fundingSource || null,
           id,
+          userEmail,
         ]
       );
 
@@ -6472,12 +6654,17 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.delete("/api/transactions/:id", async (req, res) => {
     try {
       const db = requireDatabase();
+      await ensureOwnerEmailColumn(db, 'financial_transactions');
+      const userEmail = getRequestUserEmail(req);
+      if (!userEmail) {
+        return res.status(401).json({ error: 'userEmail requerido' });
+      }
       const id = String(req.params.id || "").trim();
       if (!id) {
         return res.status(400).json({ error: "Id requerido" });
       }
 
-      const deleted = await db.query("delete from financial_transactions where id = $1", [id]);
+      const deleted = await db.query("delete from financial_transactions where id = $1 and owner_email = $2", [id, userEmail]);
       if (deleted.rowCount === 0) {
         return res.status(404).json({ error: "Transaccion no encontrada" });
       }

@@ -229,6 +229,23 @@ function getStoredAuthToken(): string | null {
   }
 }
 
+function getStoredAuthEmail(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as { email?: string };
+    const email = String(parsed?.email || '').trim().toLowerCase();
+    return email || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function requestJson<T>(pathname: string, init?: RequestInit): Promise<T> {
   const headers = new Headers({
     'Content-Type': 'application/json',
@@ -237,6 +254,11 @@ export async function requestJson<T>(pathname: string, init?: RequestInit): Prom
   const storedToken = getStoredAuthToken();
   if (storedToken) {
     headers.set('Authorization', `Bearer ${storedToken}`);
+  }
+
+  const authEmail = getStoredAuthEmail();
+  if (authEmail) {
+    headers.set('x-user-email', authEmail);
   }
 
   if (init?.headers) {
