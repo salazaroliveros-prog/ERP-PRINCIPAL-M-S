@@ -392,6 +392,52 @@ const HEALTHCHECK_INTERVAL_MS = 30000;
 const HEALTHCHECK_TIMEOUT_MS = 5000;
 const HEALTHCHECK_RETRY_ATTEMPTS = 2;
 
+type ConnectionToastKind = 'online' | 'offline' | 'offline-init';
+
+const showConnectionToast = (kind: ConnectionToastKind, title: string) => {
+  const classMap: Record<ConnectionToastKind, string> = {
+    online: 'connection-toast connection-toast--online',
+    offline: 'connection-toast connection-toast--offline',
+    'offline-init': 'connection-toast connection-toast--warning',
+  };
+
+  const iconMap: Record<ConnectionToastKind, string> = {
+    online: '●',
+    offline: '●',
+    'offline-init': '◌',
+  };
+
+  const durationMap: Record<ConnectionToastKind, number> = {
+    online: 2000,
+    offline: 2400,
+    'offline-init': 2600,
+  };
+
+  if (kind === 'online') {
+    toast.success(title, {
+      icon: iconMap[kind],
+      duration: durationMap[kind],
+      className: classMap[kind],
+    });
+    return;
+  }
+
+  if (kind === 'offline') {
+    toast.error(title, {
+      icon: iconMap[kind],
+      duration: durationMap[kind],
+      className: classMap[kind],
+    });
+    return;
+  }
+
+  toast.warning(title, {
+    icon: iconMap[kind],
+    duration: durationMap[kind],
+    className: classMap[kind],
+  });
+};
+
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const checkApiHealth = async () => {
@@ -434,16 +480,10 @@ const updateConnectionState = (isOffline: boolean) => {
   }
 
   if (isOffline && !wasOffline) {
-    toast.error('Conexion perdida', {
-      description: 'Trabajando en modo offline. Tu progreso se guardara localmente.',
-      duration: 5000,
-    });
+    showConnectionToast('offline', 'Sin conexion');
     wasOffline = true;
   } else if (!isOffline && wasOffline) {
-    toast.success('Conexion recuperada', {
-      description: 'Se ha restablecido la conexion. Sincronizando datos...',
-      duration: 5000,
-    });
+    showConnectionToast('online', 'Conexion recuperada');
     wasOffline = false;
   }
 };
@@ -464,18 +504,12 @@ const runConnectivityCheck = async () => {
 if (typeof window !== 'undefined') {
   validateApiConnection().then((online) => {
     if (!online) {
-      toast.warning('Modo Offline detectado', {
-        description: 'La aplicacion se ha iniciado sin conexion. Los cambios se sincronizaran despues.',
-        duration: 5000,
-      });
+      showConnectionToast('offline-init', 'Modo offline activo');
       wasOffline = true;
       return;
     }
 
-    toast.success('Conexion establecida', {
-      description: 'Conexion con el servidor de base de datos exitosa.',
-      duration: 3000,
-    });
+    showConnectionToast('online', 'Conexion establecida');
     wasOffline = false;
   });
 
