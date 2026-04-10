@@ -2686,6 +2686,16 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
     }
   });
 
+  app.delete('/api/audit-logs', async (_req, res) => {
+    try {
+      const db = requireDatabase();
+      const result = await db.query('delete from audit_logs');
+      return res.json({ deleted: result.rowCount || 0 });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo borrar el historial de auditoria' });
+    }
+  });
+
   app.get('/api/notifications', async (req, res) => {
     try {
       const db = requireDatabase();

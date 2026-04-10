@@ -62,3 +62,13 @@ export async function createAuditLog(payload: CreateAuditLogInput): Promise<Audi
     body: JSON.stringify(payload),
   });
 }
+
+export interface ClearAuditLogsResponse {
+  deleted: number;
+}
+
+export async function clearAuditLogs(): Promise<ClearAuditLogsResponse> {
+  return requestJson<ClearAuditLogsResponse>('/api/audit-logs', {
+    method: 'DELETE',
+  });
+}

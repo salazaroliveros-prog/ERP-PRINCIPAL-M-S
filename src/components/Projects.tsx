@@ -81,17 +81,20 @@ import {
 import { deleteClient, listClients } from '../lib/clientsApi';
 import { deleteQuoteRecord, listQuotes } from '../lib/quotesApi';
 import { deleteTransactionById, listTransactions } from '../lib/financialsApi';
+import { clearAuditLogs } from '../lib/auditApi';
 
 const TEST_PROJECT_PATTERNS = [
   /^E2E\b/i,
   /^TEST\b/i,
   /^QA\b/i,
   /^PRUEBA\b/i,
+  /^DEMO\b/i,
   /\bDATOS?\s+DE\s+PRUEBA\b/i,
 ];
 
 const TEST_DATA_TEXT_PATTERNS = [
   /(?:^|[\s_-])(E2E|TEST|QA|PRUEBA)(?:$|[\s_-])/i,
+  /(?:^|[\s_-])(DEMO|SAMPLE)(?:$|[\s_-])/i,
   /\bDATOS?\s+DE\s+PRUEBA\b/i,
 ];
 
@@ -226,8 +229,10 @@ export default function Projects() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
   const [isCleanupConfirmOpen, setIsCleanupConfirmOpen] = useState(false);
+  const [isAuditHistoryConfirmOpen, setIsAuditHistoryConfirmOpen] = useState(false);
   const [cleanupCandidates, setCleanupCandidates] = useState<CleanupCandidates>(EMPTY_CLEANUP_CANDIDATES);
   const [isCleaningTestData, setIsCleaningTestData] = useState(false);
+  const [isClearingAuditHistory, setIsClearingAuditHistory] = useState(false);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [isCSVConfirmOpen, setIsCSVConfirmOpen] = useState(false);
@@ -1108,35 +1113,7 @@ export default function Projects() {
     }
   };
 
-  const simulateCleanupTestProjects = async () => {
-    if (isCleaningTestData) return;
-
-    setIsCleaningTestData(true);
-    try {
-      const candidates = await scanCleanupCandidates();
-      const totalCandidates =
-        candidates.projects.length +
-        candidates.clients.length +
-        candidates.quotes.length +
-        candidates.transactions.length;
-
-      if (totalCandidates === 0) {
-        toast.info('Simulación: no se detectaron datos de prueba para limpiar');
-        return;
-      }
-
-      toast.success(
-        `Validación completada: ${totalCandidates} registro(s) de prueba detectados. Iniciando limpieza automática...`
-      );
-      await executeCleanupTestCandidates(candidates, true);
-    } catch {
-      toast.error('No se pudo ejecutar la simulación de limpieza');
-    } finally {
-      setIsCleaningTestData(false);
-    }
-  };
-
-  const executeCleanupTestCandidates = async (candidates: CleanupCandidates, validatedBySimulation = false) => {
+  const executeCleanupTestCandidates = async (candidates: CleanupCandidates) => {
     const totalCandidates =
       candidates.projects.length +
       candidates.clients.length +
@@ -1211,8 +1188,7 @@ export default function Projects() {
     setCleanupCandidates(EMPTY_CLEANUP_CANDIDATES);
 
     if (deleted > 0) {
-      const mode = validatedBySimulation ? 'automática' : 'manual';
-      toast.success(`Limpieza ${mode} completada: ${deleted} registro(s) de prueba eliminado(s)`);
+      toast.success(`Limpieza completada: ${deleted} registro(s) de prueba eliminado(s)`);
     }
     if (failed > 0) {
       toast.error(`${failed} proyecto(s) no se pudieron eliminar`);
@@ -1233,9 +1209,24 @@ export default function Projects() {
 
     setIsCleaningTestData(true);
     try {
-      await executeCleanupTestCandidates(cleanupCandidates, false);
+      await executeCleanupTestCandidates(cleanupCandidates);
     } finally {
       setIsCleaningTestData(false);
+    }
+  };
+
+  const confirmClearAuditHistory = async () => {
+    if (isClearingAuditHistory) return;
+
+    setIsClearingAuditHistory(true);
+    try {
+      const result = await clearAuditLogs();
+      setIsAuditHistoryConfirmOpen(false);
+      toast.success(`Historial borrado: ${result.deleted} registro(s) de auditoría eliminado(s)`);
+    } catch {
+      toast.error('No se pudo borrar el historial de auditoría');
+    } finally {
+      setIsClearingAuditHistory(false);
     }
   };
 
@@ -1424,6 +1415,20 @@ export default function Projects() {
         variant="warning"
       />
 
+      <ConfirmModal
+        isOpen={isAuditHistoryConfirmOpen}
+        onClose={() => {
+          if (isClearingAuditHistory) return;
+          setIsAuditHistoryConfirmOpen(false);
+        }}
+        onConfirm={confirmClearAuditHistory}
+        title="Borrar Historial de Cambios"
+        message="Se eliminará todo el historial de auditoría (cambios del sistema). Esta acción no se puede deshacer."
+        confirmText={isClearingAuditHistory ? 'Borrando...' : 'Borrar Historial'}
+        cancelText="Cancelar"
+        variant="warning"
+      />
+
       <FormModal
         isOpen={isAuditModalOpen}
         onClose={() => setIsAuditModalOpen(false)}
@@ -1603,23 +1608,23 @@ export default function Projects() {
               </button>
 
               <button
-                onClick={simulateCleanupTestProjects}
-                disabled={isCleaningTestData}
+                onClick={() => setIsAuditHistoryConfirmOpen(true)}
+                disabled={isClearingAuditHistory}
                 className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2.5 sm:py-4 bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-black rounded-xl sm:rounded-2xl hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-all border border-sky-100 dark:border-sky-500/20 shadow-sm whitespace-nowrap text-[10px] sm:text-xs uppercase tracking-widest"
-                title="Valida datos de prueba y ejecuta limpieza automática"
+                title="Borra el historial de cambios y auditoría"
               >
-                <Info size={14} className="sm:w-5 sm:h-5" />
-                <span className="sm:text-sm">Validar + Limpiar</span>
+                {isClearingAuditHistory ? <Loader2 size={14} className="animate-spin" /> : <Info size={14} className="sm:w-5 sm:h-5" />}
+                <span className="sm:text-sm">BORRAR HISTORIAL</span>
               </button>
 
               <button
                 onClick={requestCleanupTestProjects}
                 disabled={isCleaningTestData}
                 className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2.5 sm:py-4 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-black rounded-xl sm:rounded-2xl hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-all border border-rose-100 dark:border-rose-500/20 shadow-sm whitespace-nowrap text-[10px] sm:text-xs uppercase tracking-widest"
-                title="Elimina registros detectados como datos de prueba"
+                title="Borra datos de prueba agregados por el sistema"
               >
                 <Trash2 size={14} className="sm:w-5 sm:h-5" />
-                <span className="sm:text-sm">Limpieza Pruebas</span>
+                <span className="sm:text-sm">BORRAR DATOS DE PRUEBA</span>
               </button>
 
               <div className="h-8 sm:h-10 w-px bg-slate-200 dark:bg-slate-800 mx-0.5 sm:mx-1 hidden xl:block" />
