@@ -79,9 +79,11 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   const [isAPUImportModalOpen, setIsAPUImportModalOpen] = useState(false);
   const [apuImportTypology, setApuImportTypology] = useState<string>(project.typology || 'RESIDENCIAL');
   const [apuImportSearchTerm, setApuImportSearchTerm] = useState('');
+  const [apuImportScrollTop, setApuImportScrollTop] = useState(0);
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const apuTemplatesListRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -476,10 +478,13 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   }, [apuImportSearchTerm, apuImportTypology]);
 
   const openApuImportModal = useCallback(() => {
-    setApuImportTypology(project.typology || 'RESIDENCIAL');
-    setApuImportSearchTerm('');
     setIsAPUImportModalOpen(true);
-  }, [project.typology]);
+  }, []);
+
+  useEffect(() => {
+    if (!isAPUImportModalOpen || !apuTemplatesListRef.current) return;
+    apuTemplatesListRef.current.scrollTop = apuImportScrollTop;
+  }, [isAPUImportModalOpen]);
 
   const importFromApuTemplate = useCallback((template: any) => {
     setNewItem((prev) => ({
@@ -3940,7 +3945,11 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+            <div
+              ref={apuTemplatesListRef}
+              onScroll={(e) => setApuImportScrollTop(e.currentTarget.scrollTop)}
+              className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar"
+            >
               {filteredApuTemplates.map((template: any) => (
                 <button
                   key={`${apuImportTypology}-${template.description}`}
