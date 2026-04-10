@@ -33,6 +33,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/erp_test
       PGSSLMODE: disable
       LOCAL_API_BASE_URL: http://localhost:3000
+      SMOKE_USER_EMAIL: smoke-test@example.com
 
     steps:
       - name: Checkout

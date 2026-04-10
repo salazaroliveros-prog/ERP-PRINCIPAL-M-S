@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const BASE_URL = (process.env.LOCAL_API_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
+const SMOKE_USER_EMAIL = (process.env.SMOKE_USER_EMAIL || 'smoke-test@example.com').trim().toLowerCase();
 
 const results = [];
 const created = {
@@ -36,6 +37,7 @@ async function callApi(step, method, path, body, expectedStatuses = [200]) {
       method,
       headers: {
         'Content-Type': 'application/json',
+        'x-user-email': SMOKE_USER_EMAIL,
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
@@ -66,7 +68,10 @@ async function checkSse(step, path) {
   const timeout = setTimeout(() => controller.abort(), 2500);
   try {
     const response = await fetch(`${BASE_URL}${path}`, {
-      headers: { Accept: 'text/event-stream' },
+      headers: {
+        Accept: 'text/event-stream',
+        'x-user-email': SMOKE_USER_EMAIL,
+      },
       signal: controller.signal,
     });
     const contentType = response.headers.get('content-type') || '';
@@ -89,7 +94,7 @@ async function run() {
   await callApi('health', 'GET', '/api/health');
   await checkSse('notifications stream', '/api/notifications/stream');
   await callApi('login', 'POST', '/api/auth/login', {
-    email: 'smoke-test@example.com',
+    email: SMOKE_USER_EMAIL,
     displayName: 'Smoke Test',
   });
 
