@@ -82,10 +82,13 @@ const PREFETCH_ENABLED = (import.meta.env.VITE_PREFETCH_ENABLED ?? 'true') !== '
 const NAV_METRICS_ENABLED = import.meta.env.DEV && import.meta.env.VITE_NAV_METRICS === 'true';
 
 const LoadingFallback = () => (
-  <div className="flex-1 flex items-center justify-center min-h-[60vh]">
-    <div className="flex flex-col items-center gap-4">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-      <p className="text-sm text-slate-400 animate-pulse">Cargando módulo...</p>
+  <div className="flex-1 flex items-center justify-center min-h-[60vh] sm:min-h-[70vh]">
+    <div className="flex flex-col items-center gap-5">
+      <div className="relative flex items-center justify-center">
+        <div className="absolute h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-primary/10 animate-pulse" />
+        <div className="h-14 w-14 sm:h-18 sm:w-18 rounded-full border-[3px] border-primary/25 border-t-primary animate-spin" />
+      </div>
+      <p className="text-sm sm:text-base text-slate-400 animate-pulse font-semibold">Cargando módulo...</p>
     </div>
   </div>
 );
@@ -641,8 +644,14 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="flex flex-col items-center gap-5">
+          <div className="relative flex items-center justify-center">
+            <div className="absolute h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-primary/10 animate-pulse" />
+            <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full border-[4px] border-primary/25 border-t-primary animate-spin" />
+          </div>
+          <p className="text-sm sm:text-base text-slate-500 dark:text-slate-400 font-semibold tracking-wide">Iniciando aplicación...</p>
+        </div>
       </div>
     );
   }
