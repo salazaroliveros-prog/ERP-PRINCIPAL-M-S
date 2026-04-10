@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { 
   Plus, 
   Search, 
@@ -127,6 +127,7 @@ export default function Inventory() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [filterType, setFilterType] = useState<'all' | 'critical' | 'expiring'>('all');
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
@@ -1611,10 +1612,12 @@ export default function Inventory() {
     });
   }, [inventory, selectedProjectId, projectMaterialSummary, filterType, selectedCategory]);
 
-  const filteredInventory = React.useMemo(() => {
+  const filteredInventory = useMemo(() => {
+    const normalizedSearch = deferredSearchTerm.toLowerCase();
+
     return mergedInventory.filter(i => 
-      i.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      i.category.toLowerCase().includes(searchTerm.toLowerCase())
+      i.name.toLowerCase().includes(normalizedSearch) ||
+      i.category.toLowerCase().includes(normalizedSearch)
     ).filter(i => {
       if (selectedCategory !== 'all' && i.category !== selectedCategory) return false;
       if (filterType === 'critical') return i.stock <= i.minStock;
@@ -1626,7 +1629,7 @@ export default function Inventory() {
       }
       return true;
     });
-  }, [mergedInventory, searchTerm, selectedCategory, filterType]);
+  }, [mergedInventory, deferredSearchTerm, selectedCategory, filterType]);
 
   const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
   const paginatedInventory = React.useMemo(() => {

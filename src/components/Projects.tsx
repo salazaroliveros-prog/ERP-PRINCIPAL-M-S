@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState, useRef } from 'react';
 import Papa from 'papaparse';
 import { 
   Plus, 
@@ -212,6 +212,7 @@ export default function Projects() {
   const [reportingProject, setReportingProject] = useState<any>(null);
   const [emailTo, setEmailTo] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [filters, setFilters] = useState({
     status: 'all',
     location: '',
@@ -1230,64 +1231,105 @@ export default function Projects() {
     }
   };
 
-  const filteredProjects = projects.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         p.location.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filters.status === 'all' || p.status === filters.status;
-    const matchesLocation = !filters.location || p.location.toLowerCase().includes(filters.location.toLowerCase());
-    const matchesManager = !filters.projectManager || (p.projectManager || '').toLowerCase().includes(filters.projectManager.toLowerCase());
-    
-    let matchesDate = true;
-    if (filters.startDate || filters.endDate) {
-      const pStart = p.startDate ? new Date(p.startDate) : null;
-      const pEnd = p.endDate ? new Date(p.endDate) : null;
-      
-      const filterStart = filters.startDate ? new Date(filters.startDate) : null;
-      const filterEnd = filters.endDate ? new Date(filters.endDate) : null;
+  const filteredProjects = useMemo(() => {
+    const normalizedSearchTerm = deferredSearchTerm.toLowerCase();
+    const normalizedLocationFilter = filters.location.toLowerCase();
+    const normalizedManagerFilter = filters.projectManager.toLowerCase();
 
-      if (filterStart && filterEnd) {
-        // Check for overlap
-        if (pStart && pEnd) {
-          matchesDate = (pStart <= filterEnd && pEnd >= filterStart);
-        } else if (pStart) {
-          matchesDate = (pStart <= filterEnd);
-        } else {
-          matchesDate = false;
+    return projects
+      .filter((p) => {
+        const projectName = String(p.name || '').toLowerCase();
+        const projectLocation = String(p.location || '').toLowerCase();
+        const projectManager = String(p.projectManager || '').toLowerCase();
+
+        const matchesSearch =
+          projectName.includes(normalizedSearchTerm) || projectLocation.includes(normalizedSearchTerm);
+        const matchesStatus = filters.status === 'all' || p.status === filters.status;
+        const matchesLocation = !filters.location || projectLocation.includes(normalizedLocationFilter);
+        const matchesManager = !filters.projectManager || projectManager.includes(normalizedManagerFilter);
+
+        let matchesDate = true;
+        if (filters.startDate || filters.endDate) {
+          const pStart = p.startDate ? new Date(p.startDate) : null;
+          const pEnd = p.endDate ? new Date(p.endDate) : null;
+
+          const filterStart = filters.startDate ? new Date(filters.startDate) : null;
+          const filterEnd = filters.endDate ? new Date(filters.endDate) : null;
+
+          if (filterStart && filterEnd) {
+            if (pStart && pEnd) {
+              matchesDate = pStart <= filterEnd && pEnd >= filterStart;
+            } else if (pStart) {
+              matchesDate = pStart <= filterEnd;
+            } else {
+              matchesDate = false;
+            }
+          } else if (filterStart) {
+            matchesDate = !pEnd || pEnd >= filterStart;
+          } else if (filterEnd) {
+            matchesDate = !pStart || pStart <= filterEnd;
+          }
         }
-      } else if (filterStart) {
-        matchesDate = !pEnd || pEnd >= filterStart;
-      } else if (filterEnd) {
-        matchesDate = !pStart || pStart <= filterEnd;
-      }
-    }
 
-    const matchesTypology = !filters.typology || p.typology === filters.typology;
+        const matchesTypology = !filters.typology || p.typology === filters.typology;
 
-    return matchesSearch && matchesStatus && matchesLocation && matchesManager && matchesTypology && matchesDate;
-  }).sort((a, b) => {
-    let valA = a[sortBy];
-    let valB = b[sortBy];
-    
-    if (sortBy === 'budget') {
-      valA = Number(valA);
-      valB = Number(valB);
-    }
+        return matchesSearch && matchesStatus && matchesLocation && matchesManager && matchesTypology && matchesDate;
+      })
+      .sort((a, b) => {
+        let valA = a[sortBy];
+        let valB = b[sortBy];
 
-    if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
-    if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
-    return 0;
-  });
+        if (sortBy === 'budget') {
+          valA = Number(valA);
+          valB = Number(valB);
+        }
+
+        if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+        if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+  }, [projects, deferredSearchTerm, filters, sortBy, sortOrder]);
 
   const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const mouseMoveRafRef = useRef<number | null>(null);
+  const enableCardTilt = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const lowCpu = typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4;
+
+    return !reducedMotion && !lowCpu;
+  }, []);
 
   const handleMouseMove = (e: React.MouseEvent, projectId: string) => {
+    if (!enableCardTilt) return;
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
-    setMousePosition({ x, y });
-    setHoveredProjectId(projectId);
+
+    if (hoveredProjectId !== projectId) {
+      setHoveredProjectId(projectId);
+    }
+
+    if (mouseMoveRafRef.current !== null) {
+      cancelAnimationFrame(mouseMoveRafRef.current);
+    }
+
+    mouseMoveRafRef.current = requestAnimationFrame(() => {
+      setMousePosition({ x, y });
+      mouseMoveRafRef.current = null;
+    });
   };
+
+  useEffect(() => {
+    return () => {
+      if (mouseMoveRafRef.current !== null) {
+        cancelAnimationFrame(mouseMoveRafRef.current);
+      }
+    };
+  }, []);
 
   const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
   const paginatedProjects = filteredProjects.slice(
@@ -1905,12 +1947,18 @@ export default function Projects() {
                     animate={{ 
                       opacity: 1, 
                       scale: 1,
-                      rotateX: hoveredProjectId === project.id ? (mousePosition.y - 0.5) * -10 : 0,
-                      rotateY: hoveredProjectId === project.id ? (mousePosition.x - 0.5) * 10 : 0,
+                      rotateX: enableCardTilt && hoveredProjectId === project.id ? (mousePosition.y - 0.5) * -10 : 0,
+                      rotateY: enableCardTilt && hoveredProjectId === project.id ? (mousePosition.x - 0.5) * 10 : 0,
                     }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     onMouseMove={(e) => handleMouseMove(e, project.id)}
-                    onMouseLeave={() => setHoveredProjectId(null)}
+                    onMouseLeave={() => {
+                      setHoveredProjectId(null);
+                      if (mouseMoveRafRef.current !== null) {
+                        cancelAnimationFrame(mouseMoveRafRef.current);
+                        mouseMoveRafRef.current = null;
+                      }
+                    }}
                     whileHover={{ 
                       scale: 1.02,
                       transition: { duration: 0.2 }
