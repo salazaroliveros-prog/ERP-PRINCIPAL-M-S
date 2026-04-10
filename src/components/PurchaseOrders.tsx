@@ -39,7 +39,7 @@ import { createSupplierPayment, listSuppliers, updateSupplier } from '../lib/sup
 import { createTransaction } from '../lib/financialsApi';
 
 export default function PurchaseOrders() {
-  const projectCardEffectClass = 'rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-primary/30 transition-all duration-500';
+  const projectCardEffectClass = 'rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-500';
 
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);

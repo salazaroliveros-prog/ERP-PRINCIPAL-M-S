@@ -36,6 +36,8 @@ import { createSubcontract, deleteSubcontract, listSubcontracts, updateSubcontra
 import { createTransaction, listTransactions } from '../lib/financialsApi';
 
 export default function Subcontracts() {
+  const projectCardEffectClass = 'rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-500';
+
   const toLocalISODate = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -518,7 +520,13 @@ export default function Subcontracts() {
                   setSelectedSubDetails(sub);
                   setIsDetailsModalOpen(true);
                 }}
-                className="bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 cursor-pointer hover:border-primary/30 transition-all group relative overflow-hidden"
+                className={cn(
+                  "bg-white dark:bg-slate-900 glass-card p-6 cursor-pointer group relative overflow-hidden",
+                  projectCardEffectClass,
+                  sub.status === 'Active'
+                    ? 'hover:border-emerald-300 dark:hover:border-emerald-500/40'
+                    : 'hover:border-slate-300 dark:hover:border-slate-600'
+                )}
               >
                 <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
                   <HardHat size={64} className="text-slate-400" />

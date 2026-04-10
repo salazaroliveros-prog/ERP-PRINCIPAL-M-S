@@ -33,6 +33,8 @@ import { listProjects } from '../lib/projectsApi';
 import { createEquipment, deleteEquipment, listEquipment, updateEquipment } from '../lib/equipmentApi';
 
 export default function Equipment() {
+  const projectCardEffectClass = 'rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-500';
+
   const [equipment, setEquipment] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -409,7 +411,15 @@ export default function Equipment() {
                 key={item.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white dark:bg-slate-900 glass-card p-4 sm:p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 relative overflow-hidden group hover:shadow-lg transition-all duration-300"
+                className={cn(
+                  "bg-white dark:bg-slate-900 glass-card p-4 sm:p-6 relative overflow-hidden group",
+                  projectCardEffectClass,
+                  item.status === 'Available'
+                    ? 'hover:border-emerald-300 dark:hover:border-emerald-500/40'
+                    : item.status === 'In Use'
+                      ? 'hover:border-blue-300 dark:hover:border-blue-500/40'
+                      : 'hover:border-rose-300 dark:hover:border-rose-500/40'
+                )}
               >
               <div className="absolute top-0 right-0 p-3 sm:p-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
                 {item.type === 'Owned' ? <Wrench size={48} className="sm:w-16 sm:h-16" /> : <Truck size={48} className="sm:w-16 sm:h-16" />}
