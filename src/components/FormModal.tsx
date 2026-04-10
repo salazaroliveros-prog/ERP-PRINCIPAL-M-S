@@ -46,7 +46,10 @@ export const FormModal = ({
 
   return (
     <div 
-      className="fixed inset-0 z-[100] flex items-center justify-center p-0 md:p-4 bg-slate-900/60 backdrop-blur-sm overflow-hidden"
+      className={cn(
+        "fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm overflow-hidden",
+        isFullscreen ? "p-0" : "p-0 md:p-4"
+      )}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -57,15 +60,12 @@ export const FormModal = ({
           opacity: 1, 
           scale: 1, 
           y: 0,
-          width: isFullscreen ? '100vw' : 'auto',
-          height: isFullscreen ? '100vh' : 'auto',
-          maxWidth: isFullscreen ? '100vw' : undefined,
         }}
         exit={{ opacity: 0, scale: 0.9, y: 40 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
         className={cn(
           "bg-white dark:bg-slate-900 flex flex-col transition-all duration-500 ease-in-out relative",
-          isFullscreen ? "rounded-none w-screen h-screen" : 
+          isFullscreen ? "rounded-none w-full h-full" : 
           // Mobile is always full screen, desktop follows props
           cn(
             "w-full h-full rounded-none shadow-none md:shadow-[--shadow-theme]",

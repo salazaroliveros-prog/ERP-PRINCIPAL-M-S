@@ -591,7 +591,7 @@ export default function Financials() {
   };
 
   const handleEditTransaction = (transaction: any) => {
-    setEditingTransactionId(transaction.id);
+    setEditingTransactionId(String(transaction.id));
     setNewTransaction({
       projectId: String(transaction.projectId || ''),
       budgetItemId: String(transaction.budgetItemId || ''),
@@ -662,7 +662,7 @@ export default function Financials() {
 
       if (editingTransactionId) {
         const updated = await updateTransactionById(editingTransactionId, payload);
-        setTransactions(prev => prev.map(t => (t.id === editingTransactionId ? updated : t)));
+        setTransactions(prev => prev.map(t => (String(t.id) === String(editingTransactionId) ? updated : t)));
         toast.success('Transacción actualizada con éxito');
         await logAction(
           'Edición de Transacción',
@@ -1008,7 +1008,7 @@ export default function Financials() {
   const costPerM2 = projectArea > 0 ? totalExpense / projectArea : 0;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 min-w-0 overflow-x-hidden">
       <ConfirmModal
         isOpen={isDeleteConfirmOpen}
         onClose={() => setIsDeleteConfirmOpen(false)}
@@ -1256,13 +1256,13 @@ export default function Financials() {
       </div>
 
       {/* Insights Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8 min-w-0">
         {/* Budget Deviations */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-100 dark:border-slate-800 shadow-sm"
+          className="bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-100 dark:border-slate-800 shadow-sm min-w-0"
         >
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-xl">
@@ -1324,8 +1324,8 @@ export default function Financials() {
             <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Rentabilidad (Último Trimestre)</h3>
           </div>
 
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+          <div className="h-[300px] min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <BarChart data={profitabilityRanking} layout="vertical" margin={{ left: 40, right: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
                 <XAxis type="number" hide />
@@ -1368,8 +1368,8 @@ export default function Financials() {
         </motion.div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8 mb-6 sm:mb-8">
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8 mb-6 sm:mb-8 min-w-0">
+        <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 min-w-0">
           <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
               <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Tendencia Financiera</h3>
@@ -1390,8 +1390,8 @@ export default function Financials() {
               </div>
             </div>
           </div>
-          <div className="h-64 sm:h-80">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+          <div className="h-64 sm:h-80 min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorIngresos" x1="0" y1="0" x2="0" y2="1">
@@ -1477,8 +1477,8 @@ export default function Financials() {
         <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
           <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-4 sm:mb-6">Gastos por Categoría</h3>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 items-center">
-            <div className="h-48 sm:h-64">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <div className="h-48 sm:h-64 min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                   <Pie
                     data={expenseByCategoryData}
@@ -1664,41 +1664,41 @@ export default function Financials() {
       </div>
 
       {/* Project KPIs Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden mb-8">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden mb-8 min-w-0">
         <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
           <div className="p-2 bg-primary/10 text-primary rounded-lg">
             <TrendingUp size={20} />
           </div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-white">KPIs por Proyecto</h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+        <div className="overflow-x-hidden">
+          <table className="w-full text-left table-fixed">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Proyecto</th>
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Ingresos</th>
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Gastos</th>
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Utilidad</th>
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Margen</th>
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Costo/m²</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-[30%]">Proyecto</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right w-[14%]">Ingresos</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right w-[14%]">Gastos</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right w-[14%]">Utilidad</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right w-[12%]">Margen</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right w-[16%]">Costo/m²</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
               {projectKPIs.map(kpi => (
                 <tr key={kpi.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all duration-200 group">
-                  <td className="px-6 py-4">
-                    <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors">{kpi.name}</p>
+                  <td className="px-3 lg:px-4 py-4 align-top">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors break-words">{kpi.name}</p>
                     <p className="text-micro font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{kpi.area} m²</p>
                   </td>
-                  <td className="px-6 py-4 text-right text-sm font-bold text-emerald-600">{formatCurrency(kpi.income)}</td>
-                  <td className="px-6 py-4 text-right text-sm font-bold text-rose-600">{formatCurrency(kpi.expense)}</td>
+                  <td className="px-3 lg:px-4 py-4 text-right text-xs lg:text-sm font-bold text-emerald-600">{formatCurrency(kpi.income)}</td>
+                  <td className="px-3 lg:px-4 py-4 text-right text-xs lg:text-sm font-bold text-rose-600">{formatCurrency(kpi.expense)}</td>
                   <td className={cn(
-                    "px-6 py-4 text-right text-sm font-bold",
+                    "px-3 lg:px-4 py-4 text-right text-xs lg:text-sm font-bold",
                     kpi.profit >= 0 ? "text-emerald-600" : "text-rose-600"
                   )}>
                     {formatCurrency(kpi.profit)}
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-3 lg:px-4 py-4 text-right">
                     <span className={cn(
                       ADAPTIVE_CHIP_CLASS,
                       "px-2 py-1 rounded-full text-micro font-bold uppercase tracking-wider border",
@@ -1709,7 +1709,7 @@ export default function Financials() {
                       {kpi.profitMargin.toFixed(1)}%
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right text-sm font-bold text-slate-900 dark:text-white">
+                  <td className="px-3 lg:px-4 py-4 text-right text-xs lg:text-sm font-bold text-slate-900 dark:text-white">
                     {kpi.costPerM2 > 0 ? formatCurrency(kpi.costPerM2) : 'N/A'}
                   </td>
                 </tr>
@@ -1724,37 +1724,37 @@ export default function Financials() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden min-w-0">
         <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
           <div className="p-2 bg-primary/10 text-primary rounded-lg">
             <HandCoins size={20} />
           </div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-white">Transacciones Recientes</h3>
         </div>
-        <div className="overflow-x-auto hidden md:block">
-          <table className="w-full text-left">
+        <div className="overflow-x-hidden hidden md:block">
+          <table className="w-full text-left table-fixed">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Fecha</th>
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Proyecto</th>
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cuenta</th>
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Origen/Fuente</th>
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Categoría</th>
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Descripción</th>
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Monto</th>
-                <th className="px-6 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Acciones</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-[9%]">Fecha</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-[16%]">Proyecto</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-[13%]">Cuenta</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-[16%]">Origen/Fuente</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-[14%]">Categoría</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-[18%]">Descripción</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right w-[10%]">Monto</th>
+                <th className="px-3 lg:px-4 py-4 text-micro font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right w-[4%]">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
               {filteredTransactions.map((t) => (
                 <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all duration-200 group">
-                  <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{formatDate(t.date)}</td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors">
+                  <td className="px-3 lg:px-4 py-4 text-xs text-slate-600 dark:text-slate-400 align-top">{formatDate(t.date)}</td>
+                  <td className="px-3 lg:px-4 py-4 align-top">
+                    <span className="text-xs lg:text-sm font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors break-words">
                       {projects.find(p => p.id === t.projectId)?.name || 'N/A'}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 lg:px-4 py-4 align-top">
                     <span className={cn(
                       ADAPTIVE_CHIP_CLASS,
                       "text-micro font-bold uppercase tracking-wider px-2 py-1 rounded-full border",
@@ -1765,16 +1765,16 @@ export default function Financials() {
                       {t.accountType === 'owner' ? 'Ganancias Propietario' : 'Proyecto'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-xs text-slate-500 dark:text-slate-400">
+                  <td className="px-3 lg:px-4 py-4 text-[11px] text-slate-500 dark:text-slate-400 break-words align-top">
                     {(t.type === 'Income' ? t.incomeOrigin : t.fundingSource) || 'N/A'}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 lg:px-4 py-4 align-top">
                     <span className={cn(ADAPTIVE_CHIP_CLASS, "text-micro font-bold uppercase tracking-wider px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-full border border-slate-200 dark:border-slate-700")}>
                       {t.category}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400 max-w-xs truncate">{t.description}</td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-3 lg:px-4 py-4 text-xs text-slate-500 dark:text-slate-400 break-words align-top">{t.description}</td>
+                  <td className="px-3 lg:px-4 py-4 text-right align-top">
                     <div className={cn(
                       "flex items-center justify-end gap-1 font-bold",
                       t.type === 'Income' ? "text-emerald-600" : "text-rose-600"
@@ -1783,21 +1783,21 @@ export default function Financials() {
                       {formatCurrency(t.amount)}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-3 lg:px-4 py-4 text-right align-top">
                     <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => handleEditTransaction(t)}
-                        className="p-2 text-slate-400 hover:text-primary transition-colors"
+                        className="p-1.5 text-slate-400 hover:text-primary transition-colors"
                         title="Editar"
                       >
-                        <Pencil size={16} />
+                        <Pencil size={15} />
                       </button>
                       <button 
                         onClick={() => handleDeleteTransaction(t.id)}
-                        className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors"
                         title="Eliminar"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </td>

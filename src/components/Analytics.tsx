@@ -274,7 +274,7 @@ export default function Analytics() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-8 pb-20">
+    <div className="space-y-4 sm:space-y-8 pb-20 min-w-0 overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -377,7 +377,7 @@ export default function Analytics() {
       </div>
 
       {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 min-w-0">
         {/* Income vs Expenses */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4 sm:mb-8">
@@ -393,7 +393,7 @@ export default function Analytics() {
               </div>
             </div>
           </div>
-          <div className="h-60 sm:h-80 w-full">
+          <div className="h-60 sm:h-80 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
@@ -431,8 +431,8 @@ export default function Analytics() {
         {/* Project Distribution */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
           <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white mb-8">Distribución por Tipo de Proyecto</h3>
-          <div className="h-80 w-full flex flex-col sm:flex-row items-center">
-            <div className="h-full w-full sm:w-2/3">
+          <div className="h-80 w-full flex flex-col sm:flex-row items-center min-w-0">
+            <div className="h-full w-full sm:w-2/3 min-w-0">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 20 }}>
                   <Pie
@@ -479,7 +479,7 @@ export default function Analytics() {
         {/* Risk Distribution */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
           <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white mb-8">Distribución de Riesgos por Tipo (Proyectos Activos)</h3>
-          <div className="h-80 w-full">
+          <div className="h-80 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <BarChart data={riskDistributionData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />

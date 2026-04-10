@@ -1779,8 +1779,8 @@ export default function Inventory() {
             </p>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto lg:overflow-x-hidden">
+            <table className="w-full text-left border-collapse table-fixed">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800">
                   <th className="px-4 py-3 font-bold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Tipo</th>
@@ -3069,8 +3069,8 @@ export default function Inventory() {
           </div>
 
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto lg:overflow-x-hidden">
+              <table className="w-full text-left text-sm table-fixed">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800">
                     <th className="px-4 py-3 font-bold text-slate-500 dark:text-slate-400">Material</th>

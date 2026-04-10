@@ -531,7 +531,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 min-w-0 overflow-x-hidden">
       <header>
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Tablero de Control</h1>
         <p className="text-slate-500 dark:text-slate-400">Resumen ejecutivo y salud de proyectos</p>
@@ -570,12 +570,12 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
+        <div className="lg:col-span-2 space-y-8 min-w-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 min-w-0">
             <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all duration-300">
               <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest">Tendencia de Ganancia Global</h3>
-              <div className="h-64">
+              <div className="h-64 min-w-0">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <AreaChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                     <defs>
@@ -612,7 +612,7 @@ export default function Dashboard() {
 
             <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
               <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest">Salud Financiera por Proyecto</h3>
-              <div className="h-64">
+              <div className="h-64 min-w-0">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <BarChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
@@ -649,7 +649,7 @@ export default function Dashboard() {
 
             <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
               <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest">Estado de los Proyectos</h3>
-              <div className="h-64">
+              <div className="h-64 min-w-0">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 20 }}>
                     <Pie
@@ -687,7 +687,7 @@ export default function Dashboard() {
 
             <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
               <h3 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest">Gastos por Categoría</h3>
-              <div className="h-64">
+              <div className="h-64 min-w-0">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 20 }}>
                     <Pie
@@ -751,7 +751,7 @@ export default function Dashboard() {
                 Seleccione un proyecto en "Actualización rápida de avance" para ver su comparativa individual.
               </p>
             )}
-            <div className="h-80">
+            <div className="h-80 min-w-0">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 <BarChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
@@ -820,7 +820,7 @@ export default function Dashboard() {
             <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
               Mostrando {ganttChartData.length} obra(s)
             </p>
-            <div style={{ height: `${ganttChartHeight}px` }}>
+            <div style={{ height: `${ganttChartHeight}px` }} className="min-w-0">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 <BarChart
                   data={ganttChartData}

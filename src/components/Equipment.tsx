@@ -259,7 +259,7 @@ export default function Equipment() {
         message="¿Estás seguro de que deseas eliminar este equipo? Esta acción no se puede deshacer."
       />
 
-      <div className="space-y-8">
+      <div className="space-y-8 min-w-0 overflow-x-hidden">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-8">
         <div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">Maquinaria</h1>
@@ -324,9 +324,9 @@ export default function Equipment() {
       </header>
 
       {viewMode === 'table' ? (
-        <div className="bg-white dark:bg-slate-900 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+        <div className="bg-white dark:bg-slate-900 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 overflow-hidden min-w-0">
+          <div className="overflow-x-auto lg:overflow-x-hidden">
+            <table className="w-full text-left border-collapse table-fixed">
               <thead>
                 <tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
                   <th className="px-6 py-5 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Equipo</th>
