@@ -2230,7 +2230,8 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       );
 
       if (deleted.rowCount === 0) {
-        return res.status(404).json({ error: 'Partida no encontrada' });
+        // Keep delete idempotent: if the item is already gone, treat as success.
+        return res.status(204).send();
       }
 
       return res.status(204).send();
