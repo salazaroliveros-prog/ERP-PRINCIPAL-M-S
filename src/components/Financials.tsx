@@ -233,6 +233,10 @@ export default function Financials() {
   
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
+  const [isMobileChartView, setIsMobileChartView] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 640;
+  });
   
   const [newTransaction, setNewTransaction] = useState(getDefaultTransactionForm());
 
@@ -241,6 +245,16 @@ export default function Financials() {
     setNewTransaction(getDefaultTransactionForm());
     setCurrentStep(0);
   };
+
+  useEffect(() => {
+    const onResize = () => {
+      setIsMobileChartView(window.innerWidth < 640);
+    };
+
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     const loadBudgetItemsForProject = async () => {
@@ -924,6 +938,9 @@ export default function Financials() {
   ];
 
   const financialThemeVisual = FINANCIAL_THEME_VISUALS[currentTheme.id] || FINANCIAL_THEME_VISUALS.sunset;
+  const trendChartMargin = isMobileChartView
+    ? { top: 6, right: 4, left: -22, bottom: 2 }
+    : { top: 10, right: 30, left: 0, bottom: 0 };
 
   const financialTotals = useMemo(() => {
     let totalIncome = 0;
@@ -1474,39 +1491,39 @@ export default function Financials() {
           <div className="h-64 sm:h-80 min-w-0">
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               {financialThemeVisual.trendType === 'line' ? (
-                <LineChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <LineChart data={chartData} margin={trendChartMargin}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} minTickGap={30} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: isMobileChartView ? 8 : 10 }} minTickGap={isMobileChartView ? 56 : 30} dy={isMobileChartView ? 6 : 10} interval={isMobileChartView ? 5 : 'preserveStartEnd'} />
+                  <YAxis width={isMobileChartView ? 42 : 60} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: isMobileChartView ? 8 : 10 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} />
                   <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', padding: '12px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)' }} itemStyle={{ padding: '2px 0' }} formatter={(value: number) => [formatCurrency(value), '']} labelStyle={{ fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }} cursor={{ stroke: '#cbd5e1', strokeWidth: 2, strokeDasharray: '5 5' }} />
                   <Line type="monotone" dataKey="ingresos" stroke={financialThemeVisual.incomeColor} strokeWidth={2.5} dot={false} name="Ingresos" />
                   <Line type="monotone" dataKey="gastos" stroke={financialThemeVisual.expenseColor} strokeWidth={2.5} dot={false} name="Gastos" />
                   <Line type="monotone" dataKey="profit" stroke={financialThemeVisual.balanceColor} strokeWidth={3} dot={{ r: 2 }} name="Balance Neto" />
                 </LineChart>
               ) : financialThemeVisual.trendType === 'bar' ? (
-                <BarChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <BarChart data={chartData} margin={trendChartMargin}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} minTickGap={30} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: isMobileChartView ? 8 : 10 }} minTickGap={isMobileChartView ? 56 : 30} dy={isMobileChartView ? 6 : 10} interval={isMobileChartView ? 5 : 'preserveStartEnd'} />
+                  <YAxis width={isMobileChartView ? 42 : 60} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: isMobileChartView ? 8 : 10 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} />
                   <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', padding: '12px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)' }} itemStyle={{ padding: '2px 0' }} formatter={(value: number) => [formatCurrency(value), '']} labelStyle={{ fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }} cursor={{ stroke: '#cbd5e1', strokeWidth: 2, strokeDasharray: '5 5' }} />
-                  <Legend />
+                  {!isMobileChartView && <Legend />}
                   <Bar dataKey="ingresos" fill={financialThemeVisual.incomeColor} radius={[4, 4, 0, 0]} name="Ingresos" />
                   <Bar dataKey="gastos" fill={financialThemeVisual.expenseColor} radius={[4, 4, 0, 0]} name="Gastos" />
                   <Bar dataKey="profit" fill={financialThemeVisual.balanceColor} radius={[4, 4, 0, 0]} name="Balance Neto" />
                 </BarChart>
               ) : financialThemeVisual.trendType === 'composed' ? (
-                <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <ComposedChart data={chartData} margin={trendChartMargin}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} minTickGap={30} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: isMobileChartView ? 8 : 10 }} minTickGap={isMobileChartView ? 56 : 30} dy={isMobileChartView ? 6 : 10} interval={isMobileChartView ? 5 : 'preserveStartEnd'} />
+                  <YAxis width={isMobileChartView ? 42 : 60} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: isMobileChartView ? 8 : 10 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} />
                   <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', padding: '12px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)' }} itemStyle={{ padding: '2px 0' }} formatter={(value: number) => [formatCurrency(value), '']} labelStyle={{ fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }} cursor={{ stroke: '#cbd5e1', strokeWidth: 2, strokeDasharray: '5 5' }} />
-                  <Legend />
+                  {!isMobileChartView && <Legend />}
                   <Bar dataKey="ingresos" fill={financialThemeVisual.incomeColor} radius={[4, 4, 0, 0]} name="Ingresos" opacity={0.45} />
                   <Bar dataKey="gastos" fill={financialThemeVisual.expenseColor} radius={[4, 4, 0, 0]} name="Gastos" opacity={0.45} />
                   <Line type="monotone" dataKey="profit" stroke={financialThemeVisual.balanceColor} strokeWidth={3} name="Balance Neto" dot={{ r: 2 }} />
                 </ComposedChart>
               ) : (
-                <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <AreaChart data={chartData} margin={trendChartMargin}>
                   <defs>
                     <linearGradient id="colorIngresos" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={financialThemeVisual.incomeColor} stopOpacity={0.1}/>
@@ -1522,8 +1539,8 @@ export default function Financials() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} minTickGap={30} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: isMobileChartView ? 8 : 10 }} minTickGap={isMobileChartView ? 56 : 30} dy={isMobileChartView ? 6 : 10} interval={isMobileChartView ? 5 : 'preserveStartEnd'} />
+                  <YAxis width={isMobileChartView ? 42 : 60} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: isMobileChartView ? 8 : 10 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`} />
                   <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', padding: '12px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(8px)' }} itemStyle={{ padding: '2px 0' }} formatter={(value: number) => [formatCurrency(value), '']} labelStyle={{ fontWeight: 'bold', marginBottom: '8px', color: '#1e293b' }} cursor={{ stroke: '#cbd5e1', strokeWidth: 2, strokeDasharray: '5 5' }} />
                   <Area type="monotone" dataKey="ingresos" stroke={financialThemeVisual.incomeColor} strokeWidth={2} fillOpacity={1} fill="url(#colorIngresos)" name="Ingresos" activeDot={{ r: 6, strokeWidth: 0, fill: financialThemeVisual.incomeColor }} />
                   <Area type="monotone" dataKey="gastos" stroke={financialThemeVisual.expenseColor} strokeWidth={2} fillOpacity={1} fill="url(#colorGastos)" name="Gastos" activeDot={{ r: 6, strokeWidth: 0, fill: financialThemeVisual.expenseColor }} />
@@ -1583,11 +1600,11 @@ export default function Financials() {
             <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
               {expenseByCategoryData.map((entry, index) => (
                 <div key={entry.name} className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className={cn("w-2.5 h-2.5 rounded-full", colorDotClasses[index % colorDotClasses.length])}></div>
-                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors uppercase tracking-wider">{entry.name}</span>
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors uppercase tracking-wider truncate">{entry.name}</span>
                   </div>
-                  <span className="text-xs font-black text-slate-900 dark:text-white">{formatCurrency(entry.value)}</span>
+                  <span className="ml-2 shrink-0 text-xs font-black text-slate-900 dark:text-white text-right">{formatCurrency(entry.value)}</span>
                 </div>
               ))}
               {expenseByCategoryData.length === 0 && (
