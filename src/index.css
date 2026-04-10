@@ -39,6 +39,8 @@
     --theme-input-bg: rgba(248, 250, 252, 0.95);
     --theme-input-border: rgba(148, 163, 184, 0.3);
     --theme-input-focus-ring: rgba(37, 99, 235, 0.26);
+    --theme-input-text: #0f172a;
+    --theme-input-placeholder: #64748b;
     --theme-input-radius: 0.9rem;
     --theme-table-head-bg: rgba(241, 245, 249, 0.9);
     --theme-table-stripe: rgba(248, 250, 252, 0.85);
@@ -65,6 +67,8 @@
     --theme-input-bg: rgba(30, 41, 59, 0.8);
     --theme-input-border: rgba(100, 116, 139, 0.45);
     --theme-input-focus-ring: rgba(59, 130, 246, 0.35);
+    --theme-input-text: #f8fafc;
+    --theme-input-placeholder: #94a3b8;
     --theme-table-head-bg: rgba(30, 41, 59, 0.9);
     --theme-table-stripe: rgba(15, 23, 42, 0.55);
     --theme-table-border: rgba(51, 65, 85, 0.9);
@@ -404,7 +408,14 @@
     border-radius: var(--theme-input-radius);
     border: 1px solid var(--theme-input-border);
     background: var(--theme-input-bg);
+    color: var(--theme-input-text);
     transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='range'])::placeholder,
+  textarea::placeholder {
+    color: var(--theme-input-placeholder);
+    opacity: 1;
   }
 
   input:not([type='checkbox']):not([type='radio']):not([type='range']):focus,
