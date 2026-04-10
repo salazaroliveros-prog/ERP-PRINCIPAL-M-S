@@ -112,6 +112,7 @@ function isTestDataText(value: any) {
 
 const StatusBadge = ({ status }: { status: string }) => {
   const styles: any = {
+    'Evaluation': 'bg-violet-50 text-violet-600 border-violet-100 dark:bg-violet-500/20 dark:text-violet-300 dark:border-violet-500/40',
     'Planning': 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/40',
     'In Progress': 'bg-primary-light/50 text-primary border-primary-light dark:bg-primary/20 dark:text-blue-300 dark:border-primary/40',
     'Completed': 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40',
@@ -119,10 +120,12 @@ const StatusBadge = ({ status }: { status: string }) => {
   };
   return (
     <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border", styles[status])}>
-      {status === 'Planning' ? 'Planeación' : status === 'In Progress' ? 'En Ejecución' : status === 'Completed' ? 'Completado' : 'En Pausa'}
+      {status === 'Evaluation' ? 'Evaluación' : status === 'Planning' ? 'Planeación' : status === 'In Progress' ? 'En Ejecución' : status === 'Completed' ? 'Completado' : 'En Pausa'}
     </span>
   );
 };
+
+const isEvaluationStatus = (status: string) => status === 'Evaluation' || status === 'Planning';
 
 const getTypologyColor = (typology: string) => {
   switch (typology?.toUpperCase()) {
@@ -1341,6 +1344,26 @@ export default function Projects() {
     setCurrentPage(1);
   }, [searchTerm, filters, sortBy, sortOrder, itemsPerPage]);
 
+  const projectCostSummary = useMemo(() => {
+    const executionProjects = filteredProjects.filter((project) => project.status === 'In Progress');
+    const evaluationProjects = filteredProjects.filter((project) => isEvaluationStatus(project.status));
+
+    const executionBudget = executionProjects.reduce((sum, project) => sum + (Number(project.budget) || 0), 0);
+    const executionSpent = executionProjects.reduce((sum, project) => sum + (Number(project.spent) || 0), 0);
+
+    const evaluationBudget = evaluationProjects.reduce((sum, project) => sum + (Number(project.budget) || 0), 0);
+    const evaluationSpent = evaluationProjects.reduce((sum, project) => sum + (Number(project.spent) || 0), 0);
+
+    return {
+      executionCount: executionProjects.length,
+      evaluationCount: evaluationProjects.length,
+      executionBudget,
+      executionSpent,
+      evaluationBudget,
+      evaluationSpent,
+    };
+  }, [filteredProjects]);
+
   if (selectedProjectId) {
     return <ProjectDetails projectId={selectedProjectId} onBack={() => setSelectedProjectId(null)} />;
   }
@@ -1719,6 +1742,7 @@ export default function Projects() {
                     onChange={(e) => setFilters({...filters, status: e.target.value})}
                   >
                     <option value="all">Todos los estados</option>
+                    <option value="Evaluation">Evaluación</option>
                     <option value="Planning">Planeación</option>
                     <option value="In Progress">En Ejecución</option>
                     <option value="On Hold">En Pausa</option>
@@ -1840,6 +1864,25 @@ export default function Projects() {
         </AnimatePresence>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Monto General (En Ejecución)</p>
+            <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">{projectCostSummary.executionCount} proyectos</span>
+          </div>
+          <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{formatCurrency(projectCostSummary.executionBudget)}</p>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">Ejecutado: {formatCurrency(projectCostSummary.executionSpent)}</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-violet-100 dark:border-violet-900/30 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400">Costos en Evaluación (Aparte)</p>
+            <span className="text-[10px] font-black text-violet-600 dark:text-violet-400">{projectCostSummary.evaluationCount} proyectos</span>
+          </div>
+          <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{formatCurrency(projectCostSummary.evaluationBudget)}</p>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">Ejecutado: {formatCurrency(projectCostSummary.evaluationSpent)}</p>
+        </div>
+      </div>
+
       {viewMode === 'calendar' ? (
         <CalendarView projects={filteredProjects} />
       ) : viewMode === 'table' ? (
@@ -1871,12 +1914,14 @@ export default function Projects() {
                   <td className="px-6 py-5">
                     <span className={cn(
                       "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                      project.status === 'Evaluation' ? "bg-violet-100 text-violet-600" :
                       project.status === 'In Progress' ? "bg-blue-100 text-blue-600" :
                       project.status === 'Completed' ? "bg-emerald-100 text-emerald-600" :
                       project.status === 'On Hold' ? "bg-amber-100 text-amber-600" :
                       "bg-slate-100 text-slate-600"
                     )}>
-                      {project.status === 'In Progress' ? 'En Ejecución' :
+                      {project.status === 'Evaluation' ? 'Evaluación' :
+                       project.status === 'In Progress' ? 'En Ejecución' :
                        project.status === 'Completed' ? 'Completado' :
                        project.status === 'On Hold' ? 'En Pausa' : 'Planeación'}
                     </span>
@@ -2006,21 +2051,21 @@ export default function Projects() {
                           <div className="flex items-center gap-0.5 sm:gap-1">
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleShare(project); }} 
-                              className="p-1 sm:p-2 text-slate-400 hover:text-primary transition-colors"
+                              className="p-2 sm:p-2.5 min-h-9 min-w-9 rounded-xl bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-primary hover:border-primary/40 transition-colors"
                               title="Compartir"
                             >
                               <Share size={12} className="sm:w-[18px] sm:h-[18px]" />
                             </button>
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleEditProject(project); }} 
-                              className="p-1 sm:p-2 text-slate-400 hover:text-primary transition-colors"
+                              className="p-2 sm:p-2.5 min-h-9 min-w-9 rounded-xl bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-primary hover:border-primary/40 transition-colors"
                               title="Editar"
                             >
                               <Edit2 size={12} className="sm:w-[18px] sm:h-[18px]" />
                             </button>
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }} 
-                              className="p-1 sm:p-2 text-slate-400 hover:text-red-600 transition-colors"
+                              className="p-2 sm:p-2.5 min-h-9 min-w-9 rounded-xl bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-red-600 hover:border-red-300 transition-colors"
                               title="Eliminar"
                             >
                               <Trash2 size={12} className="sm:w-[18px] sm:h-[18px]" />
@@ -2770,6 +2815,7 @@ export default function Projects() {
                     value={newProject.status}
                     onChange={(e) => setNewProject({...newProject, status: e.target.value})}
                   >
+                    <option value="Evaluation">Evaluación</option>
                     <option value="Planning">Planeación</option>
                     <option value="In Progress">En Ejecución</option>
                     <option value="On Hold">En Pausa</option>
