@@ -53,8 +53,21 @@ type WindowWithGoogle = Window & {
   };
 };
 
+function buildInitials(name: string) {
+  const normalized = String(name || 'Usuario').trim();
+  const parts = normalized.split(/\s+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || '').join('');
+  return initials || 'U';
+}
+
+export function getFallbackAvatarUrl(name: string) {
+  const initials = buildInitials(name);
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#2563eb'/><stop offset='100%' stop-color='#0ea5e9'/></linearGradient></defs><rect width='96' height='96' rx='16' fill='url(#g)'/><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='Inter, Arial, sans-serif' font-size='34' font-weight='700'>${initials}</text></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
 function createDefaultAvatar(name: string) {
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff`;
+  return getFallbackAvatarUrl(name);
 }
 
 function loadStoredUser(): User | null {

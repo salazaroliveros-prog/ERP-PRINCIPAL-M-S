@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User, auth } from './lib/authStorageClient';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User, auth, getFallbackAvatarUrl } from './lib/authStorageClient';
 import { 
   LayoutDashboard, 
   Construction, 
@@ -491,10 +491,16 @@ function AppContent({
             </button>
             <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 overflow-hidden">
               <img 
-                src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}&background=random`} 
+                src={user.photoURL || getFallbackAvatarUrl(user.displayName || 'Usuario')} 
                 alt={user.displayName || ''} 
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
+                onError={(event) => {
+                  const img = event.currentTarget;
+                  if (img.dataset.fallbackApplied === '1') return;
+                  img.dataset.fallbackApplied = '1';
+                  img.src = getFallbackAvatarUrl(user.displayName || 'Usuario');
+                }}
               />
             </div>
           </div>

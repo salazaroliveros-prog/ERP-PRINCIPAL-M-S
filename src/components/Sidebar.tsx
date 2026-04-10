@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { User, auth } from '../lib/authStorageClient';
+import { User, auth, getFallbackAvatarUrl } from '../lib/authStorageClient';
 import { 
   LayoutDashboard, 
   Construction, 
@@ -563,10 +563,16 @@ export const Sidebar = ({
               <div className="relative group">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-primary/10 border border-primary/20 overflow-hidden shadow-inner">
                   <img 
-                    src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}&background=random`} 
+                    src={user.photoURL || getFallbackAvatarUrl(user.displayName || 'Usuario')} 
                     alt={user.displayName || ''} 
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
+                    onError={(event) => {
+                      const img = event.currentTarget;
+                      if (img.dataset.fallbackApplied === '1') return;
+                      img.dataset.fallbackApplied = '1';
+                      img.src = getFallbackAvatarUrl(user.displayName || 'Usuario');
+                    }}
                   />
                 </div>
                 <div className={cn(
