@@ -204,6 +204,8 @@ const StatCard = ({ title, value, icon: Icon, trend, trendValue, color }: any) =
   </motion.div>
 );
 
+const isEvaluationStatus = (status: string) => status === 'Evaluation' || status === 'Planning';
+
 const QuickActionButton = ({ icon: Icon, label, onClick, color }: any) => (
   <button
     onClick={onClick}
@@ -509,11 +511,15 @@ export default function Dashboard() {
     }
   }, [projects, subcontracts, loading]);
 
-  const totalBudget = projects.reduce((acc, p) => acc + (p.budget || 0), 0);
+  const executionProjects = projects.filter(p => p.status === 'In Progress' || p.status === 'Active');
+  const evaluationProjects = projects.filter(p => isEvaluationStatus(p.status));
+  const totalBudget = executionProjects.reduce((acc, p) => acc + (Number(p.budget) || 0), 0);
+  const evaluationBudget = evaluationProjects.reduce((acc, p) => acc + (Number(p.budget) || 0), 0);
+  const evaluationSpent = evaluationProjects.reduce((acc, p) => acc + (Number(p.spent) || 0), 0);
   const totalSpent = transactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0);
   const totalIncome = transactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0);
   const globalProfit = totalIncome - totalSpent;
-  const activeProjects = projects.filter(p => p.status === 'In Progress').length;
+  const activeProjects = executionProjects.length;
 
   const projectHealthData = projects.map(p => {
     const projectExpenses = transactions
@@ -546,6 +552,7 @@ export default function Dashboard() {
   })).sort((a, b) => b.value - a.value);
 
   const statusData = [
+    { name: 'En Evaluación', value: projects.filter(p => p.status === 'Evaluation').length },
     { name: 'En Planeación', value: projects.filter(p => p.status === 'Planning').length },
     { name: 'En Ejecución', value: projects.filter(p => p.status === 'In Progress').length },
     { name: 'Completadas', value: projects.filter(p => p.status === 'Completed').length },
@@ -562,7 +569,7 @@ export default function Dashboard() {
     value: item.value,
   }));
 
-  const activeProjectsList = projects.filter(p => p.status === 'In Progress' || p.status === 'Active');
+  const activeProjectsList = executionProjects;
   
   const progressComparisonData = projects
     .map(p => {
@@ -701,12 +708,20 @@ export default function Dashboard() {
 
       <div className="bento-grid">
         <StatCard 
-          title="Presupuesto Total" 
+          title="Presupuesto Total (Ejecución)" 
           value={formatCurrency(totalBudget)} 
           icon={HandCoins} 
           trend="up" 
           trendValue="+12.0%" 
           color="bg-primary shadow-primary/20"
+        />
+        <StatCard 
+          title="Costos en Evaluación" 
+          value={formatCurrency(evaluationBudget)} 
+          icon={Clock} 
+          trend="up" 
+          trendValue={`${formatCurrency(evaluationSpent)} gastado`} 
+          color="bg-violet-600 shadow-violet-600/20"
         />
         <StatCard 
           title="Total Gastado" 

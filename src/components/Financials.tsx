@@ -68,6 +68,8 @@ import { es } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Calculator, FileBarChart, Info, DollarSign, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const isEvaluationStatus = (status: string) => status === 'Evaluation' || status === 'Planning';
 import { getBrandedCsvPreamble, escapeCsvCell } from '../lib/reportBranding';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -991,6 +993,25 @@ export default function Financials() {
       .slice(0, 6);
   }, [ownerIncomeTransactions]);
 
+  const projectCostSummary = useMemo(() => {
+    const executionProjects = projects.filter((project) => project.status === 'In Progress' || project.status === 'Active');
+    const evaluationProjects = projects.filter((project) => isEvaluationStatus(project.status));
+
+    const executionBudget = executionProjects.reduce((sum, project) => sum + (Number(project.budget) || 0), 0);
+    const executionSpent = executionProjects.reduce((sum, project) => sum + (Number(project.spent) || 0), 0);
+    const evaluationBudget = evaluationProjects.reduce((sum, project) => sum + (Number(project.budget) || 0), 0);
+    const evaluationSpent = evaluationProjects.reduce((sum, project) => sum + (Number(project.spent) || 0), 0);
+
+    return {
+      executionCount: executionProjects.length,
+      evaluationCount: evaluationProjects.length,
+      executionBudget,
+      executionSpent,
+      evaluationBudget,
+      evaluationSpent,
+    };
+  }, [projects]);
+
   const administrativeCategorySet = useMemo(() => new Set(ADMINISTRATIVE_EXPENSE_CATEGORIES), []);
   const personalCategorySet = useMemo(() => new Set(PERSONAL_EXPENSE_CATEGORIES), []);
 
@@ -1298,6 +1319,26 @@ export default function Financials() {
               ? `${adminExpenseVsProfit.toFixed(1)}% de utilidad activa`
               : 'Sin utilidad activa para comparar'}
           </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Costo Proyectos en Ejecución</p>
+            <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">{projectCostSummary.executionCount} proyectos</span>
+          </div>
+          <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{formatCurrency(projectCostSummary.executionBudget)}</p>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">Ejecutado: {formatCurrency(projectCostSummary.executionSpent)}</p>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-violet-100 dark:border-violet-900/30 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400">Costos en Evaluación (Aparte)</p>
+            <span className="text-[10px] font-black text-violet-600 dark:text-violet-400">{projectCostSummary.evaluationCount} proyectos</span>
+          </div>
+          <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{formatCurrency(projectCostSummary.evaluationBudget)}</p>
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">Ejecutado: {formatCurrency(projectCostSummary.evaluationSpent)}</p>
         </div>
       </div>
 
