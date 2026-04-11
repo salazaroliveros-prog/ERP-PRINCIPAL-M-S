@@ -493,6 +493,23 @@ interface AppUserRow {
   last_login_at: string;
 }
 
+interface OcrValidationRow {
+  id: string;
+  project_id: string | null;
+  purchase_order_id: string | null;
+  invoice_number: string | null;
+  supplier: string | null;
+  detected_total: string | null;
+  score: number;
+  result_status: 'aprobado' | 'revisar' | 'rechazado';
+  decision: 'approved' | 'review' | 'rejected';
+  auto_apply: boolean;
+  auto_action_status: string | null;
+  auto_action_summary: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 function mapTransaction(row: TransactionRow) {
   return {
     id: row.id,
@@ -628,6 +645,25 @@ function mapAppUser(row: AppUserRow) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastLoginAt: row.last_login_at,
+  };
+}
+
+function mapOcrValidation(row: OcrValidationRow) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    purchaseOrderId: row.purchase_order_id,
+    invoiceNumber: row.invoice_number,
+    supplier: row.supplier,
+    detectedTotal: Number(row.detected_total || 0),
+    score: Number(row.score || 0),
+    resultStatus: row.result_status,
+    decision: row.decision,
+    autoApply: Boolean(row.auto_apply),
+    autoActionStatus: row.auto_action_status,
+    autoActionSummary: row.auto_action_summary,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
   };
 }
 
@@ -1272,6 +1308,9 @@ function serveFallbackRead(req: Request, res: Response) {
     return res.json({ items: [] });
   }
   if (req.path === '/documents') {
+    return res.json({ items: [] });
+  }
+  if (req.path === '/documents/ocr-validations') {
     return res.json({ items: [] });
   }
   if (req.path === '/folders') {
@@ -2210,6 +2249,8 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       const imageDataUrl = String(req.body?.imageDataUrl || '').trim();
       const purchaseOrderId = String(req.body?.purchaseOrderId || '').trim();
       const projectId = String(req.body?.projectId || '').trim();
+      const autoApply = Boolean(req.body?.autoApply);
+      const requestedBy = String(req.body?.requestedBy || 'IA Copiloto').trim() || 'IA Copiloto';
 
       if (!rawText && !imageDataUrl) {
         return res.status(400).json({ error: 'rawText o imageDataUrl es obligatorio' });
@@ -2298,6 +2339,9 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
 
       const checks: Array<{ name: string; status: 'pass' | 'warn' | 'fail'; detail: string }> = [];
       let score = 100;
+      let amountVariancePct: number | null = null;
+      let supplierMatches: boolean | null = null;
+      let linkedPurchaseOrder: PurchaseOrderRow | null = null;
 
       if (extracted.total <= 0) {
         checks.push({ name: 'Extraccion de monto', status: 'fail', detail: 'No se pudo extraer monto total del documento.' });
@@ -2320,6 +2364,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
         );
 
         const po = poResult.rows[0];
+        linkedPurchaseOrder = po || null;
         if (!po) {
           checks.push({ name: 'Orden de compra', status: 'fail', detail: 'No se encontró la orden de compra seleccionada.' });
           score -= 35;
@@ -2327,6 +2372,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           const poEstimated = parseAmount(po.estimated_cost);
           if (extracted.total > 0 && poEstimated > 0) {
             const diffPct = Math.abs(((extracted.total - poEstimated) / poEstimated) * 100);
+            amountVariancePct = Number(diffPct.toFixed(2));
             if (diffPct <= 8) {
               checks.push({ name: 'Coincidencia de monto OC', status: 'pass', detail: `Variación ${diffPct.toFixed(2)}% (dentro de tolerancia).` });
             } else if (diffPct <= 15) {
@@ -2341,6 +2387,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           if (extracted.supplier && po.supplier) {
             const supplierMatch = String(po.supplier).toLowerCase().includes(String(extracted.supplier).toLowerCase()) ||
               String(extracted.supplier).toLowerCase().includes(String(po.supplier).toLowerCase());
+            supplierMatches = supplierMatch;
             if (supplierMatch) {
               checks.push({ name: 'Proveedor', status: 'pass', detail: `Proveedor coincide con OC (${po.supplier}).` });
             } else {
@@ -2385,18 +2432,306 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
 
       const normalizedScore = Math.max(0, Math.min(100, score));
       const resultStatus = normalizedScore >= 80 ? 'aprobado' : normalizedScore >= 60 ? 'revisar' : 'rechazado';
+      const failChecks = checks.filter((check) => check.status === 'fail').length;
+      const approveScore = Number(process.env.OCR_AUTO_APPROVE_MIN_SCORE || 85);
+      const reviewScore = Number(process.env.OCR_AUTO_REVIEW_MIN_SCORE || 60);
+      const maxVariancePct = Number(process.env.OCR_AUTO_APPROVE_MAX_VARIANCE_PCT || 8);
+
+      const decision: 'approved' | 'review' | 'rejected' =
+        normalizedScore >= approveScore &&
+        failChecks === 0 &&
+        (amountVariancePct === null || amountVariancePct <= maxVariancePct) &&
+        (supplierMatches === null || supplierMatches === true)
+          ? 'approved'
+          : normalizedScore >= reviewScore
+            ? 'review'
+            : 'rejected';
+
+      let autoAction: {
+        requested: boolean;
+        applied: boolean;
+        summary: string;
+        workflowId?: string | null;
+      } = {
+        requested: autoApply,
+        applied: false,
+        summary: 'Sin ejecución automática',
+      };
+
+      const createDecisionWorkflow = async (workflowStatus: 'pending' | 'approved' | 'rejected', priority: 'low' | 'medium' | 'high', detail: string) => {
+        const workflowId = randomUUID();
+        const created = await db.query<WorkflowRow>(
+          `
+            insert into workflows (
+              id,
+              title,
+              type,
+              reference_id,
+              status,
+              requested_by,
+              requested_at,
+              priority,
+              description,
+              amount,
+              resolved_at
+            ) values ($1,$2,$3,$4,$5,$6,now(),$7,$8,$9,$10)
+            returning
+              id,
+              title,
+              type,
+              reference_id,
+              status,
+              requested_by,
+              requested_at::text,
+              priority,
+              description,
+              amount,
+              resolved_at::text,
+              created_at,
+              updated_at
+          `,
+          [
+            workflowId,
+            'Validación OCR automática',
+            'purchase_order',
+            purchaseOrderId || projectId || workflowId,
+            workflowStatus,
+            requestedBy,
+            priority,
+            detail,
+            Number(extracted.total || 0) || null,
+            workflowStatus === 'pending' ? null : new Date().toISOString(),
+          ]
+        );
+        return created.rows[0]?.id || null;
+      };
+
+      if (autoApply) {
+        if (decision === 'approved') {
+          if (linkedPurchaseOrder?.id) {
+            await db.query(
+              `
+                update purchase_orders
+                set status = 'Completed', updated_at = now()
+                where id = $1
+              `,
+              [linkedPurchaseOrder.id]
+            );
+          }
+
+          const workflowId = await createDecisionWorkflow(
+            'approved',
+            'medium',
+            `Documento aprobado automáticamente por motor OCR (score ${normalizedScore}).`
+          );
+
+          await createSystemNotification(
+            'OCR aprobado automáticamente',
+            `Documento ${extracted.invoiceNumber || 'sin número'} aprobado. Score ${normalizedScore}.`,
+            'project'
+          );
+
+          autoAction = {
+            requested: true,
+            applied: true,
+            summary: 'Aprobado y aplicado automáticamente',
+            workflowId,
+          };
+        } else if (decision === 'review') {
+          const workflowId = await createDecisionWorkflow(
+            'pending',
+            'high',
+            `Documento requiere revisión manual (score ${normalizedScore}).`
+          );
+
+          await createSystemNotification(
+            'OCR requiere revisión',
+            `Documento ${extracted.invoiceNumber || 'sin número'} enviado a revisión manual. Score ${normalizedScore}.`,
+            'project'
+          );
+
+          autoAction = {
+            requested: true,
+            applied: true,
+            summary: 'Enviado a revisión manual con workflow pendiente',
+            workflowId,
+          };
+        } else {
+          const workflowId = await createDecisionWorkflow(
+            'rejected',
+            'high',
+            `Documento rechazado por motor OCR (score ${normalizedScore}).`
+          );
+
+          await createSystemNotification(
+            'OCR rechazado automáticamente',
+            `Documento ${extracted.invoiceNumber || 'sin número'} rechazado por alto riesgo. Score ${normalizedScore}.`,
+            'project'
+          );
+
+          autoAction = {
+            requested: true,
+            applied: true,
+            summary: 'Rechazado automáticamente y registrado en workflow',
+            workflowId,
+          };
+        }
+      }
+
+      await db.query(
+        `
+          create table if not exists ocr_validations (
+            id text primary key,
+            project_id text,
+            purchase_order_id text,
+            invoice_number text,
+            supplier text,
+            detected_total numeric,
+            score integer not null,
+            result_status text not null,
+            decision text not null,
+            auto_apply boolean not null default false,
+            auto_action_status text,
+            auto_action_summary text,
+            checks jsonb,
+            recommendations jsonb,
+            created_by text,
+            created_at timestamptz not null default now()
+          )
+        `
+      );
+
+      await db.query(
+        `
+          insert into ocr_validations (
+            id,
+            project_id,
+            purchase_order_id,
+            invoice_number,
+            supplier,
+            detected_total,
+            score,
+            result_status,
+            decision,
+            auto_apply,
+            auto_action_status,
+            auto_action_summary,
+            checks,
+            recommendations,
+            created_by
+          )
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15)
+        `,
+        [
+          randomUUID(),
+          projectId || null,
+          purchaseOrderId || null,
+          extracted.invoiceNumber || null,
+          extracted.supplier || null,
+          Number(extracted.total || 0),
+          Math.round(normalizedScore),
+          resultStatus,
+          decision,
+          autoApply,
+          autoAction.applied ? 'applied' : 'not_applied',
+          autoAction.summary,
+          JSON.stringify(checks),
+          JSON.stringify(
+            checks
+              .filter((check) => check.status !== 'pass')
+              .map((check) => `Acción sugerida: ${check.name} - ${check.detail}`)
+          ),
+          requestedBy,
+        ]
+      );
 
       return res.json({
         status: resultStatus,
         score: normalizedScore,
+        decision,
         extracted,
         checks,
         recommendations: checks
           .filter((check) => check.status !== 'pass')
           .map((check) => `Acción sugerida: ${check.name} - ${check.detail}`),
+        autoAction,
       });
     } catch (error: any) {
       return res.status(500).json({ error: error?.message || 'No se pudo validar el documento' });
+    }
+  });
+
+  app.get('/api/documents/ocr-validations', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.query.projectId || '').trim();
+      const purchaseOrderId = String(req.query.purchaseOrderId || '').trim();
+      const limit = Math.min(Math.max(Number(req.query.limit || 20), 1), 200);
+
+      await db.query(
+        `
+          create table if not exists ocr_validations (
+            id text primary key,
+            project_id text,
+            purchase_order_id text,
+            invoice_number text,
+            supplier text,
+            detected_total numeric,
+            score integer not null,
+            result_status text not null,
+            decision text not null,
+            auto_apply boolean not null default false,
+            auto_action_status text,
+            auto_action_summary text,
+            checks jsonb,
+            recommendations jsonb,
+            created_by text,
+            created_at timestamptz not null default now()
+          )
+        `
+      );
+
+      const where: string[] = [];
+      const values: any[] = [];
+      if (projectId) {
+        values.push(projectId);
+        where.push(`project_id = $${values.length}`);
+      }
+      if (purchaseOrderId) {
+        values.push(purchaseOrderId);
+        where.push(`purchase_order_id = $${values.length}`);
+      }
+      values.push(limit);
+
+      const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : '';
+      const rows = await db.query<OcrValidationRow>(
+        `
+          select
+            id,
+            project_id,
+            purchase_order_id,
+            invoice_number,
+            supplier,
+            detected_total,
+            score,
+            result_status,
+            decision,
+            auto_apply,
+            auto_action_status,
+            auto_action_summary,
+            created_by,
+            created_at
+          from ocr_validations
+          ${whereClause}
+          order by created_at desc
+          limit $${values.length}
+        `,
+        values
+      );
+
+      return res.json({ items: rows.rows.map(mapOcrValidation) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo obtener historial OCR' });
     }
   });
 

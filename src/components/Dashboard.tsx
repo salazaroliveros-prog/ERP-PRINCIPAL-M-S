@@ -71,7 +71,8 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { drawReportHeader } from '../lib/pdfUtils';
 import { getThresholdSettings } from '../lib/settingsApi';
-import { validateDocumentOCR } from '../lib/aiOpsApi';
+import { listOcrValidations, validateDocumentOCR } from '../lib/aiOpsApi';
+import { auth } from '../lib/authStorageClient';
 
 const COLORS = [
   '#3b82f6', // Blue
@@ -303,6 +304,9 @@ export default function Dashboard() {
   const [ocrSelectedProjectId, setOcrSelectedProjectId] = useState('');
   const [ocrValidationResult, setOcrValidationResult] = useState<any | null>(null);
   const [isValidatingDocument, setIsValidatingDocument] = useState(false);
+  const [ocrAutoApply, setOcrAutoApply] = useState(true);
+  const [cashflowScenario, setCashflowScenario] = useState<'base' | 'inflation' | 'stress'>('base');
+  const [ocrValidationHistory, setOcrValidationHistory] = useState<any[]>([]);
   const [chartPreferences, setChartPreferences] = useState<DashboardChartPreferences>(
     THEME_DEFAULT_CHARTS.sunset
   );
@@ -1304,6 +1308,13 @@ export default function Dashboard() {
       return status === 'in progress' || status === 'active';
     });
 
+    const scenario =
+      cashflowScenario === 'inflation'
+        ? { expenseMultiplier: 1.14, incomeMultiplier: 0.96 }
+        : cashflowScenario === 'stress'
+          ? { expenseMultiplier: 1.22, incomeMultiplier: 0.86 }
+          : { expenseMultiplier: 1, incomeMultiplier: 1 };
+
     const projectForecast = activeProjects.map((project: any) => {
       const projectTransactions = transactions.filter((tx: any) => {
         const txDate = Date.parse(String(tx?.date || ''));
@@ -1318,8 +1329,8 @@ export default function Dashboard() {
         .filter((tx: any) => tx.type === 'Income')
         .reduce((acc: number, tx: any) => acc + Number(tx.amount || 0), 0);
 
-      const avgExpenseWeekly = sampleExpense / weeksSample;
-      const avgIncomeWeekly = sampleIncome / weeksSample;
+      const avgExpenseWeekly = (sampleExpense / weeksSample) * scenario.expenseMultiplier;
+      const avgIncomeWeekly = (sampleIncome / weeksSample) * scenario.incomeMultiplier;
 
       const budget = Number(project?.budget || 0);
       const spent = Number(project?.spent || 0);
@@ -1369,7 +1380,7 @@ export default function Dashboard() {
     });
 
     return summary;
-  }, [projects, transactions]);
+  }, [cashflowScenario, projects, transactions]);
 
   const actionableRecommendations = useMemo(() => {
     const rows: Array<{
@@ -1514,8 +1525,16 @@ export default function Dashboard() {
         imageDataUrl: ocrImageDataUrl || undefined,
         purchaseOrderId: ocrSelectedPurchaseOrderId || undefined,
         projectId: ocrSelectedProjectId || undefined,
+        autoApply: ocrAutoApply,
+        requestedBy: auth.currentUser?.email || auth.currentUser?.displayName || 'IA Copiloto',
       });
       setOcrValidationResult(result);
+      try {
+        const history = await listOcrValidations({ limit: 10 });
+        setOcrValidationHistory(history.items || []);
+      } catch {
+        // Ignore history refresh failures.
+      }
       toast.success('Validación documental completada');
     } catch (error) {
       setOcrValidationResult(null);
@@ -1524,6 +1543,27 @@ export default function Dashboard() {
       setIsValidatingDocument(false);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const history = await listOcrValidations({ limit: 10 });
+        if (!cancelled) {
+          setOcrValidationHistory(history.items || []);
+        }
+      } catch {
+        if (!cancelled) {
+          setOcrValidationHistory([]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (loading || !recentMaterialPriceHistory.materialName || recentMaterialPriceHistory.points.length < 2) return;
@@ -2123,6 +2163,27 @@ export default function Dashboard() {
             <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Forecast de Flujo de Caja (4/8/12 semanas)</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">Proyección de caja con tendencia histórica por obra activa</p>
           </div>
+          <div className="flex items-center gap-2">
+            {[
+              { key: 'base', label: 'Base' },
+              { key: 'inflation', label: 'Inflación alta' },
+              { key: 'stress', label: 'Estrés' },
+            ].map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setCashflowScenario(option.key as 'base' | 'inflation' | 'stress')}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all',
+                  cashflowScenario === option.key
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           {cashflowForecastByHorizon.map((forecast) => (
@@ -2206,6 +2267,21 @@ export default function Dashboard() {
           </div>
         </div>
 
+        <div className="mb-3 rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/70 dark:bg-slate-800/40">
+          <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              checked={ocrAutoApply}
+              onChange={(e) => setOcrAutoApply(e.target.checked)}
+              className="accent-primary"
+            />
+            Auto-aplicar decisión del motor de reglas OCR
+          </label>
+          <p className="text-[10px] text-slate-500 mt-1">
+            Reglas: aprobar si score alto y consistencia OC; revisar en zona media; rechazar alto riesgo.
+          </p>
+        </div>
+
         <div className="flex justify-end mb-3">
           <button
             type="button"
@@ -2228,6 +2304,19 @@ export default function Dashboard() {
                 score {ocrValidationResult.score}
               </span>
             </div>
+            <div className="mb-2 flex items-center gap-2 flex-wrap">
+              <span className={cn(
+                'px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border',
+                ocrValidationResult.decision === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : ocrValidationResult.decision === 'review' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'
+              )}>
+                decisión {ocrValidationResult.decision || 'N/A'}
+              </span>
+              {ocrValidationResult.autoAction && (
+                <span className="text-[10px] text-slate-600 dark:text-slate-300">
+                  {ocrValidationResult.autoAction.applied ? 'Auto-acción aplicada' : 'Auto-acción no aplicada'}: {ocrValidationResult.autoAction.summary}
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-slate-600 dark:text-slate-300 mb-2">
               Extraído: proveedor {ocrValidationResult.extracted?.supplier || 'N/A'} • total {formatCurrency(Number(ocrValidationResult.extracted?.total || 0))} • factura {ocrValidationResult.extracted?.invoiceNumber || 'N/A'}
             </p>
@@ -2243,6 +2332,35 @@ export default function Dashboard() {
             </ul>
           </div>
         )}
+
+        <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/70 dark:bg-slate-800/40">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Trazabilidad OCR reciente</p>
+          {ocrValidationHistory.length === 0 ? (
+            <p className="text-xs text-slate-500">Sin validaciones registradas todavía.</p>
+          ) : (
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+              {ocrValidationHistory.map((row: any) => (
+                <div key={row.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-black text-slate-900 dark:text-white">{row.invoiceNumber || 'Documento sin número'}</p>
+                    <span className={cn(
+                      'px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border',
+                      row.decision === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : row.decision === 'review' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'
+                    )}>
+                      {row.decision}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
+                    Score {row.score} • {row.supplier || 'Proveedor N/A'} • {formatCurrency(Number(row.detectedTotal || 0))}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    {row.autoActionSummary || 'Sin auto-acción'} • {new Date(row.createdAt).toLocaleString('es-GT')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:gap-5 min-w-0">
