@@ -128,6 +128,17 @@ type OcrHistoryColumnKey =
   | 'autoApply'
   | 'autoActionSummary';
 
+type OcrHistorySortBy = 'date' | 'score' | 'amount' | 'supplier' | 'invoiceNumber' | 'decision' | 'resultStatus';
+type OcrHistoryPresetKey = 'auditoria' | 'operaciones' | 'gerencia' | 'custom';
+
+type OcrHistoryPresetConfig = {
+  viewMode: 'cards' | 'table';
+  sortBy: OcrHistorySortBy;
+  sortDirection: 'asc' | 'desc';
+  selectedColumns: OcrHistoryColumnKey[];
+  stickyColumnsEnabled: boolean;
+};
+
 const OCR_HISTORY_COLUMN_OPTIONS: Array<{ key: OcrHistoryColumnKey; label: string }> = [
   { key: 'invoiceNumber', label: 'Factura' },
   { key: 'supplier', label: 'Proveedor' },
@@ -153,6 +164,30 @@ const OCR_HISTORY_DEFAULT_COLUMNS: OcrHistoryColumnKey[] = [
   'date',
   'autoActionSummary',
 ];
+
+const OCR_HISTORY_PRESET_CONFIGS: Record<Exclude<OcrHistoryPresetKey, 'custom'>, OcrHistoryPresetConfig> = {
+  auditoria: {
+    viewMode: 'table',
+    sortBy: 'date',
+    sortDirection: 'desc',
+    selectedColumns: ['date', 'invoiceNumber', 'supplier', 'detectedTotal', 'score', 'resultStatus', 'decision', 'projectId', 'purchaseOrderId', 'autoActionSummary', 'id'],
+    stickyColumnsEnabled: true,
+  },
+  operaciones: {
+    viewMode: 'cards',
+    sortBy: 'amount',
+    sortDirection: 'desc',
+    selectedColumns: ['invoiceNumber', 'supplier', 'detectedTotal', 'score', 'decision', 'resultStatus', 'date', 'autoActionSummary'],
+    stickyColumnsEnabled: true,
+  },
+  gerencia: {
+    viewMode: 'table',
+    sortBy: 'score',
+    sortDirection: 'asc',
+    selectedColumns: ['date', 'supplier', 'invoiceNumber', 'detectedTotal', 'score', 'decision', 'resultStatus'],
+    stickyColumnsEnabled: true,
+  },
+};
 
 const CHART_TYPE_OPTIONS: Record<DashboardChartKey, Array<{ value: string; label: string }>> = {
   profitTrend: [
@@ -354,10 +389,12 @@ export default function Dashboard() {
   const [ocrHistorySupplierFilter, setOcrHistorySupplierFilter] = useState('');
   const [ocrHistoryInvoiceFilter, setOcrHistoryInvoiceFilter] = useState('');
   const [ocrHistoryViewMode, setOcrHistoryViewMode] = useState<'cards' | 'table'>('cards');
-  const [ocrHistorySortBy, setOcrHistorySortBy] = useState<'date' | 'score' | 'amount' | 'supplier' | 'invoiceNumber' | 'decision' | 'resultStatus'>('date');
+  const [ocrHistorySortBy, setOcrHistorySortBy] = useState<OcrHistorySortBy>('date');
   const [ocrHistorySortDirection, setOcrHistorySortDirection] = useState<'asc' | 'desc'>('desc');
   const [ocrHistorySelectedColumns, setOcrHistorySelectedColumns] = useState<OcrHistoryColumnKey[]>(OCR_HISTORY_DEFAULT_COLUMNS);
   const [ocrHistoryStickyColumnsEnabled, setOcrHistoryStickyColumnsEnabled] = useState(true);
+  const [ocrHistorySelectedPreset, setOcrHistorySelectedPreset] = useState<OcrHistoryPresetKey>('operaciones');
+  const [ocrHistoryCustomPreset, setOcrHistoryCustomPreset] = useState<OcrHistoryPresetConfig | null>(null);
   const [ocrHistoryOffset, setOcrHistoryOffset] = useState(0);
   const [ocrHistoryHasMore, setOcrHistoryHasMore] = useState(false);
   const [isLoadingMoreOcrHistory, setIsLoadingMoreOcrHistory] = useState(false);
@@ -452,6 +489,42 @@ export default function Dashboard() {
       if (typeof parsed?.stickyColumnsEnabled === 'boolean') {
         setOcrHistoryStickyColumnsEnabled(parsed.stickyColumnsEnabled);
       }
+      if (
+        parsed?.selectedPreset === 'auditoria' ||
+        parsed?.selectedPreset === 'operaciones' ||
+        parsed?.selectedPreset === 'gerencia' ||
+        parsed?.selectedPreset === 'custom'
+      ) {
+        setOcrHistorySelectedPreset(parsed.selectedPreset);
+      }
+      if (parsed?.customPreset && typeof parsed.customPreset === 'object') {
+        const custom = parsed.customPreset;
+        if (
+          (custom.viewMode === 'cards' || custom.viewMode === 'table') &&
+          (custom.sortDirection === 'asc' || custom.sortDirection === 'desc') &&
+          (custom.sortBy === 'date' ||
+            custom.sortBy === 'score' ||
+            custom.sortBy === 'amount' ||
+            custom.sortBy === 'supplier' ||
+            custom.sortBy === 'invoiceNumber' ||
+            custom.sortBy === 'decision' ||
+            custom.sortBy === 'resultStatus') &&
+          Array.isArray(custom.selectedColumns)
+        ) {
+          const allowed = new Set<OcrHistoryColumnKey>(OCR_HISTORY_COLUMN_OPTIONS.map((option) => option.key));
+          const normalizedColumns = custom.selectedColumns
+            .filter((key: unknown): key is OcrHistoryColumnKey => typeof key === 'string' && allowed.has(key as OcrHistoryColumnKey));
+          if (normalizedColumns.length > 0) {
+            setOcrHistoryCustomPreset({
+              viewMode: custom.viewMode,
+              sortBy: custom.sortBy,
+              sortDirection: custom.sortDirection,
+              selectedColumns: normalizedColumns,
+              stickyColumnsEnabled: Boolean(custom.stickyColumnsEnabled),
+            });
+          }
+        }
+      }
     } catch {
       // Ignore malformed preference payloads.
     }
@@ -469,6 +542,8 @@ export default function Dashboard() {
       sortDirection: ocrHistorySortDirection,
       selectedColumns: ocrHistorySelectedColumns,
       stickyColumnsEnabled: ocrHistoryStickyColumnsEnabled,
+      selectedPreset: ocrHistorySelectedPreset,
+      customPreset: ocrHistoryCustomPreset,
     };
     localStorage.setItem(ocrHistoryPreferencesStorageKey, JSON.stringify(payload));
   }, [
@@ -483,6 +558,8 @@ export default function Dashboard() {
     ocrHistorySortDirection,
     ocrHistorySelectedColumns,
     ocrHistoryStickyColumnsEnabled,
+    ocrHistorySelectedPreset,
+    ocrHistoryCustomPreset,
   ]);
 
   const ocrHistoryProjectOptions = useMemo(() => {
@@ -681,6 +758,34 @@ export default function Dashboard() {
       }
       return [...prev, columnKey];
     });
+  };
+
+  const applyOcrPreset = (presetKey: OcrHistoryPresetKey) => {
+    const config = presetKey === 'custom' ? ocrHistoryCustomPreset : OCR_HISTORY_PRESET_CONFIGS[presetKey];
+    if (!config) {
+      toast.info('No hay preset personalizado guardado todavía.');
+      return;
+    }
+
+    setOcrHistoryViewMode(config.viewMode);
+    setOcrHistorySortBy(config.sortBy);
+    setOcrHistorySortDirection(config.sortDirection);
+    setOcrHistorySelectedColumns(config.selectedColumns);
+    setOcrHistoryStickyColumnsEnabled(config.stickyColumnsEnabled);
+    setOcrHistorySelectedPreset(presetKey);
+  };
+
+  const saveCurrentAsCustomOcrPreset = () => {
+    const config: OcrHistoryPresetConfig = {
+      viewMode: ocrHistoryViewMode,
+      sortBy: ocrHistorySortBy,
+      sortDirection: ocrHistorySortDirection,
+      selectedColumns: ocrHistorySelectedColumns,
+      stickyColumnsEnabled: ocrHistoryStickyColumnsEnabled,
+    };
+    setOcrHistoryCustomPreset(config);
+    setOcrHistorySelectedPreset('custom');
+    toast.success('Preset personalizado OCR guardado.');
   };
 
   const ocrEffectiveness = useMemo(() => {
@@ -2865,6 +2970,67 @@ export default function Dashboard() {
             <div className="rounded-xl border border-indigo-200 px-2.5 py-2 bg-indigo-50/60">
               <p className="text-[9px] uppercase tracking-wider font-black text-indigo-700">Auto / Score</p>
               <p className="text-sm font-black text-indigo-700">{ocrEffectiveness.autoApplied} / {ocrEffectiveness.avgScore}</p>
+            </div>
+          </div>
+
+          <div className="mb-2 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Presets OCR</span>
+              <button
+                type="button"
+                onClick={() => applyOcrPreset('auditoria')}
+                className={cn(
+                  'px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border',
+                  ocrHistorySelectedPreset === 'auditoria'
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
+                )}
+              >
+                Auditoría
+              </button>
+              <button
+                type="button"
+                onClick={() => applyOcrPreset('operaciones')}
+                className={cn(
+                  'px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border',
+                  ocrHistorySelectedPreset === 'operaciones'
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
+                )}
+              >
+                Operaciones
+              </button>
+              <button
+                type="button"
+                onClick={() => applyOcrPreset('gerencia')}
+                className={cn(
+                  'px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border',
+                  ocrHistorySelectedPreset === 'gerencia'
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
+                )}
+              >
+                Gerencia
+              </button>
+              <button
+                type="button"
+                onClick={() => applyOcrPreset('custom')}
+                className={cn(
+                  'px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border',
+                  ocrHistorySelectedPreset === 'custom'
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
+                )}
+              >
+                Personalizado
+              </button>
+              <button
+                type="button"
+                onClick={saveCurrentAsCustomOcrPreset}
+                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-200 bg-emerald-50/70 dark:bg-emerald-900/20"
+              >
+                Guardar Actual
+              </button>
             </div>
           </div>
 
