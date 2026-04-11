@@ -139,6 +139,13 @@ type OcrHistoryPresetConfig = {
   stickyColumnsEnabled: boolean;
 };
 
+type OcrPresetExchangePayload = {
+  schemaVersion: 1;
+  exportedAt: string;
+  source: string;
+  preset: OcrHistoryPresetConfig;
+};
+
 const OCR_HISTORY_COLUMN_OPTIONS: Array<{ key: OcrHistoryColumnKey; label: string }> = [
   { key: 'invoiceNumber', label: 'Factura' },
   { key: 'supplier', label: 'Proveedor' },
@@ -342,6 +349,7 @@ const QuickActionButton = ({ icon: Icon, label, onClick, color }: any) => (
 export default function Dashboard() {
   const { currentTheme } = useTheme();
   const executiveControlRef = useRef<HTMLDivElement>(null);
+  const ocrPresetImportInputRef = useRef<HTMLInputElement>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
@@ -786,6 +794,105 @@ export default function Dashboard() {
     setOcrHistoryCustomPreset(config);
     setOcrHistorySelectedPreset('custom');
     toast.success('Preset personalizado OCR guardado.');
+  };
+
+  const exportCustomOcrPresetJson = () => {
+    if (!ocrHistoryCustomPreset) {
+      toast.info('Primero guarda un preset personalizado.');
+      return;
+    }
+
+    const payload: OcrPresetExchangePayload = {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      source: auth.currentUser?.email || auth.currentUser?.displayName || 'ERP OCR',
+      preset: ocrHistoryCustomPreset,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    link.href = url;
+    link.download = `ocr-preset-${stamp}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const normalizeImportedPreset = (value: unknown): OcrHistoryPresetConfig | null => {
+    if (!value || typeof value !== 'object') return null;
+    const candidate = value as Partial<OcrHistoryPresetConfig>;
+
+    const validViewMode = candidate.viewMode === 'cards' || candidate.viewMode === 'table';
+    const validSortBy =
+      candidate.sortBy === 'date' ||
+      candidate.sortBy === 'score' ||
+      candidate.sortBy === 'amount' ||
+      candidate.sortBy === 'supplier' ||
+      candidate.sortBy === 'invoiceNumber' ||
+      candidate.sortBy === 'decision' ||
+      candidate.sortBy === 'resultStatus';
+    const validSortDirection = candidate.sortDirection === 'asc' || candidate.sortDirection === 'desc';
+    const validSticky = typeof candidate.stickyColumnsEnabled === 'boolean';
+    const validColumns = Array.isArray(candidate.selectedColumns);
+
+    if (!validViewMode || !validSortBy || !validSortDirection || !validSticky || !validColumns) {
+      return null;
+    }
+
+    const allowed = new Set<OcrHistoryColumnKey>(OCR_HISTORY_COLUMN_OPTIONS.map((option) => option.key));
+    const normalizedColumns = candidate.selectedColumns
+      .filter((key: unknown): key is OcrHistoryColumnKey => typeof key === 'string' && allowed.has(key as OcrHistoryColumnKey));
+
+    if (normalizedColumns.length === 0) {
+      return null;
+    }
+
+    return {
+      viewMode: candidate.viewMode,
+      sortBy: candidate.sortBy,
+      sortDirection: candidate.sortDirection,
+      selectedColumns: normalizedColumns,
+      stickyColumnsEnabled: candidate.stickyColumnsEnabled,
+    };
+  };
+
+  const importCustomOcrPresetJson = (file: File | null) => {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const raw = String(reader.result || '');
+        const parsed = JSON.parse(raw);
+        const directPreset = normalizeImportedPreset(parsed);
+        const wrappedPreset = normalizeImportedPreset(parsed?.preset);
+        const preset = directPreset || wrappedPreset;
+
+        if (!preset) {
+          toast.error('Archivo de preset OCR inválido.');
+          return;
+        }
+
+        setOcrHistoryCustomPreset(preset);
+        setOcrHistoryViewMode(preset.viewMode);
+        setOcrHistorySortBy(preset.sortBy);
+        setOcrHistorySortDirection(preset.sortDirection);
+        setOcrHistorySelectedColumns(preset.selectedColumns);
+        setOcrHistoryStickyColumnsEnabled(preset.stickyColumnsEnabled);
+        setOcrHistorySelectedPreset('custom');
+        toast.success('Preset OCR importado y aplicado correctamente.');
+      } catch {
+        toast.error('No se pudo leer el archivo JSON del preset OCR.');
+      } finally {
+        if (ocrPresetImportInputRef.current) {
+          ocrPresetImportInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsText(file);
   };
 
   const ocrEffectiveness = useMemo(() => {
@@ -3031,6 +3138,27 @@ export default function Dashboard() {
               >
                 Guardar Actual
               </button>
+              <button
+                type="button"
+                onClick={exportCustomOcrPresetJson}
+                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-200 bg-sky-50/70 dark:bg-sky-900/20"
+              >
+                Exportar JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => ocrPresetImportInputRef.current?.click()}
+                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-200 bg-violet-50/70 dark:bg-violet-900/20"
+              >
+                Importar JSON
+              </button>
+              <input
+                ref={ocrPresetImportInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={(e) => importCustomOcrPresetJson(e.target.files?.[0] || null)}
+                className="hidden"
+              />
             </div>
           </div>
 
