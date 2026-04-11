@@ -66,6 +66,7 @@ const QuickActionsLauncher = lazy(() =>
 const SideToolsDock = lazy(() =>
   import('./components/SideToolsDock').then((module) => ({ default: module.SideToolsDock }))
 );
+const MobileFinanceWidget = lazy(() => import('./components/MobileFinanceWidget'));
 const HRContractSignPage = lazy(() => import('./components/HRContractSignPage'));
 const NotificationManager = lazy(() =>
   import('./components/NotificationManager').then((module) => ({ default: module.NotificationManager }))
@@ -803,6 +804,9 @@ function AppContent({
         </Suspense>
         <Suspense fallback={null}>
           <SideToolsDock />
+        </Suspense>
+        <Suspense fallback={null}>
+          <MobileFinanceWidget />
         </Suspense>
 
         {NAV_METRICS_ENABLED && (
