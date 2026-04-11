@@ -774,7 +774,9 @@ export default function Financials() {
   };
 
   const projectKPIs = useMemo(() => {
-    return projects.map(project => {
+    return projects
+      .filter((project) => isExecutionStatus(project.status))
+      .map(project => {
       const projectTransactions = transactions.filter(t => t.projectId === project.id);
       const income = projectTransactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + t.amount, 0);
       const expense = projectTransactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + t.amount, 0);
@@ -856,7 +858,9 @@ export default function Financials() {
 
   const profitabilityRanking = useMemo(() => {
     const threeMonthsAgo = subMonths(new Date(), 3);
-    const recentProjects = projects.map(project => {
+    const recentProjects = projects
+      .filter((project) => isExecutionStatus(project.status))
+      .map(project => {
       const projectTransactions = transactions.filter(t => 
         t.projectId === project.id && 
         parseISO(t.date) >= threeMonthsAgo

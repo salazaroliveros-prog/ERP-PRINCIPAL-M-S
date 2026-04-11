@@ -1470,22 +1470,32 @@ export default function Dashboard() {
   }, [projects, subcontracts, loading, physicalFinancialDeviationThreshold]);
 
   const executionProjects = projects.filter((p) => isExecutionStatus(p.status));
+  const executionProjectIds = new Set(executionProjects.map((p) => p.id));
+  const profitEligibleTransactions = transactions.filter((t) => {
+    if (t.accountType === 'owner') return true;
+    return executionProjectIds.has(t.projectId);
+  });
   const evaluationProjects = projects.filter(p => isEvaluationStatus(p.status));
   const totalBudget = executionProjects.reduce((acc, p) => acc + (Number(p.budget) || 0), 0);
   const evaluationBudget = evaluationProjects.reduce((acc, p) => acc + (Number(p.budget) || 0), 0);
   const evaluationSpent = evaluationProjects.reduce((acc, p) => acc + (Number(p.spent) || 0), 0);
-  const totalSpent = transactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0);
-  const totalIncome = transactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0);
+  const totalSpent = profitEligibleTransactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0);
+  const totalIncome = profitEligibleTransactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0);
   const globalProfit = totalIncome - totalSpent;
   const activeProjects = executionProjects.length;
 
   const projectHealthData = projects.map(p => {
-    const projectExpenses = transactions
-      .filter(t => t.projectId === p.id && t.type === 'Expense')
-      .reduce((acc, t) => acc + (t.amount || 0), 0);
-    const projectIncome = transactions
-      .filter(t => t.projectId === p.id && t.type === 'Income')
-      .reduce((acc, t) => acc + (t.amount || 0), 0);
+    const includeInProfit = isExecutionStatus(p.status);
+    const projectExpenses = includeInProfit
+      ? transactions
+          .filter(t => t.projectId === p.id && t.type === 'Expense')
+          .reduce((acc, t) => acc + (t.amount || 0), 0)
+      : 0;
+    const projectIncome = includeInProfit
+      ? transactions
+          .filter(t => t.projectId === p.id && t.type === 'Income')
+          .reduce((acc, t) => acc + (t.amount || 0), 0)
+      : 0;
 
     return {
       name: p.name,
@@ -1632,7 +1642,7 @@ export default function Dashboard() {
   const lowStockItems = inventory.filter(i => i.stock <= i.minStock);
 
   const riskProjects = projects.filter(p => {
-    if (p.status !== 'In Progress') return false;
+    if (!isExecutionStatus(p.status)) return false;
     const financialProgress = p.budget > 0 ? (p.spent / p.budget) * 100 : 0;
     const progressDeviation = financialProgress - (p.physicalProgress || 0);
     return progressDeviation > physicalFinancialDeviationThreshold;
@@ -1640,7 +1650,7 @@ export default function Dashboard() {
 
   const physicalFinancialGapRanking = useMemo(() => {
     return projects
-      .filter((project: any) => project.status === 'In Progress' || project.status === 'Active')
+      .filter((project: any) => isExecutionStatus(project.status))
       .map((project: any) => {
         const physicalProgress = clampPercent(project.physicalProgress || 0);
         const financialProgress = getFinancialProgress(project);
@@ -1672,11 +1682,11 @@ export default function Dashboard() {
     date.setDate(date.getDate() - (6 - i));
     const dateStr = date.toISOString().split('T')[0];
     
-    const spentUpToDate = transactions
+    const spentUpToDate = profitEligibleTransactions
       .filter(t => t.type === 'Expense' && t.date <= dateStr)
       .reduce((acc, t) => acc + (t.amount || 0), 0);
       
-    const incomeUpToDate = transactions
+    const incomeUpToDate = profitEligibleTransactions
       .filter(t => t.type === 'Income' && t.date <= dateStr)
       .reduce((acc, t) => acc + (t.amount || 0), 0);
 
