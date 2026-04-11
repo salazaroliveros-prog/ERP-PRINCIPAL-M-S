@@ -3,7 +3,6 @@ import { HashRouter as Router, Routes, Route, Navigate, Link, useLocation } from
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User, auth, getFallbackAvatarUrl } from './lib/authStorageClient';
 import { 
   LayoutDashboard, 
-  Construction, 
   Users, 
   Package, 
   HandCoins, 
@@ -193,8 +192,14 @@ const Login = () => {
         className="max-w-md w-full bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 text-center border border-slate-100 dark:border-slate-800"
       >
         <div className="mb-8">
-          <div className="w-20 h-20 bg-primary-light dark:bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Construction className="text-primary" size={40} />
+          <div className="w-24 h-24 bg-primary-light dark:bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-4 p-3">
+            <img
+              src="/logo.svg"
+              alt="Constructora WM/M&S"
+              className="w-full h-full object-contain"
+              loading="eager"
+              decoding="async"
+            />
           </div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">WM_M&S</h1>
           <p className="text-primary font-medium uppercase tracking-widest">CONSTRUCTORA</p>
