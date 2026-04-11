@@ -58,11 +58,15 @@ export async function validateDocumentOCR(payload: {
 export async function listOcrValidations(params: {
   projectId?: string;
   purchaseOrderId?: string;
+  from?: string;
+  to?: string;
   limit?: number;
 } = {}) {
   const search = new URLSearchParams();
   if (params.projectId) search.set('projectId', params.projectId);
   if (params.purchaseOrderId) search.set('purchaseOrderId', params.purchaseOrderId);
+  if (params.from) search.set('from', params.from);
+  if (params.to) search.set('to', params.to);
   if (params.limit) search.set('limit', String(params.limit));
 
   const qs = search.toString();

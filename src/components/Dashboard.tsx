@@ -307,6 +307,9 @@ export default function Dashboard() {
   const [ocrAutoApply, setOcrAutoApply] = useState(true);
   const [cashflowScenario, setCashflowScenario] = useState<'base' | 'inflation' | 'stress'>('base');
   const [ocrValidationHistory, setOcrValidationHistory] = useState<any[]>([]);
+  const [ocrHistoryProjectFilter, setOcrHistoryProjectFilter] = useState('all');
+  const [ocrHistoryDecisionFilter, setOcrHistoryDecisionFilter] = useState<'all' | 'approved' | 'review' | 'rejected'>('all');
+  const [ocrHistoryDateRange, setOcrHistoryDateRange] = useState<'7' | '30' | '90' | 'all'>('30');
   const [chartPreferences, setChartPreferences] = useState<DashboardChartPreferences>(
     THEME_DEFAULT_CHARTS.sunset
   );
@@ -349,6 +352,64 @@ export default function Dashboard() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  const ocrHistoryProjectOptions = useMemo(() => {
+    const unique = new Map<string, string>();
+
+    for (const project of projects) {
+      if (!project?.id) continue;
+      unique.set(String(project.id), project.name || String(project.id));
+    }
+
+    for (const row of ocrValidationHistory) {
+      if (!row?.projectId || unique.has(String(row.projectId))) continue;
+      unique.set(String(row.projectId), String(row.projectId));
+    }
+
+    return Array.from(unique.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [projects, ocrValidationHistory]);
+
+  const visibleOcrValidationHistory = useMemo(() => {
+    return ocrValidationHistory.filter((row: any) => {
+      if (ocrHistoryDecisionFilter !== 'all' && row.decision !== ocrHistoryDecisionFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [ocrValidationHistory, ocrHistoryDecisionFilter]);
+
+  const ocrEffectiveness = useMemo(() => {
+    const total = visibleOcrValidationHistory.length;
+    if (total === 0) {
+      return {
+        total,
+        approved: 0,
+        review: 0,
+        rejected: 0,
+        autoApplied: 0,
+        avgScore: 0,
+      };
+    }
+
+    const approved = visibleOcrValidationHistory.filter((row: any) => row.decision === 'approved').length;
+    const review = visibleOcrValidationHistory.filter((row: any) => row.decision === 'review').length;
+    const rejected = visibleOcrValidationHistory.filter((row: any) => row.decision === 'rejected').length;
+    const autoApplied = visibleOcrValidationHistory.filter((row: any) => Boolean(row.autoApply)).length;
+    const avgScore =
+      visibleOcrValidationHistory.reduce((acc: number, row: any) => acc + Number(row.score || 0), 0) /
+      Math.max(1, total);
+
+    return {
+      total,
+      approved,
+      review,
+      rejected,
+      autoApplied,
+      avgScore: Number(avgScore.toFixed(1)),
+    };
+  }, [visibleOcrValidationHistory]);
 
   useEffect(() => {
     const focusExecutiveControl = () => {
@@ -1512,6 +1573,99 @@ export default function Dashboard() {
     reader.readAsDataURL(file);
   };
 
+  const buildOcrHistoryQuery = () => {
+    const query: {
+      limit: number;
+      projectId?: string;
+      from?: string;
+      to?: string;
+    } = { limit: 150 };
+
+    if (ocrHistoryProjectFilter !== 'all') {
+      query.projectId = ocrHistoryProjectFilter;
+    }
+
+    if (ocrHistoryDateRange !== 'all') {
+      const days = Number(ocrHistoryDateRange);
+      const fromDate = new Date();
+      fromDate.setHours(0, 0, 0, 0);
+      fromDate.setDate(fromDate.getDate() - Math.max(0, days - 1));
+
+      query.from = fromDate.toISOString();
+      query.to = new Date().toISOString();
+    }
+
+    return query;
+  };
+
+  const refreshOcrValidationHistory = async () => {
+    const history = await listOcrValidations(buildOcrHistoryQuery());
+    setOcrValidationHistory(history.items || []);
+  };
+
+  const exportVisibleOcrHistoryCsv = () => {
+    if (visibleOcrValidationHistory.length === 0) {
+      toast.info('No hay validaciones OCR para exportar con los filtros actuales.');
+      return;
+    }
+
+    const headers = [
+      'id',
+      'fecha',
+      'proyecto_id',
+      'orden_compra_id',
+      'factura',
+      'proveedor',
+      'monto_detectado',
+      'score',
+      'resultado',
+      'decision',
+      'auto_apply',
+      'auto_accion',
+    ];
+
+    const escapeCell = (value: unknown) => {
+      const text = String(value ?? '');
+      if (text.includes('"') || text.includes(',') || text.includes('\n')) {
+        return `"${text.replace(/"/g, '""')}"`;
+      }
+      return text;
+    };
+
+    const lines = [
+      headers.join(','),
+      ...visibleOcrValidationHistory.map((row: any) =>
+        [
+          row.id,
+          row.createdAt,
+          row.projectId,
+          row.purchaseOrderId,
+          row.invoiceNumber,
+          row.supplier,
+          Number(row.detectedTotal || 0),
+          Number(row.score || 0),
+          row.resultStatus,
+          row.decision,
+          row.autoApply ? 'true' : 'false',
+          row.autoActionSummary || '',
+        ]
+          .map(escapeCell)
+          .join(',')
+      ),
+    ];
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    link.href = url;
+    link.download = `ocr-validaciones-${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleValidateDocumentOcr = async () => {
     if (!ocrRawText.trim() && !ocrImageDataUrl) {
       toast.error('Proporciona texto OCR o una imagen del documento.');
@@ -1530,8 +1684,7 @@ export default function Dashboard() {
       });
       setOcrValidationResult(result);
       try {
-        const history = await listOcrValidations({ limit: 10 });
-        setOcrValidationHistory(history.items || []);
+        await refreshOcrValidationHistory();
       } catch {
         // Ignore history refresh failures.
       }
@@ -1549,7 +1702,7 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        const history = await listOcrValidations({ limit: 10 });
+        const history = await listOcrValidations(buildOcrHistoryQuery());
         if (!cancelled) {
           setOcrValidationHistory(history.items || []);
         }
@@ -1563,7 +1716,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ocrHistoryProjectFilter, ocrHistoryDateRange]);
 
   useEffect(() => {
     if (loading || !recentMaterialPriceHistory.materialName || recentMaterialPriceHistory.points.length < 2) return;
@@ -2334,12 +2487,78 @@ export default function Dashboard() {
         )}
 
         <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/70 dark:bg-slate-800/40">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Efectividad OCR (últimas validaciones)</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mb-3">
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-2.5 py-2 bg-white/80 dark:bg-slate-900/30">
+              <p className="text-[9px] uppercase tracking-wider font-black text-slate-500">Total</p>
+              <p className="text-sm font-black text-slate-900 dark:text-white">{ocrEffectiveness.total}</p>
+            </div>
+            <div className="rounded-xl border border-emerald-200 px-2.5 py-2 bg-emerald-50/60">
+              <p className="text-[9px] uppercase tracking-wider font-black text-emerald-700">Aprobadas</p>
+              <p className="text-sm font-black text-emerald-700">{ocrEffectiveness.approved}</p>
+            </div>
+            <div className="rounded-xl border border-amber-200 px-2.5 py-2 bg-amber-50/60">
+              <p className="text-[9px] uppercase tracking-wider font-black text-amber-700">En revisión</p>
+              <p className="text-sm font-black text-amber-700">{ocrEffectiveness.review}</p>
+            </div>
+            <div className="rounded-xl border border-rose-200 px-2.5 py-2 bg-rose-50/60">
+              <p className="text-[9px] uppercase tracking-wider font-black text-rose-700">Rechazadas</p>
+              <p className="text-sm font-black text-rose-700">{ocrEffectiveness.rejected}</p>
+            </div>
+            <div className="rounded-xl border border-indigo-200 px-2.5 py-2 bg-indigo-50/60">
+              <p className="text-[9px] uppercase tracking-wider font-black text-indigo-700">Auto / Score</p>
+              <p className="text-sm font-black text-indigo-700">{ocrEffectiveness.autoApplied} / {ocrEffectiveness.avgScore}</p>
+            </div>
+          </div>
+
+          <div className="mb-3 grid grid-cols-1 lg:grid-cols-4 gap-2">
+            <select
+              value={ocrHistoryProjectFilter}
+              onChange={(e) => setOcrHistoryProjectFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
+            >
+              <option value="all">Todos los proyectos</option>
+              {ocrHistoryProjectOptions.map((project) => (
+                <option key={project.id} value={project.id}>{project.name}</option>
+              ))}
+            </select>
+
+            <select
+              value={ocrHistoryDecisionFilter}
+              onChange={(e) => setOcrHistoryDecisionFilter(e.target.value as 'all' | 'approved' | 'review' | 'rejected')}
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
+            >
+              <option value="all">Todas las decisiones</option>
+              <option value="approved">Aprobadas</option>
+              <option value="review">En revisión</option>
+              <option value="rejected">Rechazadas</option>
+            </select>
+
+            <select
+              value={ocrHistoryDateRange}
+              onChange={(e) => setOcrHistoryDateRange(e.target.value as '7' | '30' | '90' | 'all')}
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
+            >
+              <option value="7">Últimos 7 días</option>
+              <option value="30">Últimos 30 días</option>
+              <option value="90">Últimos 90 días</option>
+              <option value="all">Todo el historial</option>
+            </select>
+
+            <button
+              onClick={exportVisibleOcrHistoryCsv}
+              className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              Exportar CSV
+            </button>
+          </div>
+
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Trazabilidad OCR reciente</p>
-          {ocrValidationHistory.length === 0 ? (
+          {visibleOcrValidationHistory.length === 0 ? (
             <p className="text-xs text-slate-500">Sin validaciones registradas todavía.</p>
           ) : (
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
-              {ocrValidationHistory.map((row: any) => (
+              {visibleOcrValidationHistory.map((row: any) => (
                 <div key={row.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-black text-slate-900 dark:text-white">{row.invoiceNumber || 'Documento sin número'}</p>

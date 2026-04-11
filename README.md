@@ -74,12 +74,17 @@ Variables requeridas para backend:
 - GITHUB_MODELS_TOKEN (si AI_PROVIDER=github-models)
 - SERVER_SCHEDULED_ALERTS_ENABLED=true|false (opcional, por defecto true)
 - SERVER_SCHEDULED_ALERTS_INTERVAL_MS=60000 (opcional, minimo 30000)
+- OCR_AUTO_APPROVE_MIN_SCORE=85 (opcional)
+- OCR_AUTO_REVIEW_MIN_SCORE=60 (opcional)
+- OCR_AUTO_APPROVE_MAX_VARIANCE_PCT=8 (opcional)
 
 Nuevos endpoints de configuracion operativa:
 
 - GET /api/settings/thresholds
 - PUT /api/settings/thresholds
 - GET /api/scheduler/status
+- POST /api/documents/ocr-validate
+- GET /api/documents/ocr-validations
 
 Scheduler backend de alertas (08:00 y 16:00):
 
