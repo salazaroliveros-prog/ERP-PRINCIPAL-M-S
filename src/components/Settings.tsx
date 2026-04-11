@@ -257,7 +257,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-8">
+    <div className="space-y-4 sm:space-y-5">
       <header>
         <h1 className="text-xl sm:text-3xl font-bold text-slate-900 dark:text-white">Configuración</h1>
         <p className="text-[10px] sm:text-sm text-slate-500 dark:text-slate-400">Personaliza tu experiencia en el ERP</p>
@@ -271,7 +271,7 @@ export default function Settings() {
           <h2 className="text-sm sm:text-xl font-bold text-slate-900 dark:text-white">Tema Visual</h2>
         </div>
 
-        <div className="p-4 sm:p-8 space-y-4 sm:space-y-8">
+        <div className="p-4 sm:p-5 space-y-4 sm:space-y-5">
           <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/70 bg-slate-50/70 dark:bg-slate-800/40 p-4 sm:p-5">
             <p className="text-[10px] sm:text-xs uppercase tracking-[0.18em] font-black text-slate-500 dark:text-slate-400">Vista previa activa</p>
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-[11px] sm:text-xs">
@@ -294,7 +294,7 @@ export default function Settings() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {THEME_COLORS.map((theme) => (
               <button
                 key={theme.id}
@@ -379,7 +379,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
           <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
             <div className="p-1.5 sm:p-2 bg-blue-50 dark:bg-blue-500/10 text-blue-500 rounded-lg">
@@ -387,7 +387,7 @@ export default function Settings() {
             </div>
             <h2 className="text-sm sm:text-xl font-bold text-slate-900 dark:text-white">Perfil de Empresa</h2>
           </div>
-          <div className="p-4 sm:p-8 space-y-4 sm:space-y-6">
+          <div className="p-4 sm:p-5 space-y-3 sm:space-y-4">
             <div className="space-y-1.5 sm:space-y-2">
               <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Nombre de la Empresa</label>
               <input 
@@ -415,7 +415,7 @@ export default function Settings() {
             </div>
             <h2 className="text-sm sm:text-xl font-bold text-slate-900 dark:text-white">Localización</h2>
           </div>
-          <div className="p-4 sm:p-8 space-y-4 sm:space-y-6">
+          <div className="p-4 sm:p-5 space-y-3 sm:space-y-4">
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-1.5 sm:space-y-2">
                 <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Moneda Base</label>
@@ -473,13 +473,13 @@ export default function Settings() {
                   Historial: cambios de umbral, fecha y responsable.
                 </p>
                 {materialThresholdAuditHistory.length > 0 && (
-                  <div className="mt-2 max-h-28 overflow-y-auto pr-1 custom-scrollbar space-y-1">
-                    {materialThresholdAuditHistory.slice(0, 4).map((entry, index) => (
+                  <div className="mt-2 space-y-1.5">
+                    {materialThresholdAuditHistory.slice(0, 6).map((entry, index) => (
                       <div key={`${entry.changedAt}_${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1.5 bg-white dark:bg-slate-900/40">
                         <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200">
                           {entry.value}% • {new Date(entry.changedAt).toLocaleString('es-GT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                         </p>
-                        <p className="text-[10px] text-slate-500 truncate">{entry.changedBy}</p>
+                        <p className="text-[10px] text-slate-500 break-all">{entry.changedBy}</p>
                       </div>
                     ))}
                   </div>
@@ -513,21 +513,21 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-4 sm:p-8">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-4 sm:p-5">
         <div className="flex items-center gap-3 mb-4 sm:mb-6">
           <div className="p-1.5 sm:p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg">
             <SettingsIcon size={16} className="sm:w-5 sm:h-5" />
           </div>
           <h2 className="text-sm sm:text-xl font-bold text-slate-900 dark:text-white">Información del Sistema</h2>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8 text-[10px] sm:text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-[10px] sm:text-sm">
           <div className="space-y-0.5 sm:space-y-1">
             <p className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-[8px] sm:text-[10px]">Versión</p>
             <p className="text-slate-900 dark:text-white font-medium">v2.4.0-stable</p>
           </div>
           <div className="space-y-0.5 sm:space-y-1">
             <p className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-[8px] sm:text-[10px]">Entorno</p>
-            <p className="text-slate-900 dark:text-white font-medium truncate">Producción (Vite + Node/Express)</p>
+            <p className="text-slate-900 dark:text-white font-medium break-words">Producción (Vite + Node/Express)</p>
           </div>
           <div className="space-y-0.5 sm:space-y-1">
             <p className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-[8px] sm:text-[10px]">Base de Datos</p>
@@ -535,12 +535,12 @@ export default function Settings() {
           </div>
           <div className="space-y-0.5 sm:space-y-1">
             <p className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-[8px] sm:text-[10px]">Última Sincronización</p>
-            <p className="text-slate-900 dark:text-white font-medium truncate">{new Date().toLocaleString()}</p>
+            <p className="text-slate-900 dark:text-white font-medium break-words">{new Date().toLocaleString()}</p>
           </div>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-4 sm:p-8">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-4 sm:p-5">
         <div className="flex items-center gap-3 mb-4 sm:mb-6">
           <div className="p-1.5 sm:p-2 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 rounded-lg">
             <SettingsIcon size={16} className="sm:w-5 sm:h-5" />
@@ -555,7 +555,7 @@ export default function Settings() {
         {schedulerLoading ? (
           <p className="text-xs text-slate-500">Cargando estado del scheduler...</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4">
               <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Estado</p>
               <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1">
@@ -574,7 +574,7 @@ export default function Settings() {
 
             <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4">
               <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Última Ejecución</p>
-              <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1 truncate">
+              <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1 break-words">
                 {schedulerSnapshot?.scheduler?.lastRunAt
                   ? new Date(schedulerSnapshot.scheduler.lastRunAt).toLocaleString()
                   : 'Sin registros'}
@@ -585,7 +585,7 @@ export default function Settings() {
             <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4">
               <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Fallos</p>
               <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1">{schedulerSnapshot?.scheduler?.failures ?? 0}</p>
-              <p className="text-[10px] text-slate-500 mt-1 truncate">{schedulerSnapshot?.scheduler?.lastError || 'Sin errores recientes'}</p>
+              <p className="text-[10px] text-slate-500 mt-1 break-words">{schedulerSnapshot?.scheduler?.lastError || 'Sin errores recientes'}</p>
             </div>
           </div>
         )}
@@ -601,7 +601,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-4 sm:p-8">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-4 sm:p-5">
         <div className="flex items-center gap-3 mb-4 sm:mb-6">
           <div className="p-1.5 sm:p-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 rounded-lg">
             <Save size={16} className="sm:w-5 sm:h-5" />
@@ -609,7 +609,7 @@ export default function Settings() {
           <h2 className="text-sm sm:text-xl font-bold text-slate-900 dark:text-white">Diagnóstico de Sincronización</h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-5">
           <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4">
             <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Pendientes en Cola</p>
             <p className="text-lg sm:text-2xl font-bold text-slate-900 dark:text-white mt-1">{queuePending}</p>
@@ -622,7 +622,7 @@ export default function Settings() {
           </div>
           <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4">
             <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Último Sync Real</p>
-            <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1 truncate">
+            <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1 break-words">
               {lastSyncAt ? new Date(lastSyncAt).toLocaleString() : 'Sin registros'}
             </p>
           </div>
