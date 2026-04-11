@@ -514,6 +514,7 @@ export default function Subcontracts() {
             return (
               <motion.div 
                 key={sub.id}
+                data-testid={`subcontract-card-${sub.id}`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 onClick={() => {
@@ -592,7 +593,10 @@ export default function Subcontracts() {
 
                   {sub.status !== 'Finished' && (
                     <div className="flex gap-2 pt-2">
-                      <button 
+                      <button
+                        type="button"
+                        data-testid={`subcontract-card-pay-${sub.id}`}
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedSubForPayment(sub);
@@ -604,7 +608,10 @@ export default function Subcontracts() {
                       >
                         Pago Parcial
                       </button>
-                      <button 
+                      <button
+                        type="button"
+                        data-testid={`subcontract-card-settle-${sub.id}`}
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleMarkAsPaid(sub);
@@ -622,7 +629,10 @@ export default function Subcontracts() {
                       <span className="text-micro font-bold uppercase tracking-wider">Vence: {sub.endDate ? formatDate(sub.endDate) : 'N/A'}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button 
+                      <button
+                        type="button"
+                        data-testid={`subcontract-card-edit-${sub.id}`}
+                        onPointerDown={(e) => e.stopPropagation()}
                         title={`Editar subcontrato ${sub.contractor}`}
                         aria-label={`Editar subcontrato ${sub.contractor}`}
                         onClick={(e) => {
@@ -633,7 +643,10 @@ export default function Subcontracts() {
                       >
                         <Edit2 size={16} />
                       </button>
-                      <button 
+                      <button
+                        type="button"
+                        data-testid={`subcontract-card-delete-${sub.id}`}
+                        onPointerDown={(e) => e.stopPropagation()}
                         title={`Eliminar subcontrato ${sub.contractor}`}
                         aria-label={`Eliminar subcontrato ${sub.contractor}`}
                         onClick={(e) => {

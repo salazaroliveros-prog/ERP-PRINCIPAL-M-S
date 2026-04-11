@@ -488,6 +488,7 @@ export default function Clients() {
               {paginatedClients.map((client) => (
                 <motion.div 
                   key={client.id}
+                  data-testid={`client-card-${client.id}`}
                   layout
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -543,7 +544,10 @@ export default function Clients() {
                   </div>
 
                   <div className="flex gap-1.5 sm:gap-2 pt-3 sm:pt-4 border-t border-slate-50 dark:border-slate-800">
-                    <button 
+                    <button
+                      type="button"
+                      data-testid={`client-card-chat-${client.id}`}
+                      onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedClient(client);
@@ -554,7 +558,10 @@ export default function Clients() {
                       <MessageSquare size={12} className="sm:w-3.5 sm:h-3.5" />
                       Chat
                     </button>
-                    <button 
+                    <button
+                      type="button"
+                      data-testid={`client-card-edit-${client.id}`}
+                      onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleOpenModal(client);
@@ -564,7 +571,10 @@ export default function Clients() {
                       <Edit2 size={12} className="sm:w-3.5 sm:h-3.5" />
                       Editar
                     </button>
-                    <button 
+                    <button
+                      type="button"
+                      data-testid={`client-card-delete-${client.id}`}
+                      onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDeleteClient(client.id);

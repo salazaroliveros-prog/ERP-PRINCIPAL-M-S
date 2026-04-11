@@ -254,6 +254,10 @@ export default function Projects() {
   const [auditResults, setAuditResults] = useState<any>(null);
   const [isAuditing, setIsAuditing] = useState(false);
 
+  const stopCardEvent = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+  };
+
   const runFinancialAudit = async () => {
     const projectsWithDeviations = projects.filter(p => {
       const physicalProgress = Number(p.physicalProgress || 0);
@@ -1987,6 +1991,7 @@ export default function Projects() {
                 return (
                   <motion.div 
                     key={project.id}
+                    data-testid={`project-card-${project.id}`}
                     layout
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ 
@@ -2038,7 +2043,11 @@ export default function Projects() {
                       <div className="p-1.5 sm:p-3 bg-primary-light/50 dark:bg-primary/20 text-primary rounded-lg sm:rounded-xl">
                         <Construction size={16} className="sm:w-6 sm:h-6" />
                       </div>
-                      <div className="flex flex-col items-end gap-1 sm:gap-2" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="flex flex-col items-end gap-1 sm:gap-2"
+                        onPointerDown={stopCardEvent}
+                        onClick={stopCardEvent}
+                      >
                         <StatusBadge status={project.status} />
                         <div className="flex items-center gap-1 sm:gap-2">
                           <span className={cn("px-1 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[7px] sm:text-[10px] font-black uppercase border flex items-center gap-0.5 sm:gap-1.5", getTypologyColor(project.typology))}>
@@ -2049,22 +2058,31 @@ export default function Projects() {
                             {project.typology || 'N/A'}
                           </span>
                           <div className="flex items-center gap-0.5 sm:gap-1">
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleShare(project); }} 
+                            <button
+                              type="button"
+                              data-testid={`project-card-share-${project.id}`}
+                              onPointerDown={stopCardEvent}
+                              onClick={(e) => { e.stopPropagation(); handleShare(project); }}
                               className="p-2 sm:p-2.5 min-h-9 min-w-9 rounded-xl bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-primary hover:border-primary/40 transition-colors"
                               title="Compartir"
                             >
                               <Share size={12} className="sm:w-[18px] sm:h-[18px]" />
                             </button>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleEditProject(project); }} 
+                            <button
+                              type="button"
+                              data-testid={`project-card-edit-${project.id}`}
+                              onPointerDown={stopCardEvent}
+                              onClick={(e) => { e.stopPropagation(); handleEditProject(project); }}
                               className="p-2 sm:p-2.5 min-h-9 min-w-9 rounded-xl bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-primary hover:border-primary/40 transition-colors"
                               title="Editar"
                             >
                               <Edit2 size={12} className="sm:w-[18px] sm:h-[18px]" />
                             </button>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }} 
+                            <button
+                              type="button"
+                              data-testid={`project-card-delete-${project.id}`}
+                              onPointerDown={stopCardEvent}
+                              onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }}
                               className="p-2 sm:p-2.5 min-h-9 min-w-9 rounded-xl bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-red-600 hover:border-red-300 transition-colors"
                               title="Eliminar"
                             >
@@ -2187,10 +2205,18 @@ export default function Projects() {
                       )}
                     </div>
                   </div>
-                  <div className="px-4 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    className="px-4 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center"
+                    onPointerDown={stopCardEvent}
+                    onClick={stopCardEvent}
+                  >
                     <div className="flex gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
-                      <button 
-                        onClick={() => {
+                      <button
+                        type="button"
+                        data-testid={`project-card-map-${project.id}`}
+                        onPointerDown={stopCardEvent}
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setProjectForMap(project);
                           setIsMapOpen(true);
                         }}
@@ -2200,24 +2226,40 @@ export default function Projects() {
                         <MapPin size={12} className="sm:w-3.5 sm:h-3.5" />
                         Mapa
                       </button>
-                      <button 
-                        onClick={() => generateReport(project)}
+                      <button
+                        type="button"
+                        data-testid={`project-card-report-${project.id}`}
+                        onPointerDown={stopCardEvent}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          generateReport(project);
+                        }}
                         className="text-[10px] sm:text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-primary flex items-center gap-1 transition-colors whitespace-nowrap"
                         title="Informe General"
                       >
                         <FileText size={12} className="sm:w-3.5 sm:h-3.5" />
                         Informe
                       </button>
-                      <button 
-                        onClick={() => generateBudgetReport(project)}
+                      <button
+                        type="button"
+                        data-testid={`project-card-budget-report-${project.id}`}
+                        onPointerDown={stopCardEvent}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          generateBudgetReport(project);
+                        }}
                         className="text-[10px] sm:text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-primary flex items-center gap-1 transition-colors whitespace-nowrap"
                         title="Presupuesto Detallado"
                       >
                         <Download size={12} className="sm:w-3.5 sm:h-3.5" />
                         PDF
                       </button>
-                      <button 
-                        onClick={() => {
+                      <button
+                        type="button"
+                        data-testid={`project-card-budget-${project.id}`}
+                        onPointerDown={stopCardEvent}
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setBudgetProject(project);
                           setIsBudgetModalOpen(true);
                         }}
@@ -2227,8 +2269,14 @@ export default function Projects() {
                         Presupuesto
                       </button>
                     </div>
-                    <button 
-                      onClick={() => setSelectedProjectId(project.id)}
+                    <button
+                      type="button"
+                      data-testid={`project-card-view-${project.id}`}
+                      onPointerDown={stopCardEvent}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedProjectId(project.id);
+                      }}
                       className="text-[10px] sm:text-xs font-bold text-primary hover:underline flex items-center gap-1 whitespace-nowrap ml-2"
                     >
                       <ChevronRight size={12} className="sm:w-3.5 sm:h-3.5" />

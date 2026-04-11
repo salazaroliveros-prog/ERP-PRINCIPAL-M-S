@@ -19,6 +19,10 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'mobile-chromium',
+      use: { ...devices['Pixel 5'] },
+    },
   ],
   webServer: {
     command: 'node ./node_modules/tsx/dist/cli.mjs server.ts',

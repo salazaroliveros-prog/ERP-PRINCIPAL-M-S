@@ -2369,6 +2369,7 @@ export default function Inventory() {
                     setSelectedItemDetails(item);
                     setIsDetailsModalOpen(true);
                   }}
+                  data-testid={`inventory-card-${item.id}`}
                   className="md:hidden p-2.5 space-y-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800"
                 >
                   <div className="flex justify-between items-center">
@@ -2394,7 +2395,10 @@ export default function Inventory() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      <button 
+                      <button
+                        type="button"
+                        data-testid={`inventory-card-dec-${item.id}`}
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleUpdateStock(item.id, -1);
@@ -2411,7 +2415,10 @@ export default function Inventory() {
                           item.stock <= item.minStock ? "text-rose-600" : "text-slate-900 dark:text-white"
                         )}>{item.stock}</span>
                       </div>
-                      <button 
+                      <button
+                        type="button"
+                        data-testid={`inventory-card-inc-${item.id}`}
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleUpdateStock(item.id, 1);
@@ -2440,7 +2447,10 @@ export default function Inventory() {
                   </div>
                   <div className="flex justify-end items-center gap-1">
                     {item.stock <= item.minStock && (
-                      <button 
+                      <button
+                        type="button"
+                        data-testid={`inventory-card-po-${item.id}`}
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
                           openPOModal(item);
@@ -2452,7 +2462,10 @@ export default function Inventory() {
                         <ShoppingBag size={12} />
                       </button>
                     )}
-                    <button 
+                    <button
+                      type="button"
+                      data-testid={`inventory-card-batches-${item.id}`}
+                      onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedItemForBatch(item);
@@ -2464,7 +2477,10 @@ export default function Inventory() {
                     >
                       <Layers size={12} />
                     </button>
-                    <button 
+                    <button
+                      type="button"
+                      data-testid={`inventory-card-reorder-${item.id}`}
+                      onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleReorderItem(item.id);
@@ -2480,7 +2496,10 @@ export default function Inventory() {
                     >
                       <ShoppingCart size={12} />
                     </button>
-                    <button 
+                    <button
+                      type="button"
+                      data-testid={`inventory-card-edit-${item.id}`}
+                      onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => {
                         e.stopPropagation();
                         openEditModal(item);
@@ -2491,7 +2510,10 @@ export default function Inventory() {
                     >
                       <Edit2 size={12} />
                     </button>
-                    <button 
+                    <button
+                      type="button"
+                      data-testid={`inventory-card-delete-${item.id}`}
+                      onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDeleteMaterial(item.id);
