@@ -22,7 +22,12 @@ import {
   Sun,
   CalendarDays,
   Clock3,
-  ChevronRight
+  ChevronRight,
+  Download,
+  MessageSquare,
+  Eye,
+  EyeOff,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
@@ -386,6 +391,14 @@ function AppContent({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [enhancementsReady, setEnhancementsReady] = useState(false);
+  const [isMobileQuickSetupVisible, setIsMobileQuickSetupVisible] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.localStorage.getItem('wm_mobile_quick_setup_visible_v1') !== 'false';
+  });
+  const [isQuickFabVisible, setIsQuickFabVisible] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.localStorage.getItem('wm_quick_fab_visible_v1') !== 'false';
+  });
   const prefetchedRoutesRef = useRef<Set<string>>(new Set());
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { unreadCount } = useNotifications();
@@ -398,9 +411,15 @@ function AppContent({
   }, [location.pathname]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('wm_mobile_quick_setup_visible_v1', String(isMobileQuickSetupVisible));
+  }, [isMobileQuickSetupVisible]);
+
+  useEffect(() => {
     const params = new URLSearchParams(location.search || '');
     const quickAction = params.get('quickAction');
     const quickPanel = params.get('quickPanel');
+    const copilot = params.get('copilot');
 
     const allowedQuickActions = new Set([
       'new-income',
@@ -421,6 +440,10 @@ function AppContent({
 
     if (quickPanel === '1') {
       window.dispatchEvent(new Event('OPEN_QUICK_ACTIONS'));
+    }
+
+    if (copilot === '1') {
+      window.dispatchEvent(new Event('OPEN_AI_CHAT'));
     }
 
     if (quickAction && allowedQuickActions.has(quickAction)) {
@@ -633,6 +656,34 @@ function AppContent({
     return <Login />;
   }
 
+  const handleOpenCopilot = () => {
+    window.dispatchEvent(new Event('OPEN_AI_CHAT'));
+  };
+
+  const handleOpenQuickPanel = () => {
+    window.dispatchEvent(new Event('OPEN_QUICK_ACTIONS'));
+  };
+
+  const toggleQuickFabVisibility = () => {
+    const nextVisible = !isQuickFabVisible;
+    setIsQuickFabVisible(nextVisible);
+    window.localStorage.setItem('wm_quick_fab_visible_v1', String(nextVisible));
+    window.dispatchEvent(
+      new CustomEvent('QUICK_ACTION_FAB_VISIBILITY', { detail: { visible: nextVisible } })
+    );
+  };
+
+  const handleInstallOrGuide = () => {
+    if (deferredPrompt) {
+      void onInstall();
+      return;
+    }
+
+    toast.info('Instalación desde navegador', {
+      description: 'Usa "Agregar a pantalla de inicio" para crear el acceso directo del ERP en tu móvil.',
+    });
+  };
+
   return (
       <div className="h-screen h-[100dvh] min-h-0 bg-slate-50 dark:bg-slate-950 flex flex-col lg:flex-row overflow-hidden transition-colors duration-300">
         <Toaster position="top-right" richColors closeButton />
@@ -752,6 +803,54 @@ function AppContent({
         <main className={cn(
           "flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar perf-content p-4 lg:p-8 pt-32 sm:pt-28 lg:pt-28 pb-24 lg:pb-8"
         )}>
+          {isMobileQuickSetupVisible && (
+            <div className="lg:hidden mb-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Accesos moviles</p>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">Instala y abre en un toque</h3>
+                </div>
+                <button
+                  onClick={() => setIsMobileQuickSetupVisible(false)}
+                  className="text-[11px] font-semibold text-slate-500 dark:text-slate-300"
+                >
+                  Ocultar
+                </button>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  onClick={handleInstallOrGuide}
+                  className="h-10 rounded-xl border border-primary/40 bg-primary/10 text-primary font-bold text-xs flex items-center justify-center gap-2"
+                >
+                  <Download size={14} />
+                  Instalar ERP
+                </button>
+                <button
+                  onClick={handleOpenCopilot}
+                  className="h-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold text-xs flex items-center justify-center gap-2"
+                >
+                  <MessageSquare size={14} />
+                  Abrir Copilot
+                </button>
+                <button
+                  onClick={handleOpenQuickPanel}
+                  className="h-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold text-xs flex items-center justify-center gap-2"
+                >
+                  <Zap size={14} />
+                  Acción rápida
+                </button>
+                <button
+                  onClick={toggleQuickFabVisibility}
+                  className="h-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-bold text-xs flex items-center justify-center gap-2"
+                >
+                  {isQuickFabVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {isQuickFabVisible ? 'Ocultar botón' : 'Mostrar botón'}
+                </button>
+              </div>
+            </div>
+          )}
+
           <Suspense fallback={<LoadingFallback />}>
             <AnimatePresence mode="wait">
               <Routes>

@@ -410,6 +410,37 @@ export default function AIChat() {
     const handleAICommand = async (event: any) => {
       const { command, params } = event.detail;
       setIsOpen(true);
+
+      if (command === 'QUICK_PROMPT') {
+        const prompt = String(params?.text || '').trim();
+        if (!prompt) return;
+
+        const userMsg: Message = { role: 'user', text: prompt, timestamp: new Date() };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setIsLoading(true);
+        setError(null);
+
+        try {
+          const response = await getAIResponse(prompt, messages.map(m => ({ role: m.role, text: m.text })));
+          const diagnostic = response ? parseGeminiDiagnostic(response) : null;
+          if (diagnostic) {
+            setError(diagnostic);
+          } else {
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              text: response || 'No fue posible generar respuesta en este momento.',
+              timestamp: new Date(),
+            }]);
+          }
+        } catch {
+          setError('Error al procesar la solicitud rapida.');
+        } finally {
+          setIsLoading(false);
+          autoHideAssistant();
+        }
+        return;
+      }
       
       if (command === 'Análisis de Riesgos Profundo') {
         const prompt = `Realiza un análisis de riesgos exhaustivo para el proyecto "${params.projectName}" (ID: ${params.projectId}). Identifica desviaciones, predice sobrecostos futuros y sugiere acciones correctivas inmediatas.`;
