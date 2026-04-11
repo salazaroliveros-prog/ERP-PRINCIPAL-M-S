@@ -5,6 +5,9 @@
   "id": "/erp-constructora-wmms",
   "start_url": "/",
   "scope": "/",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
