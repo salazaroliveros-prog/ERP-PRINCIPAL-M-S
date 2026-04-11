@@ -277,6 +277,10 @@ function DateTimeWidget({ compact = false }: { compact?: boolean }) {
   const [now, setNow] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [clockFormat, setClockFormat] = useState<'12h' | '24h'>(() => {
+    const saved = localStorage.getItem('clock-format');
+    return saved === '12h' ? '12h' : '24h';
+  });
   const widgetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -300,11 +304,32 @@ function DateTimeWidget({ compact = false }: { compact?: boolean }) {
     return () => window.removeEventListener('mousedown', handlePointerDown);
   }, [isCalendarOpen]);
 
+  useEffect(() => {
+    const applySavedClockFormat = () => {
+      const saved = localStorage.getItem('clock-format');
+      setClockFormat(saved === '12h' ? '12h' : '24h');
+    };
+
+    const onClockFormatChanged = () => applySavedClockFormat();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'clock-format') {
+        applySavedClockFormat();
+      }
+    };
+
+    window.addEventListener('CLOCK_FORMAT_CHANGED', onClockFormatChanged as EventListener);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('CLOCK_FORMAT_CHANGED', onClockFormatChanged as EventListener);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
   const timeLabel = now.toLocaleTimeString('es-GT', {
     hour: '2-digit',
     minute: '2-digit',
     second: compact ? undefined : '2-digit',
-    hour12: false,
+    hour12: clockFormat === '12h',
   });
 
   const dateLabel = selectedDate.toLocaleDateString('es-GT', {

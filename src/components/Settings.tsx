@@ -12,6 +12,10 @@ export default function Settings() {
   const [selectedTheme, setSelectedTheme] = useState(currentTheme);
   const [companyName, setCompanyName] = useState('WM_M&S CONSTRUCTORA');
   const [currency, setCurrency] = useState('GTQ');
+  const [clockFormat, setClockFormat] = useState<'12h' | '24h'>(() => {
+    const saved = localStorage.getItem('clock-format');
+    return saved === '12h' ? '12h' : '24h';
+  });
   const [taxRate, setTaxRate] = useState(12);
   const [queuePending, setQueuePending] = useState(0);
   const [queueSyncing, setQueueSyncing] = useState(false);
@@ -41,6 +45,8 @@ export default function Settings() {
 
   const handleSaveSettings = async () => {
     setTheme(selectedTheme);
+    localStorage.setItem('clock-format', clockFormat);
+    window.dispatchEvent(new Event('CLOCK_FORMAT_CHANGED'));
     await logAction('Actualizar Configuración', 'Configuración', 'Se actualizó la configuración general del sistema', 'update');
     toast.success('Configuración guardada con éxito');
   };
@@ -187,6 +193,17 @@ export default function Settings() {
                   className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-primary/20 transition-all"
                 />
               </div>
+            </div>
+            <div className="space-y-1.5 sm:space-y-2">
+              <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Formato de Hora</label>
+              <select
+                value={clockFormat}
+                onChange={(e) => setClockFormat(e.target.value === '12h' ? '12h' : '24h')}
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+              >
+                <option value="24h">24 horas (14:30)</option>
+                <option value="12h">12 horas (2:30 PM)</option>
+              </select>
             </div>
           </div>
         </div>
