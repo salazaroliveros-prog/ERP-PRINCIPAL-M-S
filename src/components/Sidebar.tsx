@@ -275,7 +275,7 @@ export const Sidebar = ({
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="absolute left-0 mt-2 w-80 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 z-50 overflow-hidden"
+                        className="fixed left-3 right-3 top-16 w-auto max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 z-50 overflow-hidden sm:absolute sm:left-0 sm:right-auto sm:top-auto sm:mt-2 sm:w-80 sm:max-w-none"
                       >
                         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
                           <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white">Notificaciones</h3>
@@ -289,7 +289,7 @@ export const Sidebar = ({
                             <span className="text-[10px] font-bold text-slate-400 uppercase">{notifications.length} Total</span>
                           </div>
                         </div>
-                        <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+                        <div className="max-h-[55vh] sm:max-h-[400px] overflow-y-auto custom-scrollbar">
                           {notifications.length === 0 ? (
                             <div className="p-8 text-center">
                               <p className="text-xs text-slate-400 font-medium italic">No hay notificaciones</p>
@@ -311,7 +311,7 @@ export const Sidebar = ({
                                   )} />
                                   <div className="flex-1">
                                     <p className="text-xs font-black text-slate-900 dark:text-white leading-tight mb-1">{n.title}</p>
-                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-2">{n.body}</p>
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-2 break-words">{n.body}</p>
                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
                                       {n.createdAt ? new Date(n.createdAt).toLocaleString() : 'Reciente'}
                                     </p>

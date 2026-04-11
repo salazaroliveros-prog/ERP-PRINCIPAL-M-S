@@ -29,6 +29,7 @@ export default function AIChat() {
   const CHAT_AUTO_HIDE_STORAGE_KEY = 'wm_ai_chat_auto_hide';
   const CHAT_PANEL_WIDTH = 400;
   const CHAT_PANEL_HEIGHT = 600;
+  const CHAT_INACTIVITY_AUTO_CLOSE_MS = 30000;
   const [isMobile, setIsMobile] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -80,7 +81,7 @@ export default function AIChat() {
     window.setTimeout(() => {
       setShowQuickActions(false);
       setIsOpen(false);
-    }, 700);
+    }, 8000);
   };
 
   const hideAssistantManually = () => {
@@ -288,7 +289,7 @@ export default function AIChat() {
   }, []);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isAutoHideEnabled) return;
 
     let inactivityTimer: number | null = null;
 
@@ -302,7 +303,7 @@ export default function AIChat() {
       if (inactivityTimer) {
         window.clearTimeout(inactivityTimer);
       }
-      inactivityTimer = window.setTimeout(closePanel, 5000);
+      inactivityTimer = window.setTimeout(closePanel, CHAT_INACTIVITY_AUTO_CLOSE_MS);
     };
 
     const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
@@ -315,7 +316,7 @@ export default function AIChat() {
       }
       events.forEach((eventName) => window.removeEventListener(eventName, resetTimer));
     };
-  }, [isOpen]);
+  }, [isOpen, isAutoHideEnabled]);
 
   const handleSend = async () => {
     // Validation: Prevent empty or whitespace-only messages, ensure valid characters
@@ -613,10 +614,10 @@ export default function AIChat() {
                       >
                         <div className="relative">
                           <div className={cn(
-                            "p-3 rounded-2xl text-sm shadow-sm",
+                            "p-3 rounded-2xl text-sm shadow-sm whitespace-pre-wrap leading-relaxed",
                             msg.role === 'user' 
                               ? "bg-primary text-white rounded-tr-none" 
-                              : "bg-white text-slate-800 border border-slate-200 rounded-tl-none"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-tl-none"
                           )}>
                             {msg.text}
                           </div>

@@ -42,6 +42,7 @@ const QUICK_ACTIONS: QuickAction[] = [
 
 export function QuickActionsLauncher() {
   const [isOpen, setIsOpen] = useState(false);
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     const handleOpenQuickActions = () => {
@@ -68,17 +69,27 @@ export function QuickActionsLauncher() {
     if (!isOpen) return;
 
     let inactivityTimer: number | null = null;
+    const AUTO_CLOSE_MS = 30000;
 
     const closePanel = () => setIsOpen(false);
     const resetTimer = () => {
       if (inactivityTimer) {
         window.clearTimeout(inactivityTimer);
       }
-      inactivityTimer = window.setTimeout(closePanel, 5000);
+      inactivityTimer = window.setTimeout(closePanel, AUTO_CLOSE_MS);
     };
 
-    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!panelRef.current) return;
+      const target = event.target as Node | null;
+      if (target && panelRef.current.contains(target)) {
+        resetTimer();
+      }
+    };
+
+    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'touchstart'];
     events.forEach((eventName) => window.addEventListener(eventName, resetTimer, { passive: true }));
+    window.addEventListener('pointerdown', handlePointerDown, { passive: true });
     resetTimer();
 
     return () => {
@@ -86,6 +97,7 @@ export function QuickActionsLauncher() {
         window.clearTimeout(inactivityTimer);
       }
       events.forEach((eventName) => window.removeEventListener(eventName, resetTimer));
+      window.removeEventListener('pointerdown', handlePointerDown);
     };
   }, [isOpen]);
 
@@ -118,6 +130,7 @@ export function QuickActionsLauncher() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            ref={panelRef}
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 30 }}
