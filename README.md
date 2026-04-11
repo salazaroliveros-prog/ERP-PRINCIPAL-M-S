@@ -93,6 +93,7 @@ Filtros soportados en GET /api/documents/ocr-validations:
 - invoiceNumber (busqueda parcial)
 - from, to (rango por fecha de creacion)
 - limit (maximo 200)
+- offset (paginacion incremental)
 
 Scheduler backend de alertas (08:00 y 16:00):
 

@@ -63,6 +63,7 @@ export async function listOcrValidations(params: {
   from?: string;
   to?: string;
   limit?: number;
+  offset?: number;
 } = {}) {
   const search = new URLSearchParams();
   if (params.projectId) search.set('projectId', params.projectId);
@@ -72,8 +73,9 @@ export async function listOcrValidations(params: {
   if (params.from) search.set('from', params.from);
   if (params.to) search.set('to', params.to);
   if (params.limit) search.set('limit', String(params.limit));
+  if (Number.isFinite(params.offset)) search.set('offset', String(params.offset));
 
   const qs = search.toString();
   const path = qs ? `/api/documents/ocr-validations?${qs}` : '/api/documents/ocr-validations';
-  return requestJson<{ items: OcrValidationRecord[] }>(path);
+  return requestJson<{ items: OcrValidationRecord[]; hasMore?: boolean; limit?: number; offset?: number }>(path);
 }

@@ -1311,7 +1311,9 @@ function serveFallbackRead(req: Request, res: Response) {
     return res.json({ items: [] });
   }
   if (req.path === '/documents/ocr-validations') {
-    return res.json({ items: [] });
+    const limit = Math.min(Math.max(Number(req.query.limit || 20), 1), 200);
+    const offset = Math.max(Number(req.query.offset || 0), 0);
+    return res.json({ items: [], hasMore: false, limit, offset });
   }
   if (req.path === '/folders') {
     return res.json({ items: [] });
@@ -2671,6 +2673,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       const from = String(req.query.from || '').trim();
       const to = String(req.query.to || '').trim();
       const limit = Math.min(Math.max(Number(req.query.limit || 20), 1), 200);
+      const offset = Math.max(Number(req.query.offset || 0), 0);
 
       await db.query(
         `
@@ -2722,6 +2725,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
         where.push(`created_at <= $${values.length}::timestamptz`);
       }
       values.push(limit);
+      values.push(offset);
 
       const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : '';
       const rows = await db.query<OcrValidationRow>(
@@ -2744,12 +2748,18 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           from ocr_validations
           ${whereClause}
           order by created_at desc
-          limit $${values.length}
+          limit $${values.length - 1}
+          offset $${values.length}
         `,
         values
       );
 
-      return res.json({ items: rows.rows.map(mapOcrValidation) });
+      return res.json({
+        items: rows.rows.map(mapOcrValidation),
+        hasMore: rows.rows.length === limit,
+        limit,
+        offset,
+      });
     } catch (error: any) {
       return res.status(500).json({ error: error?.message || 'No se pudo obtener historial OCR' });
     }

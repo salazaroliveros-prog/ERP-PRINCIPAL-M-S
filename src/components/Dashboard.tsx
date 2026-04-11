@@ -69,6 +69,7 @@ import { createWorkflow, listWorkflows } from '../lib/workflowsApi';
 import { useTheme } from '../contexts/ThemeContext';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { drawReportHeader } from '../lib/pdfUtils';
 import { getThresholdSettings } from '../lib/settingsApi';
 import { listOcrValidations, validateDocumentOCR } from '../lib/aiOpsApi';
@@ -312,6 +313,9 @@ export default function Dashboard() {
   const [ocrHistoryDateRange, setOcrHistoryDateRange] = useState<'7' | '30' | '90' | 'all'>('30');
   const [ocrHistorySupplierFilter, setOcrHistorySupplierFilter] = useState('');
   const [ocrHistoryInvoiceFilter, setOcrHistoryInvoiceFilter] = useState('');
+  const [ocrHistoryOffset, setOcrHistoryOffset] = useState(0);
+  const [ocrHistoryHasMore, setOcrHistoryHasMore] = useState(false);
+  const [isLoadingMoreOcrHistory, setIsLoadingMoreOcrHistory] = useState(false);
   const [chartPreferences, setChartPreferences] = useState<DashboardChartPreferences>(
     THEME_DEFAULT_CHARTS.sunset
   );
@@ -1593,6 +1597,7 @@ export default function Dashboard() {
   const buildOcrHistoryQuery = () => {
     const query: {
       limit: number;
+      offset?: number;
       projectId?: string;
       supplier?: string;
       invoiceNumber?: string;
@@ -1627,9 +1632,44 @@ export default function Dashboard() {
     return query;
   };
 
-  const refreshOcrValidationHistory = async () => {
-    const history = await listOcrValidations(buildOcrHistoryQuery());
-    setOcrValidationHistory(history.items || []);
+  const refreshOcrValidationHistory = async (mode: 'reset' | 'append' = 'reset') => {
+    const currentOffset = mode === 'append' ? ocrHistoryOffset : 0;
+    const history = await listOcrValidations({
+      ...buildOcrHistoryQuery(),
+      offset: currentOffset,
+    });
+    const incomingItems = history.items || [];
+
+    if (mode === 'append') {
+      setOcrValidationHistory((prev) => {
+        const existingIds = new Set(prev.map((item: any) => item.id));
+        const merged = [...prev];
+        for (const row of incomingItems) {
+          if (!existingIds.has(row.id)) {
+            merged.push(row);
+          }
+        }
+        return merged;
+      });
+    } else {
+      setOcrValidationHistory(incomingItems);
+    }
+
+    setOcrHistoryOffset(currentOffset + incomingItems.length);
+    setOcrHistoryHasMore(Boolean(history.hasMore));
+  };
+
+  const loadMoreOcrHistory = async () => {
+    if (!ocrHistoryHasMore || isLoadingMoreOcrHistory) return;
+
+    try {
+      setIsLoadingMoreOcrHistory(true);
+      await refreshOcrValidationHistory('append');
+    } catch (error) {
+      handleApiError(error, OperationType.READ, 'documents/ocr-validations/load-more');
+    } finally {
+      setIsLoadingMoreOcrHistory(false);
+    }
   };
 
   const exportVisibleOcrHistoryCsv = () => {
@@ -1695,6 +1735,34 @@ export default function Dashboard() {
     URL.revokeObjectURL(url);
   };
 
+  const exportVisibleOcrHistoryXlsx = () => {
+    if (visibleOcrValidationHistory.length === 0) {
+      toast.info('No hay validaciones OCR para exportar con los filtros actuales.');
+      return;
+    }
+
+    const rows = visibleOcrValidationHistory.map((row: any) => ({
+      id: row.id,
+      fecha: row.createdAt,
+      proyecto_id: row.projectId || '',
+      orden_compra_id: row.purchaseOrderId || '',
+      factura: row.invoiceNumber || '',
+      proveedor: row.supplier || '',
+      monto_detectado: Number(row.detectedTotal || 0),
+      score: Number(row.score || 0),
+      resultado: row.resultStatus || '',
+      decision: row.decision || '',
+      auto_apply: row.autoApply ? 'true' : 'false',
+      auto_accion: row.autoActionSummary || '',
+    }));
+
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(workbook, sheet, 'OCR');
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    XLSX.writeFile(workbook, `ocr-validaciones-${stamp}.xlsx`);
+  };
+
   const handleValidateDocumentOcr = async () => {
     if (!ocrRawText.trim() && !ocrImageDataUrl) {
       toast.error('Proporciona texto OCR o una imagen del documento.');
@@ -1713,7 +1781,7 @@ export default function Dashboard() {
       });
       setOcrValidationResult(result);
       try {
-        await refreshOcrValidationHistory();
+        await refreshOcrValidationHistory('reset');
       } catch {
         // Ignore history refresh failures.
       }
@@ -1731,13 +1799,21 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        const history = await listOcrValidations(buildOcrHistoryQuery());
+        const history = await listOcrValidations({
+          ...buildOcrHistoryQuery(),
+          offset: 0,
+        });
         if (!cancelled) {
-          setOcrValidationHistory(history.items || []);
+          const items = history.items || [];
+          setOcrValidationHistory(items);
+          setOcrHistoryOffset(items.length);
+          setOcrHistoryHasMore(Boolean(history.hasMore));
         }
       } catch {
         if (!cancelled) {
           setOcrValidationHistory([]);
+          setOcrHistoryOffset(0);
+          setOcrHistoryHasMore(false);
         }
       }
     })();
@@ -2596,6 +2672,13 @@ export default function Dashboard() {
             >
               Exportar CSV
             </button>
+
+            <button
+              onClick={exportVisibleOcrHistoryXlsx}
+              className="px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50/80 dark:bg-emerald-900/20 text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+            >
+              Exportar XLSX
+            </button>
           </div>
 
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Trazabilidad OCR reciente</p>
@@ -2622,6 +2705,18 @@ export default function Dashboard() {
                   </p>
                 </div>
               ))}
+            </div>
+          )}
+          {ocrHistoryHasMore && (
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => void loadMoreOcrHistory()}
+                disabled={isLoadingMoreOcrHistory}
+                className="px-3 py-1.5 rounded-full border border-slate-300 dark:border-slate-600 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+              >
+                {isLoadingMoreOcrHistory ? 'Cargando...' : 'Cargar más'}
+              </button>
             </div>
           )}
         </div>
