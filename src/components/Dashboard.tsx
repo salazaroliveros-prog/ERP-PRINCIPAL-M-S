@@ -922,6 +922,24 @@ export default function Dashboard() {
     });
   };
 
+  const restoreBaseOcrPreset = () => {
+    const base = OCR_HISTORY_PRESET_CONFIGS.operaciones;
+    setOcrHistoryProjectFilter('all');
+    setOcrHistoryDecisionFilter('all');
+    setOcrHistoryDateRange('30');
+    setOcrHistorySupplierFilter('');
+    setOcrHistoryInvoiceFilter('');
+    setOcrHistoryPresetSearchTerm('');
+    setOcrHistoryViewMode(base.viewMode);
+    setOcrHistorySortBy(base.sortBy);
+    setOcrHistorySortDirection(base.sortDirection);
+    setOcrHistorySelectedColumns(base.selectedColumns);
+    setOcrHistoryStickyColumnsEnabled(base.stickyColumnsEnabled);
+    setOcrHistorySelectedPresetId('operaciones');
+    setOcrHistoryPresetNameInput('Mi preset OCR');
+    toast.success('Se restauró el preset base de Operaciones.');
+  };
+
   const exportCustomOcrPresetJson = () => {
     const selectedCustomPreset = ocrHistoryCustomPresets.find((preset) => preset.id === ocrHistorySelectedPresetId);
     if (!selectedCustomPreset) {
@@ -3318,6 +3336,13 @@ export default function Dashboard() {
                 className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-200 bg-emerald-50/70 dark:bg-emerald-900/20"
               >
                 Guardar Actual
+              </button>
+              <button
+                type="button"
+                onClick={restoreBaseOcrPreset}
+                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-200 bg-amber-50/70 dark:bg-amber-900/20"
+              >
+                Restaurar Base
               </button>
               <button
                 type="button"
