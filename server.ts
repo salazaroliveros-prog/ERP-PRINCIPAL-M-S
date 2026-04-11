@@ -15,6 +15,10 @@ const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
+const AI_PROVIDER = String(process.env.AI_PROVIDER || 'gemini').trim().toLowerCase();
+const GITHUB_MODELS_ENDPOINT = String(process.env.GITHUB_MODELS_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions').trim();
+const GITHUB_MODELS_MODEL = String(process.env.GITHUB_MODELS_MODEL || 'gpt-4.1-mini').trim();
+const GITHUB_MODELS_TOKEN = String(process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || '').trim();
 const PG_POOL_MAX = Number(process.env.PG_POOL_MAX || 20);
 const PG_IDLE_TIMEOUT_MS = Number(process.env.PG_IDLE_TIMEOUT_MS || 30000);
 const PG_CONNECTION_TIMEOUT_MS = Number(process.env.PG_CONNECTION_TIMEOUT_MS || 10000);
@@ -1204,6 +1208,16 @@ function serveFallbackRead(req: Request, res: Response) {
     });
   }
 
+  if (req.path === '/scheduler/status') {
+    return res.json({
+      status: 'degraded',
+      scheduler: {
+        enabled: false,
+        reason: 'database-unavailable',
+      },
+    });
+  }
+
   if (req.path === '/projects') {
     return res.json({ items: [] });
   }
@@ -1224,6 +1238,15 @@ function serveFallbackRead(req: Request, res: Response) {
   }
   if (req.path === '/notifications') {
     return res.json({ items: [], hasMore: false });
+  }
+  if (req.path === '/settings/thresholds') {
+    return res.json({
+      materialWeeklySpikeThresholdPct: 10,
+      physicalFinancialDeviationThresholdPct: 15,
+      updatedAt: null,
+      updatedBy: null,
+      source: 'fallback',
+    });
   }
   if (req.path === '/quotes') {
     return res.json({ items: [] });
@@ -1294,6 +1317,29 @@ function serveFallbackRead(req: Request, res: Response) {
 export async function createApp(options?: { includeFrontend?: boolean }) {
   const app = express();
   const notificationStreams = new Set<Response>();
+  const SCHEDULED_ALERTS_ENABLED = !['0', 'false', 'no', 'off'].includes(
+    String(process.env.SERVER_SCHEDULED_ALERTS_ENABLED || 'true').trim().toLowerCase()
+  );
+  const SCHEDULED_ALERTS_INTERVAL_MS = Math.max(
+    30 * 1000,
+    Number(process.env.SERVER_SCHEDULED_ALERTS_INTERVAL_MS || 60 * 1000)
+  );
+  const SCHEDULED_ALERT_HOURS = new Set([8, 16]);
+  const schedulerStatus = {
+    enabled: SCHEDULED_ALERTS_ENABLED,
+    intervalMs: SCHEDULED_ALERTS_INTERVAL_MS,
+    runs: 0,
+    alertsGenerated: 0,
+    dedupedSkips: 0,
+    failures: 0,
+    lastCheckedAt: null as string | null,
+    lastRunAt: null as string | null,
+    lastSuccessAt: null as string | null,
+    lastErrorAt: null as string | null,
+    lastError: null as string | null,
+    lastSlot: null as string | null,
+    lastSummary: null as Record<string, any> | null,
+  };
 
   const publishNotificationEvent = (
     eventType: 'created' | 'read',
@@ -1310,6 +1356,262 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       }
     }
   };
+
+  const createSystemNotification = async (title: string, body: string, type: 'inventory' | 'subcontract' | 'project' | 'system' = 'system') => {
+    const db = requireDatabase();
+    const result = await db.query<NotificationRow>(
+      `
+        insert into notifications (title, body, type)
+        values ($1,$2,$3)
+        returning id, title, body, type, read, created_at
+      `,
+      [title, body, type]
+    );
+
+    const createdNotification = mapNotification(result.rows[0]);
+    publishNotificationEvent('created', createdNotification);
+    return createdNotification;
+  };
+
+  const toMoney = (value: any) => {
+    const numeric = Number(value || 0);
+    return Number.isFinite(numeric) ? numeric : 0;
+  };
+
+  const runScheduledCostIntelligence = async () => {
+    if (!SCHEDULED_ALERTS_ENABLED || !pool) return;
+
+    const now = new Date();
+    schedulerStatus.lastCheckedAt = now.toISOString();
+    const hour = now.getHours();
+    if (!SCHEDULED_ALERT_HOURS.has(hour)) return;
+
+    schedulerStatus.runs += 1;
+    schedulerStatus.lastRunAt = now.toISOString();
+
+    const slot = String(hour).padStart(2, '0');
+    const dateKey = now.toISOString().slice(0, 10);
+    const runKey = `scheduled_cost_intel_alert_${dateKey}_${slot}`;
+    const db = requireDatabase();
+
+    await db.query(
+      `
+        create table if not exists app_settings (
+          setting_key text primary key,
+          setting_value text not null,
+          updated_at timestamptz not null default now(),
+          updated_by text
+        )
+      `
+    );
+
+    const lockResult = await db.query(
+      `
+        insert into app_settings (setting_key, setting_value, updated_at, updated_by)
+        values ($1, $2, now(), 'server-scheduler')
+        on conflict (setting_key) do nothing
+        returning setting_key
+      `,
+      [runKey, 'sent']
+    );
+
+    if ((lockResult.rowCount || 0) === 0) {
+      schedulerStatus.dedupedSkips += 1;
+      schedulerStatus.lastSlot = `${dateKey} ${slot}:00`;
+      return;
+    }
+
+    const projectsResult = await db.query<ProjectRow>(
+      `
+        select id, name, location, project_manager, area, status, budget, spent, physical_progress, financial_progress,
+               start_date, end_date, client_uid, typology, latitude, longitude, created_at
+        from projects
+        where status in ('In Progress', 'Active')
+      `
+    );
+
+    const projects = projectsResult.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      budget: toMoney(row.budget),
+      spent: toMoney(row.spent),
+    }));
+
+    const topOverrun = projects
+      .map((project) => {
+        const remaining = project.budget - project.spent;
+        return {
+          name: project.name,
+          overrun: remaining < 0 ? Math.abs(remaining) : 0,
+          remainingPct: project.budget > 0 ? (remaining / project.budget) * 100 : 0,
+        };
+      })
+      .sort((left, right) => right.overrun - left.overrun)[0];
+
+    const redProjects = projects.filter((project) => {
+      const remaining = project.budget - project.spent;
+      const remainingPct = project.budget > 0 ? (remaining / project.budget) * 100 : 0;
+      return remainingPct < 5;
+    }).length;
+
+    const purchaseOrdersResult = await db.query<PurchaseOrderRow>(
+      `
+        select id, project_id, budget_item_id, material_id, material_name, quantity, unit, estimated_cost,
+               supplier, supplier_id, notes, status, order_date, date_received, date_paid,
+               payment_method, payment_reference, stock_applied, budget_applied, created_at, updated_at
+        from purchase_orders
+        order by coalesce(date_paid, date_received, order_date, created_at) desc
+        limit 200
+      `
+    );
+
+    const normalizedOrders = purchaseOrdersResult.rows
+      .map((row) => {
+        const supplierName = String(row.supplier || '').trim() || 'Proveedor sin nombre';
+        const materialName = String(row.material_name || '').trim() || 'Material';
+        const quantity = toMoney(row.quantity);
+        const totalCost = toMoney(row.estimated_cost);
+        const unitPrice = quantity > 0 ? totalCost / quantity : 0;
+        const timestamp = Date.parse(String(row.date_paid || row.date_received || row.order_date || row.created_at || ''));
+        return { supplierName, materialName, unitPrice, timestamp };
+      })
+      .filter((row) => row.unitPrice > 0 && Number.isFinite(row.timestamp));
+
+    const supplierRows = normalizedOrders.reduce((acc: Record<string, typeof normalizedOrders>, row) => {
+      if (!acc[row.supplierName]) acc[row.supplierName] = [];
+      acc[row.supplierName].push(row);
+      return acc;
+    }, {});
+
+    const volatilityRanking = Object.entries(supplierRows)
+      .map(([supplierName, rows]) => {
+        const materialBuckets = rows.reduce((acc: Record<string, typeof normalizedOrders>, row) => {
+          const materialKey = row.materialName.toLowerCase();
+          if (!acc[materialKey]) acc[materialKey] = [];
+          acc[materialKey].push(row);
+          return acc;
+        }, {});
+
+        let transitions = 0;
+        let totalAbsChange = 0;
+
+        Object.values(materialBuckets).forEach((bucket) => {
+          const sorted = [...bucket].sort((left, right) => left.timestamp - right.timestamp);
+          for (let index = 1; index < sorted.length; index += 1) {
+            const previous = sorted[index - 1].unitPrice;
+            const current = sorted[index].unitPrice;
+            if (previous <= 0 || current <= 0) continue;
+            totalAbsChange += Math.abs(((current - previous) / previous) * 100);
+            transitions += 1;
+          }
+        });
+
+        const volatilityPct = transitions > 0 ? totalAbsChange / transitions : 0;
+        return {
+          supplierName,
+          volatilityPct,
+          records: rows.length,
+        };
+      })
+      .filter((row) => row.records >= 2)
+      .sort((left, right) => right.volatilityPct - left.volatilityPct);
+
+    const mostVolatile = volatilityRanking[0];
+    const bodyParts: string[] = [];
+
+    if (topOverrun && topOverrun.overrun > 0) {
+      bodyParts.push(`Proyecto crítico: ${topOverrun.name} (${toMoney(topOverrun.overrun).toLocaleString('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 })}).`);
+    }
+    if (redProjects > 0) {
+      bodyParts.push(`Proyectos en rojo: ${redProjects}.`);
+    }
+    if (mostVolatile) {
+      bodyParts.push(`Proveedor más volátil: ${mostVolatile.supplierName} (${mostVolatile.volatilityPct.toFixed(1)}%).`);
+    }
+
+    if (bodyParts.length === 0) {
+      bodyParts.push('Sin alertas críticas en este corte programado.');
+    }
+
+    const createdNotification = await createSystemNotification(
+      `Resumen programado de costos (${slot}:00)`,
+      bodyParts.join(' '),
+      'system'
+    );
+
+    schedulerStatus.alertsGenerated += 1;
+    schedulerStatus.lastSuccessAt = new Date().toISOString();
+    schedulerStatus.lastSlot = `${dateKey} ${slot}:00`;
+    schedulerStatus.lastSummary = {
+      topOverrunProject: topOverrun?.name || null,
+      topOverrunAmount: topOverrun?.overrun || 0,
+      redProjects,
+      mostVolatileSupplier: mostVolatile?.supplierName || null,
+      mostVolatilePct: mostVolatile?.volatilityPct || 0,
+      notificationId: createdNotification.id || null,
+    };
+
+    try {
+      await db.query(
+        `
+          insert into audit_logs (
+            project_id,
+            user_id,
+            user_name,
+            user_email,
+            action,
+            module,
+            details,
+            type,
+            metadata,
+            user_agent,
+            ip_address
+          )
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)
+        `,
+        [
+          null,
+          'server-scheduler',
+          'Server Scheduler',
+          null,
+          'Resumen programado de costos',
+          'Scheduler',
+          `Alerta programada ${slot}:00 generada correctamente`,
+          'system',
+          JSON.stringify({
+            slot,
+            dateKey,
+            summary: schedulerStatus.lastSummary,
+          }),
+          'server',
+          null,
+        ]
+      );
+    } catch {
+      // Ignore audit persistence failures to avoid breaking scheduler flow.
+    }
+  };
+
+  let scheduledAlertsTimer: ReturnType<typeof setInterval> | null = null;
+  if (SCHEDULED_ALERTS_ENABLED && pool) {
+    void runScheduledCostIntelligence().catch((error) => {
+      schedulerStatus.failures += 1;
+      schedulerStatus.lastErrorAt = new Date().toISOString();
+      schedulerStatus.lastError = String(error?.message || error || 'scheduler-initial-run-failed');
+      console.error('[scheduler] initial run failed:', error?.message || error);
+    });
+
+    scheduledAlertsTimer = setInterval(() => {
+      void runScheduledCostIntelligence().catch((error) => {
+        schedulerStatus.failures += 1;
+        schedulerStatus.lastErrorAt = new Date().toISOString();
+        schedulerStatus.lastError = String(error?.message || error || 'scheduler-run-failed');
+        console.error('[scheduler] run failed:', error?.message || error);
+      });
+    }, SCHEDULED_ALERTS_INTERVAL_MS);
+
+    scheduledAlertsTimer.unref?.();
+  }
 
   const corsOrigins = (process.env.CORS_ORIGINS || "")
     .split(",")
@@ -1433,6 +1735,108 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
     }
   });
 
+  app.get('/api/settings/thresholds', async (_req, res) => {
+    try {
+      const db = requireDatabase();
+
+      await db.query(
+        `
+          create table if not exists app_settings (
+            setting_key text primary key,
+            setting_value text not null,
+            updated_at timestamptz not null default now(),
+            updated_by text
+          )
+        `
+      );
+
+      const rows = await db.query<{ setting_key: string; setting_value: string; updated_at: string; updated_by: string | null }>(
+        `
+          select setting_key, setting_value, updated_at, updated_by
+          from app_settings
+          where setting_key in (
+            'material_weekly_spike_threshold_pct',
+            'physical_financial_deviation_threshold_pct'
+          )
+        `
+      );
+
+      const byKey = new Map(rows.rows.map((row) => [row.setting_key, row]));
+      const material = Number(byKey.get('material_weekly_spike_threshold_pct')?.setting_value || 10);
+      const deviation = Number(byKey.get('physical_financial_deviation_threshold_pct')?.setting_value || 15);
+      const latestUpdated = rows.rows
+        .map((row) => new Date(row.updated_at).getTime())
+        .filter((value) => Number.isFinite(value))
+        .sort((a, b) => b - a)[0];
+      const latestBy = rows.rows
+        .slice()
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0]?.updated_by || null;
+
+      return res.json({
+        materialWeeklySpikeThresholdPct: Number.isFinite(material) ? Math.max(3, Math.min(40, material)) : 10,
+        physicalFinancialDeviationThresholdPct: Number.isFinite(deviation) ? Math.max(5, Math.min(40, deviation)) : 15,
+        updatedAt: latestUpdated ? new Date(latestUpdated).toISOString() : null,
+        updatedBy: latestBy,
+        source: 'database',
+      });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron leer los umbrales' });
+    }
+  });
+
+  app.put('/api/settings/thresholds', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const materialRaw = Number(req.body?.materialWeeklySpikeThresholdPct);
+      const deviationRaw = Number(req.body?.physicalFinancialDeviationThresholdPct);
+
+      if (!Number.isFinite(materialRaw) || !Number.isFinite(deviationRaw)) {
+        return res.status(400).json({ error: 'Valores de umbral inválidos' });
+      }
+
+      const material = Math.max(3, Math.min(40, materialRaw));
+      const deviation = Math.max(5, Math.min(40, deviationRaw));
+      const updatedBy = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim() || null;
+
+      await db.query(
+        `
+          create table if not exists app_settings (
+            setting_key text primary key,
+            setting_value text not null,
+            updated_at timestamptz not null default now(),
+            updated_by text
+          )
+        `
+      );
+
+      await db.query(
+        `
+          insert into app_settings (setting_key, setting_value, updated_at, updated_by)
+          values
+            ('material_weekly_spike_threshold_pct', $1, now(), $3),
+            ('physical_financial_deviation_threshold_pct', $2, now(), $3)
+          on conflict (setting_key)
+          do update
+          set
+            setting_value = excluded.setting_value,
+            updated_at = now(),
+            updated_by = excluded.updated_by
+        `,
+        [String(material), String(deviation), updatedBy]
+      );
+
+      return res.json({
+        materialWeeklySpikeThresholdPct: material,
+        physicalFinancialDeviationThresholdPct: deviation,
+        updatedAt: new Date().toISOString(),
+        updatedBy,
+        source: 'database',
+      });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron guardar los umbrales' });
+    }
+  });
+
   app.post('/api/uploads', upload.single('file'), async (req, res) => {
     try {
       const file = req.file;
@@ -1524,17 +1928,111 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
     }
   });
 
+  app.get('/api/scheduler/status', async (_req, res) => {
+    return res.json({
+      status: 'ok',
+      scheduler: {
+        ...schedulerStatus,
+        activeTimer: Boolean(scheduledAlertsTimer),
+        hours: Array.from(SCHEDULED_ALERT_HOURS.values()),
+      },
+    });
+  });
+
   app.get('/api/ai/health', async (req, res) => {
     const runTest = ['1', 'true', 'yes'].includes(String(req.query.runTest || '').trim().toLowerCase());
     const geminiApiKey = String(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+    const githubModelsConfigured = Boolean(GITHUB_MODELS_TOKEN);
     const keySource = process.env.GEMINI_API_KEY
       ? 'GEMINI_API_KEY'
       : (process.env.VITE_GEMINI_API_KEY ? 'VITE_GEMINI_API_KEY' : null);
+
+    if (AI_PROVIDER === 'github-models') {
+      if (!githubModelsConfigured) {
+        return res.status(503).json({
+          status: 'error',
+          ai: 'github-models',
+          provider: AI_PROVIDER,
+          configured: false,
+          message: 'GITHUB_MODELS_TOKEN no configurado. Define GITHUB_MODELS_TOKEN en el entorno del servidor.',
+        });
+      }
+
+      if (!runTest) {
+        return res.json({
+          status: 'ok',
+          ai: 'github-models',
+          provider: AI_PROVIDER,
+          configured: true,
+          endpoint: GITHUB_MODELS_ENDPOINT,
+          model: GITHUB_MODELS_MODEL,
+          runTest: false,
+        });
+      }
+
+      try {
+        const response = await fetch(GITHUB_MODELS_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${GITHUB_MODELS_TOKEN}`,
+          },
+          body: JSON.stringify({
+            model: GITHUB_MODELS_MODEL,
+            temperature: 0,
+            max_tokens: 16,
+            messages: [
+              { role: 'system', content: 'Responde solo con la palabra OK.' },
+              { role: 'user', content: 'Responde solo con la palabra OK.' },
+            ],
+          }),
+        });
+
+        const payload = await response.json().catch(() => ({} as any));
+        if (!response.ok) {
+          const errorMessage = String((payload as any)?.error?.message || response.statusText || 'No se pudo validar GitHub Models');
+          return res.status(502).json({
+            status: 'error',
+            ai: 'github-models',
+            provider: AI_PROVIDER,
+            configured: true,
+            endpoint: GITHUB_MODELS_ENDPOINT,
+            model: GITHUB_MODELS_MODEL,
+            runTest: true,
+            message: errorMessage,
+          });
+        }
+
+        const preview = String((payload as any)?.choices?.[0]?.message?.content || '').slice(0, 120);
+        return res.json({
+          status: 'ok',
+          ai: 'github-models',
+          provider: AI_PROVIDER,
+          configured: true,
+          endpoint: GITHUB_MODELS_ENDPOINT,
+          model: GITHUB_MODELS_MODEL,
+          runTest: true,
+          responsePreview: preview,
+        });
+      } catch (error: any) {
+        return res.status(502).json({
+          status: 'error',
+          ai: 'github-models',
+          provider: AI_PROVIDER,
+          configured: true,
+          endpoint: GITHUB_MODELS_ENDPOINT,
+          model: GITHUB_MODELS_MODEL,
+          runTest: true,
+          message: error?.message || 'No se pudo validar GitHub Models',
+        });
+      }
+    }
 
     if (!geminiApiKey) {
       return res.status(503).json({
         status: 'error',
         ai: 'gemini',
+        provider: AI_PROVIDER,
         configured: false,
         message: 'Gemini API key no configurada. Define GEMINI_API_KEY en el entorno del servidor.',
       });
@@ -1544,6 +2042,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       return res.json({
         status: 'ok',
         ai: 'gemini',
+        provider: AI_PROVIDER,
         configured: true,
         keySource,
         runTest: false,
@@ -1560,6 +2059,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       return res.json({
         status: 'ok',
         ai: 'gemini',
+        provider: AI_PROVIDER,
         configured: true,
         keySource,
         runTest: true,
@@ -1570,10 +2070,135 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       return res.status(502).json({
         status: 'error',
         ai: 'gemini',
+        provider: AI_PROVIDER,
         configured: true,
         keySource,
         runTest: true,
         message: error?.message || 'No se pudo validar Gemini',
+      });
+    }
+  });
+
+  app.post('/api/ai/chat', async (req, res) => {
+    const body = req.body || {};
+    const message = String(body.message || '').trim();
+    const history = Array.isArray(body.history) ? body.history : [];
+
+    if (!message) {
+      return res.status(400).json({ error: 'message es obligatorio' });
+    }
+
+    const normalizedHistory = history
+      .map((entry: any) => ({
+        role: String(entry?.role || '').trim().toLowerCase(),
+        text: String(entry?.text || '').trim(),
+      }))
+      .filter((entry: any) => (entry.role === 'user' || entry.role === 'assistant') && Boolean(entry.text))
+      .slice(-12);
+
+    if (AI_PROVIDER === 'github-models') {
+      if (!GITHUB_MODELS_TOKEN) {
+        return res.status(503).json({
+          error: 'Proveedor AI no configurado. Falta GITHUB_MODELS_TOKEN.',
+          provider: AI_PROVIDER,
+        });
+      }
+
+      try {
+        const messages = [
+          {
+            role: 'system',
+            content: 'Eres el asistente de WM_M&S Constructora. Responde en espanol, con recomendaciones accionables para operaciones, costos, riesgos y proyectos.',
+          },
+          ...normalizedHistory.map((entry: any) => ({
+            role: entry.role,
+            content: entry.text,
+          })),
+          { role: 'user', content: message },
+        ];
+
+        const response = await fetch(GITHUB_MODELS_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${GITHUB_MODELS_TOKEN}`,
+          },
+          body: JSON.stringify({
+            model: GITHUB_MODELS_MODEL,
+            temperature: 0.3,
+            messages,
+          }),
+        });
+
+        const payload = await response.json().catch(() => ({} as any));
+
+        if (!response.ok) {
+          const errorMessage = String((payload as any)?.error?.message || response.statusText || 'Error en GitHub Models');
+          return res.status(502).json({
+            error: errorMessage,
+            provider: AI_PROVIDER,
+          });
+        }
+
+        const reply = String((payload as any)?.choices?.[0]?.message?.content || '').trim();
+        if (!reply) {
+          return res.status(502).json({
+            error: 'Respuesta vacia de GitHub Models',
+            provider: AI_PROVIDER,
+          });
+        }
+
+        return res.json({
+          provider: AI_PROVIDER,
+          model: GITHUB_MODELS_MODEL,
+          response: reply,
+        });
+      } catch (error: any) {
+        return res.status(502).json({
+          error: error?.message || 'No se pudo conectar con GitHub Models',
+          provider: AI_PROVIDER,
+        });
+      }
+    }
+
+    const geminiApiKey = String(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+    if (!geminiApiKey) {
+      return res.status(503).json({
+        error: 'Proveedor AI no configurado. Falta GEMINI_API_KEY.',
+        provider: AI_PROVIDER,
+      });
+    }
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+      const model = String(process.env.GEMINI_MODEL || process.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash').trim();
+      const contents = [
+        ...normalizedHistory.map((entry: any) => ({
+          role: entry.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: entry.text }],
+        })),
+        { role: 'user', parts: [{ text: message }] },
+      ];
+
+      const result = await ai.models.generateContent({
+        model,
+        contents,
+      });
+
+      const reply = String(result.text || '').trim();
+      if (!reply) {
+        return res.status(502).json({ error: 'Respuesta vacia de Gemini', provider: AI_PROVIDER });
+      }
+
+      return res.json({
+        provider: 'gemini',
+        model,
+        response: reply,
+      });
+    } catch (error: any) {
+      return res.status(502).json({
+        error: error?.message || 'No se pudo conectar con Gemini',
+        provider: AI_PROVIDER,
       });
     }
   });

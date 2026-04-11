@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Bot, Send, X, MessageSquare, Sparkles, AlertTriangle, TrendingUp, Wrench, Loader2, MoreVertical, History, Construction, DollarSign, Mic, MicOff, Trash2 } from 'lucide-react';
+import { Bot, Send, X, MessageSquare, Sparkles, AlertTriangle, TrendingUp, Wrench, Loader2, MoreVertical, History, Construction, DollarSign, Mic, MicOff, Trash2, BarChart3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, handleApiError, OperationType } from '../lib/utils';
 import { getAIResponse } from '../lib/gemini';
@@ -10,6 +10,7 @@ import { listRisks } from '../lib/risksApi';
 import { generateExecutiveReport } from '../lib/pdfUtils';
 import { sendNotification } from '../lib/notifications';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -77,15 +78,20 @@ const persistControlHistory = (items: PortfolioControlSnapshot[]) => {
 };
 
 const GEMINI_DIAGNOSTIC_PREFIX = '[GEMINI_DIAGNOSTIC]';
+const AI_DIAGNOSTIC_PREFIX = '[AI_DIAGNOSTIC]';
 
 const parseGeminiDiagnostic = (text: string) => {
-  if (!text.startsWith(GEMINI_DIAGNOSTIC_PREFIX)) {
+  if (!text.startsWith(GEMINI_DIAGNOSTIC_PREFIX) && !text.startsWith(AI_DIAGNOSTIC_PREFIX)) {
     return null;
   }
-  return text.replace(GEMINI_DIAGNOSTIC_PREFIX, '').trim();
+  return text
+    .replace(GEMINI_DIAGNOSTIC_PREFIX, '')
+    .replace(AI_DIAGNOSTIC_PREFIX, '')
+    .trim();
 };
 
 export default function AIChat() {
+  const navigate = useNavigate();
   const CHAT_AUTO_HIDE_STORAGE_KEY = 'wm_ai_chat_auto_hide';
   const CHAT_PANEL_WIDTH = 400;
   const CHAT_PANEL_HEIGHT = 600;
@@ -634,6 +640,52 @@ export default function AIChat() {
 
     // Check for "informe ejecutivo" command
     const lowerInput = trimmedInput.toLowerCase();
+
+    // Command: Abrir centro de control real (físico-financiero)
+    if (
+      lowerInput.includes('control fisico financiero') ||
+      lowerInput.includes('control físico financiero') ||
+      lowerInput.includes('panel ejecutivo') ||
+      lowerInput.includes('tablero de control')
+    ) {
+      const assistantMessage: Message = {
+        role: 'assistant',
+        text: 'Perfecto. Te llevo al tablero y enfoco el Centro de Control Ejecutivo para revisar físico vs financiero, riesgos y acciones prioritarias.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+
+      navigate('/');
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('FOCUS_EXECUTIVE_CONTROL_CENTER'));
+      }, 120);
+
+      setIsLoading(false);
+      autoHideAssistant();
+      return;
+    }
+
+    // Command: Abrir módulo de analítica con gráficas
+    if (
+      lowerInput.includes('abrir analitica') ||
+      lowerInput.includes('abrir analítica') ||
+      lowerInput.includes('abrir analytics') ||
+      lowerInput.includes('graficas de control') ||
+      lowerInput.includes('gráficas de control')
+    ) {
+      const assistantMessage: Message = {
+        role: 'assistant',
+        text: 'Abriendo analítica avanzada para revisar tendencias, costos y desempeño con gráficas en tiempo real.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+
+      navigate('/analytics');
+
+      setIsLoading(false);
+      autoHideAssistant();
+      return;
+    }
     
     // Command: Abrir Calculadora
     if (lowerInput.includes('abrir calculadora') || lowerInput.includes('calculadora de costos') || lowerInput.includes('estimar costos')) {
@@ -707,6 +759,11 @@ export default function AIChat() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, assistantMessage]);
+
+      navigate('/');
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('FOCUS_EXECUTIVE_CONTROL_CENTER'));
+      }, 120);
 
       const data = await fetchReportData();
       if (!data) {
@@ -828,6 +885,7 @@ export default function AIChat() {
   };
 
   const quickActions = [
+    { icon: BarChart3, label: "Centro de Control Real", prompt: "Abrir tablero de control físico financiero" },
     { icon: Bot, label: "Control Total ERP", prompt: "Ejecuta control total del ERP: analiza pros y contras de proyectos en ejecución, sobrecostos, presupuesto corto, inventario y tiempos de obra." },
     { icon: TrendingUp, label: "Salud Global M2", prompt: "Realiza un análisis de salud presupuestaria de todos los proyectos activos basado en sus M2 y tipología. Envía sugerencias si detectas riesgos." },
     { icon: AlertTriangle, label: "Análisis de Riesgos", prompt: "Realiza un análisis de riesgos proactivo y predictivo para mis proyectos actuales. Identifica desviaciones críticas, predice sobrecostos futuros y sugiere acciones correctivas inmediatas para mitigar situaciones críticas." },

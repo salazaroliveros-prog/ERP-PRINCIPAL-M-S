@@ -13,8 +13,26 @@ Backend en PostgreSQL (Express + SQL migrations).
 1. Instala dependencias: npm install
 2. Crea un archivo .env.local (opcional) con:
    - VITE_GEMINI_API_KEY=tu_clave_gemini
+    - VITE_AI_PROVIDER=gemini (o github-models / copilot)
    - VITE_GOOGLE_CLIENT_ID=tu_client_id_oauth_web_google
 3. Ejecuta en desarrollo: npm run dev
+
+### Modo Copilot (GitHub Models)
+
+Para usar el asistente con modelo tipo Copilot desde backend:
+
+- Frontend:
+   - VITE_AI_PROVIDER=github-models
+- Backend:
+   - AI_PROVIDER=github-models
+   - GITHUB_MODELS_TOKEN=tu_token_de_github_models
+   - GITHUB_MODELS_MODEL=gpt-4.1-mini (opcional)
+   - GITHUB_MODELS_ENDPOINT=https://models.inference.ai.azure.com/chat/completions (opcional)
+
+Comprobacion rapida:
+
+- GET /api/ai/health
+- GET /api/ai/health?runTest=true
 
 ## Despliegue del frontend en GitHub Pages
 
@@ -51,6 +69,23 @@ Variables requeridas para backend:
 - DATABASE_URL: cadena de conexion PostgreSQL
 - PGSSLMODE=disable (solo local, opcional)
 - CORS_ORIGINS: lista CSV de origins permitidos
+- AI_PROVIDER=gemini|github-models (opcional, por defecto gemini)
+- GEMINI_API_KEY (si AI_PROVIDER=gemini)
+- GITHUB_MODELS_TOKEN (si AI_PROVIDER=github-models)
+- SERVER_SCHEDULED_ALERTS_ENABLED=true|false (opcional, por defecto true)
+- SERVER_SCHEDULED_ALERTS_INTERVAL_MS=60000 (opcional, minimo 30000)
+
+Nuevos endpoints de configuracion operativa:
+
+- GET /api/settings/thresholds
+- PUT /api/settings/thresholds
+- GET /api/scheduler/status
+
+Scheduler backend de alertas (08:00 y 16:00):
+
+- Genera notificacion de resumen de costos aunque no haya navegador abierto.
+- Usa deduplicacion por franja diaria en base de datos para evitar duplicados.
+- Registra metadatos de ejecucion en auditoria cuando la tabla audit_logs esta disponible.
 
 Ejecutar migraciones localmente:
 

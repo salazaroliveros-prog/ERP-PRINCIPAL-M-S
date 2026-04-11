@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -63,10 +63,14 @@ import { sendNotification } from '../lib/notifications';
 import { logAction } from '../lib/audit';
 import { listProjects, listProjectBudgetItemsDetailed, updateProject, updateProjectBudgetItem } from '../lib/projectsApi';
 import { listTransactions } from '../lib/financialsApi';
-import { listInventory } from '../lib/operationsApi';
+import { listInventory, listPurchaseOrders } from '../lib/operationsApi';
 import { listSubcontracts } from '../lib/subcontractsApi';
 import { listWorkflows } from '../lib/workflowsApi';
 import { useTheme } from '../contexts/ThemeContext';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { drawReportHeader } from '../lib/pdfUtils';
+import { getThresholdSettings } from '../lib/settingsApi';
 
 const COLORS = [
   '#3b82f6', // Blue
@@ -93,6 +97,9 @@ const MARKET_RATE_BY_TYPOLOGY: Record<string, number> = {
   INFRAESTRUCTURA: 7500,
   TURISMO: 7000,
 };
+
+const MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY = 'material_weekly_spike_threshold_pct';
+const PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY = 'physical_financial_deviation_threshold_pct';
 
 type DashboardChartKey =
   | 'profitTrend'
@@ -256,9 +263,12 @@ const QuickActionButton = ({ icon: Icon, label, onClick, color }: any) => (
 
 export default function Dashboard() {
   const { currentTheme } = useTheme();
+  const executiveControlRef = useRef<HTMLDivElement>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
+  const [portfolioBudgetItemsByProject, setPortfolioBudgetItemsByProject] = useState<Record<string, any[]>>({});
   const [subcontracts, setSubcontracts] = useState<any[]>([]);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [pendingWorkflows, setPendingWorkflows] = useState<any[]>([]);
@@ -269,6 +279,19 @@ export default function Dashboard() {
   const [quickBudgetItems, setQuickBudgetItems] = useState<any[]>([]);
   const [isLoadingQuickItems, setIsLoadingQuickItems] = useState(false);
   const [quickSearchTerm, setQuickSearchTerm] = useState('');
+  const [inflationScenarioPct, setInflationScenarioPct] = useState(0);
+  const [selectedProviderVolatility, setSelectedProviderVolatility] = useState('all');
+  const [selectedMarginProjectId, setSelectedMarginProjectId] = useState('all');
+  const [materialWeeklySpikeThreshold, setMaterialWeeklySpikeThreshold] = useState<number>(() => {
+    const saved = Number(localStorage.getItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY) || 10);
+    if (!Number.isFinite(saved)) return 10;
+    return Math.max(3, Math.min(40, saved));
+  });
+  const [physicalFinancialDeviationThreshold, setPhysicalFinancialDeviationThreshold] = useState<number>(() => {
+    const saved = Number(localStorage.getItem(PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY) || 15);
+    if (!Number.isFinite(saved)) return 15;
+    return Math.max(5, Math.min(40, saved));
+  });
   const [progressChartScope, setProgressChartScope] = useState<'all' | 'selected'>('all');
   const [chartPreferences, setChartPreferences] = useState<DashboardChartPreferences>(
     THEME_DEFAULT_CHARTS.sunset
@@ -311,6 +334,66 @@ export default function Dashboard() {
     onResize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    const focusExecutiveControl = () => {
+      executiveControlRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    window.addEventListener('FOCUS_EXECUTIVE_CONTROL_CENTER', focusExecutiveControl);
+    return () => window.removeEventListener('FOCUS_EXECUTIVE_CONTROL_CENTER', focusExecutiveControl);
+  }, []);
+
+  useEffect(() => {
+    const refreshThreshold = () => {
+      const saved = Number(localStorage.getItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY) || 10);
+      if (!Number.isFinite(saved)) {
+        setMaterialWeeklySpikeThreshold(10);
+        return;
+      }
+      setMaterialWeeklySpikeThreshold(Math.max(3, Math.min(40, saved)));
+    };
+
+    window.addEventListener('MATERIAL_ALERT_THRESHOLD_CHANGED', refreshThreshold);
+    return () => window.removeEventListener('MATERIAL_ALERT_THRESHOLD_CHANGED', refreshThreshold);
+  }, []);
+
+  useEffect(() => {
+    const refreshThreshold = () => {
+      const saved = Number(localStorage.getItem(PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY) || 15);
+      if (!Number.isFinite(saved)) {
+        setPhysicalFinancialDeviationThreshold(15);
+        return;
+      }
+      setPhysicalFinancialDeviationThreshold(Math.max(5, Math.min(40, saved)));
+    };
+
+    window.addEventListener('PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_CHANGED', refreshThreshold);
+    return () => window.removeEventListener('PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_CHANGED', refreshThreshold);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const remote = await getThresholdSettings();
+        if (cancelled) return;
+
+        setMaterialWeeklySpikeThreshold(remote.materialWeeklySpikeThresholdPct);
+        setPhysicalFinancialDeviationThreshold(remote.physicalFinancialDeviationThresholdPct);
+
+        localStorage.setItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY, String(remote.materialWeeklySpikeThresholdPct));
+        localStorage.setItem(PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY, String(remote.physicalFinancialDeviationThresholdPct));
+      } catch {
+        // Keep local thresholds when remote settings are unavailable.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -454,10 +537,11 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        const [projectsItems, transactionsResult, inventoryResult, subcontractsItems, workflowsItems] = await Promise.all([
+        const [projectsItems, transactionsResult, inventoryResult, purchaseOrdersItems, subcontractsItems, workflowsItems] = await Promise.all([
           listProjects(),
           listTransactions({ limit: 100, offset: 0 }),
           listInventory({ limit: 500, offset: 0 }),
+          listPurchaseOrders(),
           listSubcontracts({ status: 'Active' }),
           listWorkflows({ status: 'pending' }),
         ]);
@@ -491,9 +575,37 @@ export default function Dashboard() {
         setProjects(normalizedProjects);
         setTransactions(transactionsResult.items);
         setInventory(inventoryResult.items);
+        setPurchaseOrders(purchaseOrdersItems);
         setSubcontracts(subcontractsItems);
         setPendingWorkflows(workflowsItems.slice(0, 5));
         setRecentLogs([]);
+
+        const projectsForBaseline = normalizedProjects
+          .filter((project: any) => {
+            const status = String(project?.status || '').toLowerCase();
+            return status !== 'completed' && status !== 'cancelled';
+          })
+          .slice(0, 15);
+
+        const budgetDetailPairs = await Promise.all(
+          projectsForBaseline.map(async (project: any) => {
+            try {
+              const items = await listProjectBudgetItemsDetailed(project.id);
+              return [project.id, items] as const;
+            } catch {
+              return [project.id, []] as const;
+            }
+          })
+        );
+
+        if (!cancelled) {
+          setPortfolioBudgetItemsByProject(
+            budgetDetailPairs.reduce((acc, [projectId, items]) => {
+              acc[projectId] = items;
+              return acc;
+            }, {} as Record<string, any[]>)
+          );
+        }
       } catch (error) {
         if (!cancelled) {
           handleApiError(error, OperationType.GET, 'dashboard');
@@ -547,10 +659,10 @@ export default function Dashboard() {
         const progressDeviation = financialProgress - (p.physicalProgress || 0);
         const projectId = `proj_dev_${p.id}`;
 
-        if (progressDeviation > 15 && !notifiedItems[projectId]) {
+        if (progressDeviation > physicalFinancialDeviationThreshold && !notifiedItems[projectId]) {
           sendNotification(
             'Alerta de Desviación Financiera',
-            `La obra ${p.name} tiene una desviación del ${progressDeviation.toFixed(1)}% (Gasto > Avance Físico).`,
+            `La obra ${p.name} tiene una desviación del ${progressDeviation.toFixed(1)}% (umbral ${physicalFinancialDeviationThreshold}%).`,
             'project'
           );
           notifiedItems[projectId] = true;
@@ -562,7 +674,7 @@ export default function Dashboard() {
     if (hasNewNotifications) {
       localStorage.setItem(notifiedKey, JSON.stringify(notifiedItems));
     }
-  }, [projects, subcontracts, loading]);
+  }, [projects, subcontracts, loading, physicalFinancialDeviationThreshold]);
 
   const executionProjects = projects.filter(p => p.status === 'In Progress' || p.status === 'Active');
   const evaluationProjects = projects.filter(p => isEvaluationStatus(p.status));
@@ -730,8 +842,30 @@ export default function Dashboard() {
     if (p.status !== 'In Progress') return false;
     const financialProgress = p.budget > 0 ? (p.spent / p.budget) * 100 : 0;
     const progressDeviation = financialProgress - (p.physicalProgress || 0);
-    return progressDeviation > 15;
+    return progressDeviation > physicalFinancialDeviationThreshold;
   });
+
+  const physicalFinancialGapRanking = useMemo(() => {
+    return projects
+      .filter((project: any) => project.status === 'In Progress' || project.status === 'Active')
+      .map((project: any) => {
+        const physicalProgress = clampPercent(project.physicalProgress || 0);
+        const financialProgress = getFinancialProgress(project);
+        const gap = Number((financialProgress - physicalProgress).toFixed(1));
+        return {
+          projectId: project.id,
+          projectName: project.name,
+          shortName: String(project.name || '').length > 22 ? `${String(project.name).slice(0, 21)}...` : String(project.name || 'Proyecto'),
+          physicalProgress,
+          financialProgress,
+          gap,
+          recommendation: getMitigationSuggestions(gap)[0] || 'Revisar control de ejecución y flujo de caja de obra.',
+        };
+      })
+      .filter((row) => row.gap > 0)
+      .sort((left, right) => right.gap - left.gap)
+      .slice(0, 6);
+  }, [projects]);
 
   const inactiveProjects = projects.filter(p => {
     if (p.status === 'Completed') return false;
@@ -859,6 +993,447 @@ export default function Dashboard() {
     { name: 'Gastos', value: financialSummary.totalExpense, color: '#ef4444' },
   ].filter((item) => item.value > 0);
 
+  const materialPriceSignals = useMemo(() => {
+    return [...inventory]
+      .filter((item: any) => Number(item.unitPrice || 0) > 0)
+      .sort((left: any, right: any) => Number(right.unitPrice || 0) - Number(left.unitPrice || 0))
+      .slice(0, 5)
+      .map((item: any) => {
+        const minStock = Number(item.minStock || 0);
+        const stock = Number(item.stock || 0);
+        const critical = minStock > 0 && stock <= minStock;
+        return {
+          id: item.id,
+          name: item.name,
+          unitPrice: Number(item.unitPrice || 0),
+          stock,
+          minStock,
+          critical,
+        };
+      });
+  }, [inventory]);
+
+  const materialBudgetBaseline = useMemo(() => {
+    const baseline: Record<string, { name: string; weightedUnitPrice: number; sampleCount: number }> = {};
+
+    Object.values(portfolioBudgetItemsByProject).forEach((items) => {
+      (items || []).forEach((item: any) => {
+        const rowQty = Number(item?.quantity || 0);
+        const materials = Array.isArray(item?.materials) ? item.materials : [];
+
+        materials.forEach((material: any) => {
+          const materialName = String(material?.name || '').trim();
+          const expectedUnitPrice = Number(material?.unitPrice || 0);
+          const materialQtyPerItem = Number(material?.quantity || 0);
+          if (!materialName || expectedUnitPrice <= 0 || materialQtyPerItem <= 0 || rowQty <= 0) return;
+
+          const key = materialName.toLowerCase();
+          const weight = materialQtyPerItem * rowQty;
+          if (!baseline[key]) {
+            baseline[key] = { name: materialName, weightedUnitPrice: 0, sampleCount: 0 };
+          }
+
+          baseline[key].weightedUnitPrice += expectedUnitPrice * weight;
+          baseline[key].sampleCount += weight;
+        });
+      });
+    });
+
+    Object.keys(baseline).forEach((key) => {
+      const entry = baseline[key];
+      if (entry.sampleCount > 0) {
+        entry.weightedUnitPrice = entry.weightedUnitPrice / entry.sampleCount;
+      }
+    });
+
+    return baseline;
+  }, [portfolioBudgetItemsByProject]);
+
+  const recentMaterialPriceHistory = useMemo(() => {
+    const validOrders = purchaseOrders
+      .filter((order: any) => Number(order?.quantity || 0) > 0 && Number(order?.estimatedCost || 0) > 0)
+      .map((order: any) => {
+        const quantity = Number(order.quantity || 0);
+        const totalCost = Number(order.estimatedCost || 0);
+        const unitPrice = quantity > 0 ? totalCost / quantity : 0;
+        const dateValue = String(order.datePaid || order.dateReceived || order.date || '');
+        return {
+          materialName: String(order.materialName || 'Material').trim(),
+          unitPrice,
+          dateValue,
+          timestamp: Date.parse(dateValue),
+        };
+      })
+      .filter((item: any) => item.materialName && item.unitPrice > 0 && Number.isFinite(item.timestamp));
+
+    const byMaterial = validOrders.reduce((acc: Record<string, any[]>, item: any) => {
+      const key = item.materialName.toLowerCase();
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(item);
+      return acc;
+    }, {});
+
+    const topMaterialKey = Object.keys(byMaterial)
+      .sort((left, right) => byMaterial[right].length - byMaterial[left].length)[0];
+
+    if (!topMaterialKey) {
+      return {
+        materialName: '',
+        points: [] as Array<{ dateLabel: string; unitPrice: number }>,
+        weeklyChangePct: 0,
+        monthlyChangePct: 0,
+      };
+    }
+
+    const pointsRaw = [...byMaterial[topMaterialKey]]
+      .sort((left, right) => left.timestamp - right.timestamp)
+      .slice(-10);
+
+    const points = pointsRaw.map((item) => ({
+      dateLabel: formatDateFns(new Date(item.timestamp), 'dd/MM'),
+      unitPrice: Number(item.unitPrice.toFixed(2)),
+    }));
+
+    const latest = pointsRaw[pointsRaw.length - 1]?.unitPrice || 0;
+    const weeklyBaseline = pointsRaw[Math.max(0, pointsRaw.length - 4)]?.unitPrice || latest;
+    const monthlyBaseline = pointsRaw[0]?.unitPrice || latest;
+
+    const weeklyChangePct = weeklyBaseline > 0 ? ((latest - weeklyBaseline) / weeklyBaseline) * 100 : 0;
+    const monthlyChangePct = monthlyBaseline > 0 ? ((latest - monthlyBaseline) / monthlyBaseline) * 100 : 0;
+
+    return {
+      materialName: byMaterial[topMaterialKey][0]?.materialName || '',
+      points,
+      weeklyChangePct: Number(weeklyChangePct.toFixed(1)),
+      monthlyChangePct: Number(monthlyChangePct.toFixed(1)),
+    };
+  }, [purchaseOrders]);
+
+  const materialDeviationAlerts = useMemo(() => {
+    return inventory
+      .map((item: any) => {
+        const key = String(item?.name || '').toLowerCase();
+        const expected = Number(materialBudgetBaseline[key]?.weightedUnitPrice || 0);
+        const current = Number(item?.unitPrice || 0);
+        if (expected <= 0 || current <= 0) return null;
+
+        const deviationPct = ((current - expected) / expected) * 100;
+        if (Math.abs(deviationPct) < 12) return null;
+
+        return {
+          id: item.id,
+          name: item.name,
+          expected,
+          current,
+          deviationPct: Number(deviationPct.toFixed(1)),
+          severity: deviationPct >= 25 ? 'high' : 'medium',
+        };
+      })
+      .filter(Boolean)
+      .sort((left: any, right: any) => Math.abs(right.deviationPct) - Math.abs(left.deviationPct))
+      .slice(0, 6) as Array<{
+        id: string;
+        name: string;
+        expected: number;
+        current: number;
+        deviationPct: number;
+        severity: 'high' | 'medium';
+      }>;
+  }, [inventory, materialBudgetBaseline]);
+
+  const projectedCostOverrunByProject = useMemo(() => {
+    const rows = projects
+      .map((project: any) => {
+        const budgetRows = portfolioBudgetItemsByProject[project.id] || [];
+        let projectedOverrun = 0;
+
+        budgetRows.forEach((row: any) => {
+          const rowQty = Number(row?.quantity || 0);
+          const materials = Array.isArray(row?.materials) ? row.materials : [];
+
+          materials.forEach((material: any) => {
+            const nameKey = String(material?.name || '').toLowerCase();
+            const expectedPrice = Number(material?.unitPrice || 0);
+            const inventoryPrice = Number(
+              inventory.find((inv: any) => String(inv?.name || '').toLowerCase() === nameKey)?.unitPrice || 0
+            );
+            const currentInventoryPrice = inventoryPrice * (1 + (inflationScenarioPct / 100));
+            const plannedQty = Number(material?.quantity || 0) * rowQty;
+            if (expectedPrice <= 0 || currentInventoryPrice <= 0 || plannedQty <= 0) return;
+
+            const delta = currentInventoryPrice - expectedPrice;
+            if (delta > 0) {
+              projectedOverrun += delta * plannedQty;
+            }
+          });
+        });
+
+        const projectBudget = Number(project?.budget || 0);
+        const overrunPctBudget = projectBudget > 0 ? (projectedOverrun / projectBudget) * 100 : 0;
+
+        return {
+          projectId: project.id,
+          projectName: project.name,
+          projectedOverrun,
+          overrunPctBudget: Number(overrunPctBudget.toFixed(2)),
+          recommendation:
+            overrunPctBudget >= 8
+              ? 'Cerrar compras anticipadas y renegociar proveedores críticos de inmediato.'
+              : overrunPctBudget >= 3
+                ? 'Programar compras por lote y revisar alternativas de marca/proveedor.'
+                : 'Mantener monitoreo quincenal de precios para proteger margen.',
+        };
+      })
+      .filter((row) => row.projectedOverrun > 0)
+      .sort((left, right) => right.projectedOverrun - left.projectedOverrun)
+      .slice(0, 5);
+
+    return rows;
+  }, [inflationScenarioPct, inventory, portfolioBudgetItemsByProject, projects]);
+
+  const providerVolatilityRanking = useMemo(() => {
+    const normalized = purchaseOrders
+      .filter((order: any) => Number(order?.quantity || 0) > 0 && Number(order?.estimatedCost || 0) > 0)
+      .map((order: any) => ({
+        supplierName: String(order?.supplier || 'Proveedor sin nombre').trim(),
+        materialName: String(order?.materialName || 'Material').trim(),
+        unitPrice: Number(order.estimatedCost || 0) / Math.max(1, Number(order.quantity || 1)),
+        timestamp: Date.parse(String(order.datePaid || order.dateReceived || order.date || '')),
+      }))
+      .filter((item: any) => Number.isFinite(item.timestamp) && item.unitPrice > 0);
+
+    const bySupplier = normalized.reduce((acc: Record<string, any[]>, row: any) => {
+      const key = row.supplierName;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(row);
+      return acc;
+    }, {});
+
+    return Object.entries(bySupplier)
+      .map(([supplierName, rows]) => {
+        const byMaterial = (rows as any[]).reduce((acc: Record<string, any[]>, row: any) => {
+          const materialKey = row.materialName.toLowerCase();
+          if (!acc[materialKey]) acc[materialKey] = [];
+          acc[materialKey].push(row);
+          return acc;
+        }, {});
+
+        let totalAbsChangePct = 0;
+        let transitions = 0;
+
+        Object.values(byMaterial).forEach((materialRows: any[]) => {
+          const sorted = [...materialRows].sort((left, right) => left.timestamp - right.timestamp);
+          for (let index = 1; index < sorted.length; index += 1) {
+            const previous = Number(sorted[index - 1].unitPrice || 0);
+            const current = Number(sorted[index].unitPrice || 0);
+            if (previous <= 0 || current <= 0) continue;
+            totalAbsChangePct += Math.abs(((current - previous) / previous) * 100);
+            transitions += 1;
+          }
+        });
+
+        const volatilityPct = transitions > 0 ? totalAbsChangePct / transitions : 0;
+        return {
+          supplierName,
+          volatilityPct: Number(volatilityPct.toFixed(1)),
+          records: (rows as any[]).length,
+          risk: volatilityPct >= 18 ? 'alto' : volatilityPct >= 10 ? 'medio' : 'bajo',
+        };
+      })
+      .filter((row) => row.records >= 2)
+      .sort((left, right) => right.volatilityPct - left.volatilityPct)
+      .slice(0, 5);
+  }, [purchaseOrders]);
+
+  const projectMarginRisk = useMemo(() => {
+    return projects
+      .map((project: any) => {
+        const budget = Number(project?.budget || 0);
+        const spent = Number(project?.spent || 0);
+        const overrun = Number(
+          projectedCostOverrunByProject.find((item) => item.projectId === project.id)?.projectedOverrun || 0
+        );
+
+        const remainingBudget = budget - spent - overrun;
+        const remainingPct = budget > 0 ? (remainingBudget / budget) * 100 : 0;
+
+        let risk: 'verde' | 'amarillo' | 'rojo' = 'verde';
+        if (remainingPct < 5) risk = 'rojo';
+        else if (remainingPct < 12) risk = 'amarillo';
+
+        return {
+          projectId: project.id,
+          projectName: project.name,
+          remainingBudget,
+          remainingPct: Number(remainingPct.toFixed(2)),
+          risk,
+        };
+      })
+      .sort((left, right) => left.remainingPct - right.remainingPct)
+      .slice(0, 6);
+  }, [projects, projectedCostOverrunByProject]);
+
+  const filteredProviderVolatilityRanking = useMemo(() => {
+    if (selectedProviderVolatility === 'all') return providerVolatilityRanking;
+    return providerVolatilityRanking.filter((item) => item.supplierName === selectedProviderVolatility);
+  }, [providerVolatilityRanking, selectedProviderVolatility]);
+
+  const filteredProjectMarginRisk = useMemo(() => {
+    if (selectedMarginProjectId === 'all') return projectMarginRisk;
+    return projectMarginRisk.filter((project) => project.projectId === selectedMarginProjectId);
+  }, [projectMarginRisk, selectedMarginProjectId]);
+
+  useEffect(() => {
+    if (loading || !recentMaterialPriceHistory.materialName || recentMaterialPriceHistory.points.length < 2) return;
+
+    const notifiedKey = `material_price_spike_${new Date().toISOString().slice(0, 10)}`;
+    const notifiedItems = JSON.parse(localStorage.getItem(notifiedKey) || '{}');
+    const materialKey = recentMaterialPriceHistory.materialName.toLowerCase();
+
+    if (
+      recentMaterialPriceHistory.weeklyChangePct >= materialWeeklySpikeThreshold &&
+      !notifiedItems[materialKey]
+    ) {
+      void sendNotification(
+        'Alerta de Precio de Material',
+        `${recentMaterialPriceHistory.materialName} subió ${recentMaterialPriceHistory.weeklyChangePct}% en la última semana (umbral ${materialWeeklySpikeThreshold}%). Recomendado: anticipar compra o renegociar proveedor.`,
+        'inventory'
+      );
+
+      notifiedItems[materialKey] = true;
+      localStorage.setItem(notifiedKey, JSON.stringify(notifiedItems));
+    }
+  }, [loading, materialWeeklySpikeThreshold, recentMaterialPriceHistory]);
+
+  useEffect(() => {
+    if (loading) return;
+
+    const runScheduledAlerts = () => {
+      const now = new Date();
+      const hour = now.getHours();
+      const slot = hour === 8 ? '08' : hour === 16 ? '16' : null;
+      if (!slot) return;
+
+      const dateKey = now.toISOString().slice(0, 10);
+      const sentKey = `scheduled_cost_intel_alert_${dateKey}_${slot}`;
+      if (localStorage.getItem(sentKey) === '1') return;
+
+      const topOverrun = projectedCostOverrunByProject[0];
+      const redProjects = projectMarginRisk.filter((item) => item.risk === 'rojo').length;
+      const volatileSupplier = providerVolatilityRanking[0];
+
+      const bodyParts: string[] = [];
+      if (topOverrun) {
+        bodyParts.push(`Proyecto crítico: ${topOverrun.projectName} (${formatCurrency(topOverrun.projectedOverrun)}).`);
+      }
+      if (redProjects > 0) {
+        bodyParts.push(`Proyectos en rojo: ${redProjects}.`);
+      }
+      if (volatileSupplier) {
+        bodyParts.push(`Proveedor más volátil: ${volatileSupplier.supplierName} (${volatileSupplier.volatilityPct}%).`);
+      }
+
+      if (bodyParts.length > 0) {
+        void sendNotification(
+          `Resumen programado de costos (${slot}:00)`,
+          bodyParts.join(' '),
+          'project'
+        );
+      }
+
+      localStorage.setItem(sentKey, '1');
+    };
+
+    runScheduledAlerts();
+    const intervalId = window.setInterval(runScheduledAlerts, 60 * 1000);
+    return () => window.clearInterval(intervalId);
+  }, [loading, projectMarginRisk, projectedCostOverrunByProject, providerVolatilityRanking]);
+
+  const handleExportMaterialIntelligenceReport = () => {
+    const doc = new jsPDF() as any;
+    const startY = drawReportHeader(doc, 'INTELIGENCIA DE COSTOS DE MATERIALES', {
+      subtitle: `Escenario de inflación aplicado: ${inflationScenarioPct}%`,
+      dateText: `Fecha: ${new Date().toLocaleDateString('es-GT')}`,
+    });
+
+    const trendRows = recentMaterialPriceHistory.points.length
+      ? recentMaterialPriceHistory.points.map((point) => [
+          point.dateLabel,
+          formatCurrency(point.unitPrice),
+        ])
+      : [['Sin datos', '-', '-']];
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(11);
+    doc.text('1. Tendencia de precio unitario', 14, startY + 6);
+
+    autoTable(doc, {
+      startY: startY + 10,
+      head: [['Fecha', 'Precio unitario']],
+      body: trendRows,
+      theme: 'striped',
+      headStyles: { fillColor: [15, 118, 110] },
+      styles: { fontSize: 9 },
+    });
+
+    const deviationRows = materialDeviationAlerts.length
+      ? materialDeviationAlerts.map((alert) => [
+          alert.name,
+          formatCurrency(alert.expected),
+          formatCurrency(alert.current),
+          `${alert.deviationPct > 0 ? '+' : ''}${alert.deviationPct}%`,
+        ])
+      : [['Sin alertas relevantes', '-', '-', '-']];
+
+    const afterTrendY = (doc as any).lastAutoTable.finalY + 8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('2. Desvíos vs presupuesto', 14, afterTrendY);
+
+    autoTable(doc, {
+      startY: afterTrendY + 4,
+      head: [['Material', 'Presupuesto', 'Actual', 'Desvío']],
+      body: deviationRows,
+      theme: 'striped',
+      headStyles: { fillColor: [220, 38, 38] },
+      styles: { fontSize: 9 },
+    });
+
+    const overrunRows = projectedCostOverrunByProject.length
+      ? projectedCostOverrunByProject.map((item) => [
+          item.projectName,
+          formatCurrency(item.projectedOverrun),
+          `${item.overrunPctBudget.toFixed(2)}%`,
+          item.recommendation,
+        ])
+      : [['Sin sobrecosto proyectado', '-', '-', '-']];
+
+    const afterDeviationY = (doc as any).lastAutoTable.finalY + 8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('3. Proyección de sobrecosto por proyecto', 14, afterDeviationY);
+
+    autoTable(doc, {
+      startY: afterDeviationY + 4,
+      head: [['Proyecto', 'Sobre-costo', '% Presupuesto', 'Recomendación']],
+      body: overrunRows,
+      theme: 'striped',
+      headStyles: { fillColor: [217, 119, 6] },
+      styles: { fontSize: 8.5, cellPadding: 2.2 },
+      columnStyles: {
+        0: { cellWidth: 42 },
+        1: { cellWidth: 32 },
+        2: { cellWidth: 26 },
+        3: { cellWidth: 86 },
+      },
+    });
+
+    const fileName = `Inteligencia_Materiales_${new Date().toISOString().slice(0, 10)}.pdf`;
+    doc.save(fileName);
+    toast.success('Reporte gerencial exportado');
+  };
+
   return (
     <div className="space-y-6 lg:space-y-5 min-w-0 overflow-x-hidden lg:h-[calc(100dvh-9.5rem)] lg:overflow-y-auto lg:pr-2 custom-scrollbar">
       <header>
@@ -907,7 +1482,7 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+      <div id="executive-control-center" ref={executiveControlRef} className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div>
             <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Semáforo Ejecutivo IA</h3>
@@ -979,6 +1554,278 @@ export default function Dashboard() {
                   <li key={idx} className="text-xs text-slate-700 dark:text-slate-200">• {strength}</li>
                 ))}
               </ul>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Brecha físico-financiera crítica</p>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">Umbral {physicalFinancialDeviationThreshold}%</span>
+          </div>
+          {physicalFinancialGapRanking.length === 0 ? (
+            <p className="text-xs font-semibold text-slate-500">Sin brechas positivas relevantes en obras activas.</p>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div className="h-44">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
+                  <BarChart data={physicalFinancialGapRanking} layout="vertical" margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} unit="%" />
+                    <YAxis type="category" dataKey="shortName" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} width={92} />
+                    <Tooltip formatter={(value: number) => [`+${value.toFixed(1)}%`, 'Brecha']} />
+                    <Bar dataKey="gap" fill="#f97316" radius={[0, 8, 8, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="space-y-2">
+                {physicalFinancialGapRanking.slice(0, 3).map((row) => (
+                  <div key={row.projectId} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
+                    <p className="text-xs font-black text-slate-900 dark:text-white">{row.projectName}</p>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                      Físico {row.physicalProgress.toFixed(1)}% • Financiero {row.financialProgress.toFixed(1)}% • <span className="font-black text-rose-600">Brecha +{row.gap.toFixed(1)}%</span>
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-1">{row.recommendation}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Vigilancia de Precios de Materiales</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Materiales de mayor impacto en costo unitario para presupuestar y controlar compras</p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => navigate('/inventory')}
+              className="px-3 py-1.5 rounded-full bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all"
+            >
+              Abrir Inventario
+            </button>
+            <button
+              type="button"
+              onClick={handleExportMaterialIntelligenceReport}
+              className="px-3 py-1.5 rounded-full bg-primary text-white text-[10px] font-black uppercase tracking-widest hover:bg-primary-hover transition-all"
+            >
+              Exportar PDF
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Escenario What-if inflación</p>
+          {[0, 5, 10, 15].map((pct) => (
+            <button
+              key={pct}
+              type="button"
+              onClick={() => setInflationScenarioPct(pct)}
+              className={cn(
+                'px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all',
+                inflationScenarioPct === pct
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'
+              )}
+            >
+              {pct}%
+            </button>
+          ))}
+          <span className="text-[10px] text-slate-500">Aplicado sobre precio actual de inventario para proyección.</span>
+          <span className="text-[10px] text-slate-500">Umbral alerta semanal actual: {materialWeeklySpikeThreshold}%</span>
+        </div>
+
+        {materialPriceSignals.length === 0 ? (
+          <p className="text-xs font-semibold text-slate-500">Aún no hay materiales con precio unitario registrado.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+            {materialPriceSignals.map((item) => (
+              <div
+                key={item.id}
+                className={cn(
+                  'rounded-2xl border p-3',
+                  item.critical
+                    ? 'border-rose-200 bg-rose-50/70 dark:border-rose-500/40 dark:bg-rose-500/10'
+                    : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/40'
+                )}
+              >
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 line-clamp-2">{item.name}</p>
+                <p className="text-lg font-black text-slate-900 dark:text-white mt-1">{formatCurrency(item.unitPrice)}</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
+                  Stock: <span className="font-black">{item.stock}</span>
+                </p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                  Mínimo: <span className="font-black">{item.minStock}</span>
+                </p>
+                <p className={cn(
+                  'text-[10px] font-black uppercase tracking-wider mt-2',
+                  item.critical ? 'text-rose-600' : 'text-emerald-600'
+                )}>
+                  {item.critical ? 'Priorizar compra' : 'Stock aceptable'}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2">
+          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Historial de precio (compras)</p>
+              {recentMaterialPriceHistory.materialName && (
+                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{recentMaterialPriceHistory.materialName}</span>
+              )}
+            </div>
+
+            {recentMaterialPriceHistory.points.length >= 2 ? (
+              <>
+                <div className="h-44">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
+                    <LineChart data={recentMaterialPriceHistory.points} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="dateLabel" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value}`} />
+                      <Tooltip formatter={(value: number) => [formatCurrency(value), 'Precio unitario']} />
+                      <Line type="monotone" dataKey="unitPrice" stroke="#0f766e" strokeWidth={3} dot={{ r: 2 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-2 py-1.5">
+                    <p className="text-[9px] uppercase font-black tracking-wider text-slate-500">Variación semanal</p>
+                    <p className={cn('text-xs font-black', recentMaterialPriceHistory.weeklyChangePct > 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                      {recentMaterialPriceHistory.weeklyChangePct > 0 ? '+' : ''}{recentMaterialPriceHistory.weeklyChangePct}%
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-2 py-1.5">
+                    <p className="text-[9px] uppercase font-black tracking-wider text-slate-500">Variación mensual</p>
+                    <p className={cn('text-xs font-black', recentMaterialPriceHistory.monthlyChangePct > 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                      {recentMaterialPriceHistory.monthlyChangePct > 0 ? '+' : ''}{recentMaterialPriceHistory.monthlyChangePct}%
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-slate-500">No hay suficiente historial de órdenes de compra para generar tendencia.</p>
+            )}
+          </div>
+
+          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Desvío automático vs presupuesto</p>
+            {materialDeviationAlerts.length === 0 ? (
+              <p className="text-xs text-slate-500">Sin desvíos relevantes por ahora (umbral ±12%).</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {materialDeviationAlerts.slice(0, 4).map((alert) => (
+                  <li key={alert.id} className="text-xs text-slate-700 dark:text-slate-200">
+                    <span className={cn('font-black', alert.deviationPct > 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                      {alert.name}: {alert.deviationPct > 0 ? '+' : ''}{alert.deviationPct}%
+                    </span>{' '}
+                    (Presupuesto {formatCurrency(alert.expected)} vs actual {formatCurrency(alert.current)})
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Proyección de sobrecosto por proyecto</p>
+          {projectedCostOverrunByProject.length === 0 ? (
+            <p className="text-xs text-slate-500">No se detecta sobrecosto proyectado con los precios actuales.</p>
+          ) : (
+            <div className="space-y-2">
+              {projectedCostOverrunByProject.slice(0, 3).map((project) => (
+                <div key={project.projectId} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
+                  <p className="text-xs font-black text-slate-900 dark:text-white">{project.projectName}</p>
+                  <p className="text-xs text-rose-600 font-black">Sobre-costo proyectado: {formatCurrency(project.projectedOverrun)} ({project.overrunPctBudget.toFixed(2)}% del presupuesto)</p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">{project.recommendation}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Volatilidad de precios por proveedor</p>
+              <select
+                value={selectedProviderVolatility}
+                onChange={(e) => setSelectedProviderVolatility(e.target.value)}
+                className="px-2 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700"
+              >
+                <option value="all">Todos</option>
+                {providerVolatilityRanking.map((item) => (
+                  <option key={item.supplierName} value={item.supplierName}>{item.supplierName}</option>
+                ))}
+              </select>
+            </div>
+            {filteredProviderVolatilityRanking.length === 0 ? (
+              <p className="text-xs text-slate-500">Sin suficientes órdenes para calcular volatilidad por proveedor.</p>
+            ) : (
+              <div className="space-y-2">
+                {filteredProviderVolatilityRanking.map((item) => (
+                  <div key={item.supplierName} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
+                    <p className="text-xs font-black text-slate-900 dark:text-white">{item.supplierName}</p>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                      Volatilidad promedio: <span className="font-black">{item.volatilityPct}%</span> • registros: {item.records}
+                    </p>
+                    <p className={cn(
+                      'text-[10px] font-black uppercase tracking-wider mt-1',
+                      item.risk === 'alto' && 'text-rose-600',
+                      item.risk === 'medio' && 'text-amber-600',
+                      item.risk === 'bajo' && 'text-emerald-600'
+                    )}>
+                      Riesgo {item.risk}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Semáforo de margen por proyecto</p>
+              <select
+                value={selectedMarginProjectId}
+                onChange={(e) => setSelectedMarginProjectId(e.target.value)}
+                className="px-2 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700"
+              >
+                <option value="all">Todos</option>
+                {projectMarginRisk.map((project) => (
+                  <option key={project.projectId} value={project.projectId}>{project.projectName}</option>
+                ))}
+              </select>
+            </div>
+            {filteredProjectMarginRisk.length === 0 ? (
+              <p className="text-xs text-slate-500">Sin proyectos para evaluar margen.</p>
+            ) : (
+              <div className="space-y-2">
+                {filteredProjectMarginRisk.map((project) => (
+                  <div key={project.projectId} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-black text-slate-900 dark:text-white">{project.projectName}</p>
+                      <span className={cn(
+                        'px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border',
+                        project.risk === 'verde' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                        project.risk === 'amarillo' && 'bg-amber-50 text-amber-700 border-amber-200',
+                        project.risk === 'rojo' && 'bg-rose-50 text-rose-700 border-rose-200'
+                      )}>
+                        {project.risk}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
+                      Margen disponible: <span className="font-black">{formatCurrency(project.remainingBudget)}</span> ({project.remainingPct.toFixed(2)}% del presupuesto)
+                    </p>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -1598,6 +2445,7 @@ export default function Dashboard() {
               {riskProjects.length > 0 && (
                 <div className="p-4 bg-amber-50 dark:bg-amber-500/10 rounded-xl border border-amber-100 dark:border-amber-500/20">
                   <p className="text-sm font-bold text-amber-700 dark:text-amber-400 mb-2">Desviación Financiera ({riskProjects.length})</p>
+                  <p className="text-[10px] uppercase tracking-wider font-black text-amber-600 dark:text-amber-400 mb-2">Umbral activo: {physicalFinancialDeviationThreshold}%</p>
                   <div className="space-y-2">
                     {riskProjects.slice(0, 3).map(p => {
                       const deviation = (p.spent / p.budget) * 100 - (p.physicalProgress || 0);

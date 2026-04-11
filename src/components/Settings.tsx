@@ -6,8 +6,36 @@ import { logAction } from '../lib/audit';
 import { getOfflineQueueStatus, onOfflineQueueStatusChange, retryOfflineSync } from '../lib/api';
 import { cn } from '../lib/utils';
 import { getSavedStartupSound, playStartupSound, STARTUP_SOUND_OPTIONS, STARTUP_SOUND_STORAGE_KEY, type StartupSoundId } from '../lib/startupSound';
+import { auth } from '../lib/authStorageClient';
+import { getThresholdSettings, saveThresholdSettings } from '../lib/settingsApi';
+import { getSchedulerStatus, type SchedulerStatusResponse } from '../lib/schedulerApi';
 
 import { useTheme, THEME_COLORS } from '../contexts/ThemeContext';
+
+const MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY = 'material_weekly_spike_threshold_pct';
+const MATERIAL_WEEKLY_SPIKE_THRESHOLD_AUDIT_STORAGE_KEY = 'material_weekly_spike_threshold_audit_v1';
+const PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY = 'physical_financial_deviation_threshold_pct';
+
+type MaterialThresholdAuditEntry = {
+  value: number;
+  changedAt: string;
+  changedBy: string;
+};
+
+const loadThresholdAuditHistory = (): MaterialThresholdAuditEntry[] => {
+  try {
+    const raw = localStorage.getItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_AUDIT_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as MaterialThresholdAuditEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && Number.isFinite(Number(item.value)) && item.changedAt && item.changedBy)
+      .sort((left, right) => new Date(right.changedAt).getTime() - new Date(left.changedAt).getTime())
+      .slice(0, 12);
+  } catch {
+    return [];
+  }
+};
 
 export default function Settings() {
   const { currentTheme, setTheme } = useTheme();
@@ -20,9 +48,23 @@ export default function Settings() {
   });
   const [startupSound, setStartupSound] = useState<StartupSoundId>(() => getSavedStartupSound());
   const [taxRate, setTaxRate] = useState(12);
+  const [materialSpikeThreshold, setMaterialSpikeThreshold] = useState<number>(() => {
+    const saved = Number(localStorage.getItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY) || 10);
+    if (!Number.isFinite(saved)) return 10;
+    return Math.max(3, Math.min(40, saved));
+  });
+  const [materialThresholdAuditHistory, setMaterialThresholdAuditHistory] = useState<MaterialThresholdAuditEntry[]>(() => loadThresholdAuditHistory());
+  const [physicalFinancialDeviationThreshold, setPhysicalFinancialDeviationThreshold] = useState<number>(() => {
+    const saved = Number(localStorage.getItem(PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY) || 15);
+    if (!Number.isFinite(saved)) return 15;
+    return Math.max(5, Math.min(40, saved));
+  });
   const [queuePending, setQueuePending] = useState(0);
   const [queueSyncing, setQueueSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [schedulerSnapshot, setSchedulerSnapshot] = useState<SchedulerStatusResponse | null>(null);
+  const [schedulerLoading, setSchedulerLoading] = useState(true);
+  const [schedulerRefreshTick, setSchedulerRefreshTick] = useState(0);
 
   useEffect(() => {
     const initial = getOfflineQueueStatus();
@@ -37,6 +79,118 @@ export default function Settings() {
     });
   }, []);
 
+  useEffect(() => {
+    let isCancelled = false;
+
+    (async () => {
+      try {
+        const remote = await getThresholdSettings();
+        if (isCancelled) return;
+
+        setMaterialSpikeThreshold(remote.materialWeeklySpikeThresholdPct);
+        setPhysicalFinancialDeviationThreshold(remote.physicalFinancialDeviationThresholdPct);
+
+        localStorage.setItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY, String(remote.materialWeeklySpikeThresholdPct));
+        localStorage.setItem(PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY, String(remote.physicalFinancialDeviationThresholdPct));
+      } catch {
+        // Keep local values when API is unavailable.
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [schedulerRefreshTick]);
+
+  const schedulerHealthStatus = (() => {
+    if (schedulerLoading) return 'neutral';
+    const scheduler = schedulerSnapshot?.scheduler;
+    if (!scheduler?.enabled) return 'red';
+
+    const nowMs = Date.now();
+    const lastSuccessMs = scheduler.lastSuccessAt ? new Date(scheduler.lastSuccessAt).getTime() : 0;
+    const hoursWithoutSuccess = lastSuccessMs > 0 ? (nowMs - lastSuccessMs) / (1000 * 60 * 60) : Infinity;
+
+    if (hoursWithoutSuccess >= 8) return 'red';
+    if (hoursWithoutSuccess >= 2) return 'yellow';
+
+    const failures = Number(scheduler.failures || 0);
+    const lastError = String(scheduler.lastError || '').trim();
+    if (failures > 0 && lastError) return 'yellow';
+    return 'green';
+  })();
+
+  const schedulerHealthClass =
+    schedulerHealthStatus === 'green'
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      : schedulerHealthStatus === 'yellow'
+        ? 'bg-amber-50 text-amber-700 border-amber-200'
+        : schedulerHealthStatus === 'red'
+          ? 'bg-rose-50 text-rose-700 border-rose-200'
+          : 'bg-slate-50 text-slate-600 border-slate-200';
+
+  const schedulerHealthMessage =
+    schedulerHealthStatus === 'green'
+      ? 'Operación normal'
+      : schedulerHealthStatus === 'yellow'
+        ? 'Atención: corrida atrasada o fallo reciente'
+        : schedulerHealthStatus === 'red'
+          ? 'Crítico: scheduler inactivo o sin ejecución exitosa >= 8h'
+          : 'Consultando estado...';
+
+  const schedulerLastRunAgo = (() => {
+    const iso = schedulerSnapshot?.scheduler?.lastRunAt;
+    if (!iso) return 'Sin registros';
+
+    const diffMs = Date.now() - new Date(iso).getTime();
+    if (!Number.isFinite(diffMs) || diffMs < 0) return 'N/A';
+
+    const minutes = Math.floor(diffMs / (1000 * 60));
+    if (minutes < 1) return 'hace instantes';
+    if (minutes < 60) return `hace ${minutes} min`;
+
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `hace ${hours} h`;
+
+    const days = Math.floor(hours / 24);
+    return `hace ${days} d`;
+  })();
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const refreshSchedulerStatus = async () => {
+      try {
+        const snapshot = await getSchedulerStatus();
+        if (isCancelled) return;
+        setSchedulerSnapshot(snapshot);
+      } catch {
+        if (isCancelled) return;
+        setSchedulerSnapshot({
+          status: 'error',
+          scheduler: {
+            enabled: false,
+            reason: 'status-unavailable',
+          },
+        });
+      } finally {
+        if (!isCancelled) {
+          setSchedulerLoading(false);
+        }
+      }
+    };
+
+    void refreshSchedulerStatus();
+    const interval = window.setInterval(() => {
+      void refreshSchedulerStatus();
+    }, 60 * 1000);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const handleRetrySync = async () => {
     await retryOfflineSync();
     const refreshed = getOfflineQueueStatus();
@@ -47,10 +201,45 @@ export default function Settings() {
   };
 
   const handleSaveSettings = async () => {
+    const previousThreshold = Number(localStorage.getItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY) || 10);
+    const normalizedPreviousThreshold = Number.isFinite(previousThreshold)
+      ? Math.max(3, Math.min(40, previousThreshold))
+      : 10;
+
     setTheme(selectedTheme);
     localStorage.setItem('clock-format', clockFormat);
     localStorage.setItem(STARTUP_SOUND_STORAGE_KEY, startupSound);
+    localStorage.setItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY, String(materialSpikeThreshold));
+    localStorage.setItem(PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY, String(physicalFinancialDeviationThreshold));
+
+    try {
+      await saveThresholdSettings({
+        materialWeeklySpikeThresholdPct: materialSpikeThreshold,
+        physicalFinancialDeviationThresholdPct: physicalFinancialDeviationThreshold,
+      });
+    } catch {
+      // Keep working with local persistence if backend settings are not available.
+    }
+
+    if (normalizedPreviousThreshold !== materialSpikeThreshold) {
+      const user = auth.currentUser;
+      const changedBy = user?.email || user?.displayName || 'usuario.local@wmms';
+      const entry: MaterialThresholdAuditEntry = {
+        value: materialSpikeThreshold,
+        changedAt: new Date().toISOString(),
+        changedBy,
+      };
+
+      const nextHistory = [entry, ...materialThresholdAuditHistory]
+        .sort((left, right) => new Date(right.changedAt).getTime() - new Date(left.changedAt).getTime())
+        .slice(0, 12);
+      localStorage.setItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_AUDIT_STORAGE_KEY, JSON.stringify(nextHistory));
+      setMaterialThresholdAuditHistory(nextHistory);
+    }
+
     window.dispatchEvent(new Event('CLOCK_FORMAT_CHANGED'));
+    window.dispatchEvent(new Event('MATERIAL_ALERT_THRESHOLD_CHANGED'));
+    window.dispatchEvent(new Event('PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_CHANGED'));
     await logAction('Actualizar Configuración', 'Configuración', 'Se actualizó la configuración general del sistema', 'update');
     toast.success('Configuración guardada con éxito');
   };
@@ -262,6 +451,64 @@ export default function Settings() {
                 <option value="12h">12 horas (2:30 PM)</option>
               </select>
             </div>
+
+            <div className="space-y-2">
+              <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Umbral alerta precio material (semanal)
+              </label>
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 px-3 py-3">
+                <input
+                  type="range"
+                  min={3}
+                  max={40}
+                  step={1}
+                  value={materialSpikeThreshold}
+                  onChange={(e) => setMaterialSpikeThreshold(Number(e.target.value))}
+                  className="w-full accent-primary"
+                />
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200 mt-2">
+                  {materialSpikeThreshold}%
+                </p>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Historial: cambios de umbral, fecha y responsable.
+                </p>
+                {materialThresholdAuditHistory.length > 0 && (
+                  <div className="mt-2 max-h-28 overflow-y-auto pr-1 custom-scrollbar space-y-1">
+                    {materialThresholdAuditHistory.slice(0, 4).map((entry, index) => (
+                      <div key={`${entry.changedAt}_${index}`} className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1.5 bg-white dark:bg-slate-900/40">
+                        <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200">
+                          {entry.value}% • {new Date(entry.changedAt).toLocaleString('es-GT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="text-[10px] text-slate-500 truncate">{entry.changedBy}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Umbral desviación físico-financiera
+              </label>
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 px-3 py-3">
+                <input
+                  type="range"
+                  min={5}
+                  max={40}
+                  step={1}
+                  value={physicalFinancialDeviationThreshold}
+                  onChange={(e) => setPhysicalFinancialDeviationThreshold(Number(e.target.value))}
+                  className="w-full accent-primary"
+                />
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200 mt-2">
+                  {physicalFinancialDeviationThreshold}%
+                </p>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Se usa para alertas cuando gasto financiero supera el avance físico en ejecución.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -290,6 +537,67 @@ export default function Settings() {
             <p className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-[8px] sm:text-[10px]">Última Sincronización</p>
             <p className="text-slate-900 dark:text-white font-medium truncate">{new Date().toLocaleString()}</p>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-4 sm:p-8">
+        <div className="flex items-center gap-3 mb-4 sm:mb-6">
+          <div className="p-1.5 sm:p-2 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 rounded-lg">
+            <SettingsIcon size={16} className="sm:w-5 sm:h-5" />
+          </div>
+          <h2 className="text-sm sm:text-xl font-bold text-slate-900 dark:text-white">Salud del Scheduler</h2>
+          <span className={cn('ml-auto px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider', schedulerHealthClass)}>
+            {schedulerHealthStatus === 'green' ? 'verde' : schedulerHealthStatus === 'yellow' ? 'amarillo' : schedulerHealthStatus === 'red' ? 'rojo' : 'cargando'}
+          </span>
+        </div>
+        <p className="text-[11px] text-slate-500 mb-4">{schedulerHealthMessage}</p>
+
+        {schedulerLoading ? (
+          <p className="text-xs text-slate-500">Cargando estado del scheduler...</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Estado</p>
+              <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1">
+                {schedulerSnapshot?.scheduler?.enabled ? 'Activo' : 'Inactivo'}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-1">{schedulerSnapshot?.scheduler?.reason || 'operativo'}</p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Corridas / Alertas</p>
+              <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1">
+                {(schedulerSnapshot?.scheduler?.runs ?? 0)} / {(schedulerSnapshot?.scheduler?.alertsGenerated ?? 0)}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-1">saltos dedupe: {schedulerSnapshot?.scheduler?.dedupedSkips ?? 0}</p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Última Ejecución</p>
+              <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1 truncate">
+                {schedulerSnapshot?.scheduler?.lastRunAt
+                  ? new Date(schedulerSnapshot.scheduler.lastRunAt).toLocaleString()
+                  : 'Sin registros'}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-1">{schedulerLastRunAgo} • slot: {schedulerSnapshot?.scheduler?.lastSlot || 'N/A'}</p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400">Fallos</p>
+              <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mt-1">{schedulerSnapshot?.scheduler?.failures ?? 0}</p>
+              <p className="text-[10px] text-slate-500 mt-1 truncate">{schedulerSnapshot?.scheduler?.lastError || 'Sin errores recientes'}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setSchedulerRefreshTick((tick) => tick + 1)}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 text-white font-bold py-2.5 sm:py-3 px-6 sm:px-8 rounded-xl hover:bg-indigo-700 transition-all text-xs sm:text-sm"
+          >
+            Refrescar ahora
+          </button>
         </div>
       </div>
 

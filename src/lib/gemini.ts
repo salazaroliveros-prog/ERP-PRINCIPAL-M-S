@@ -305,11 +305,43 @@ const tools = {
 };
 
 export async function getAIResponse(message: string, history: { role: string, text: string }[]) {
+  const configuredProvider = String(import.meta.env.VITE_AI_PROVIDER || 'gemini').trim().toLowerCase();
+  const DIAGNOSTIC_PREFIX = '[AI_DIAGNOSTIC]';
+
+  if (configuredProvider === 'github-models' || configuredProvider === 'copilot') {
+    try {
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message,
+          history: history.slice(-12),
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({} as any));
+      if (!response.ok) {
+        const errorMessage = String((payload as any)?.error || response.statusText || 'Error en proveedor AI');
+        return `${DIAGNOSTIC_PREFIX} ${errorMessage}`;
+      }
+
+      const reply = String((payload as any)?.response || '').trim();
+      if (!reply) {
+        return `${DIAGNOSTIC_PREFIX} Respuesta vacia del proveedor AI.`;
+      }
+
+      return reply;
+    } catch (error: any) {
+      return `${DIAGNOSTIC_PREFIX} No se pudo conectar con /api/ai/chat: ${String(error?.message || error)}`;
+    }
+  }
+
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   const preferredModel = (import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash').trim();
   const fallbackModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
   const candidateModels = Array.from(new Set([preferredModel, ...fallbackModels]));
-  const DIAGNOSTIC_PREFIX = '[GEMINI_DIAGNOSTIC]';
 
   const isModelUnavailableError = (errorText: string) => {
     const messageLower = errorText.toLowerCase();
