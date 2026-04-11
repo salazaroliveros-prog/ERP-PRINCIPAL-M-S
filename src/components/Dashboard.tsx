@@ -313,6 +313,8 @@ export default function Dashboard() {
   const [ocrHistoryDateRange, setOcrHistoryDateRange] = useState<'7' | '30' | '90' | 'all'>('30');
   const [ocrHistorySupplierFilter, setOcrHistorySupplierFilter] = useState('');
   const [ocrHistoryInvoiceFilter, setOcrHistoryInvoiceFilter] = useState('');
+  const [ocrHistorySortBy, setOcrHistorySortBy] = useState<'date' | 'score' | 'amount'>('date');
+  const [ocrHistorySortDirection, setOcrHistorySortDirection] = useState<'asc' | 'desc'>('desc');
   const [ocrHistoryOffset, setOcrHistoryOffset] = useState(0);
   const [ocrHistoryHasMore, setOcrHistoryHasMore] = useState(false);
   const [isLoadingMoreOcrHistory, setIsLoadingMoreOcrHistory] = useState(false);
@@ -324,6 +326,11 @@ export default function Dashboard() {
     return window.innerWidth < MOBILE_CHART_BREAKPOINT;
   });
   const navigate = useNavigate();
+
+  const ocrHistoryPreferencesStorageKey = useMemo(() => {
+    const actor = auth.currentUser?.email || auth.currentUser?.displayName || 'default';
+    return `dashboard_ocr_history_preferences_${actor}`;
+  }, [auth.currentUser?.email, auth.currentUser?.displayName]);
 
   const updateChartPreference = (chartKey: DashboardChartKey, value: string) => {
     setChartPreferences((prev) => ({
@@ -358,6 +365,54 @@ export default function Dashboard() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ocrHistoryPreferencesStorageKey);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw);
+      if (typeof parsed?.projectFilter === 'string') setOcrHistoryProjectFilter(parsed.projectFilter);
+      if (parsed?.decisionFilter === 'all' || parsed?.decisionFilter === 'approved' || parsed?.decisionFilter === 'review' || parsed?.decisionFilter === 'rejected') {
+        setOcrHistoryDecisionFilter(parsed.decisionFilter);
+      }
+      if (parsed?.dateRange === '7' || parsed?.dateRange === '30' || parsed?.dateRange === '90' || parsed?.dateRange === 'all') {
+        setOcrHistoryDateRange(parsed.dateRange);
+      }
+      if (typeof parsed?.supplierFilter === 'string') setOcrHistorySupplierFilter(parsed.supplierFilter);
+      if (typeof parsed?.invoiceFilter === 'string') setOcrHistoryInvoiceFilter(parsed.invoiceFilter);
+      if (parsed?.sortBy === 'date' || parsed?.sortBy === 'score' || parsed?.sortBy === 'amount') {
+        setOcrHistorySortBy(parsed.sortBy);
+      }
+      if (parsed?.sortDirection === 'asc' || parsed?.sortDirection === 'desc') {
+        setOcrHistorySortDirection(parsed.sortDirection);
+      }
+    } catch {
+      // Ignore malformed preference payloads.
+    }
+  }, [ocrHistoryPreferencesStorageKey]);
+
+  useEffect(() => {
+    const payload = {
+      projectFilter: ocrHistoryProjectFilter,
+      decisionFilter: ocrHistoryDecisionFilter,
+      dateRange: ocrHistoryDateRange,
+      supplierFilter: ocrHistorySupplierFilter,
+      invoiceFilter: ocrHistoryInvoiceFilter,
+      sortBy: ocrHistorySortBy,
+      sortDirection: ocrHistorySortDirection,
+    };
+    localStorage.setItem(ocrHistoryPreferencesStorageKey, JSON.stringify(payload));
+  }, [
+    ocrHistoryPreferencesStorageKey,
+    ocrHistoryProjectFilter,
+    ocrHistoryDecisionFilter,
+    ocrHistoryDateRange,
+    ocrHistorySupplierFilter,
+    ocrHistoryInvoiceFilter,
+    ocrHistorySortBy,
+    ocrHistorySortDirection,
+  ]);
 
   const ocrHistoryProjectOptions = useMemo(() => {
     const unique = new Map<string, string>();
@@ -400,6 +455,26 @@ export default function Dashboard() {
       return true;
     });
   }, [ocrValidationHistory, ocrHistoryDecisionFilter, ocrHistorySupplierFilter, ocrHistoryInvoiceFilter]);
+
+  const sortedVisibleOcrValidationHistory = useMemo(() => {
+    const sorted = [...visibleOcrValidationHistory];
+    sorted.sort((a: any, b: any) => {
+      const direction = ocrHistorySortDirection === 'asc' ? 1 : -1;
+
+      if (ocrHistorySortBy === 'score') {
+        return (Number(a.score || 0) - Number(b.score || 0)) * direction;
+      }
+
+      if (ocrHistorySortBy === 'amount') {
+        return (Number(a.detectedTotal || 0) - Number(b.detectedTotal || 0)) * direction;
+      }
+
+      const aDate = new Date(a.createdAt || 0).getTime();
+      const bDate = new Date(b.createdAt || 0).getTime();
+      return (aDate - bDate) * direction;
+    });
+    return sorted;
+  }, [visibleOcrValidationHistory, ocrHistorySortBy, ocrHistorySortDirection]);
 
   const ocrEffectiveness = useMemo(() => {
     const total = visibleOcrValidationHistory.length;
@@ -1673,7 +1748,7 @@ export default function Dashboard() {
   };
 
   const exportVisibleOcrHistoryCsv = () => {
-    if (visibleOcrValidationHistory.length === 0) {
+    if (sortedVisibleOcrValidationHistory.length === 0) {
       toast.info('No hay validaciones OCR para exportar con los filtros actuales.');
       return;
     }
@@ -1703,7 +1778,7 @@ export default function Dashboard() {
 
     const lines = [
       headers.join(','),
-      ...visibleOcrValidationHistory.map((row: any) =>
+      ...sortedVisibleOcrValidationHistory.map((row: any) =>
         [
           row.id,
           row.createdAt,
@@ -1736,12 +1811,12 @@ export default function Dashboard() {
   };
 
   const exportVisibleOcrHistoryXlsx = () => {
-    if (visibleOcrValidationHistory.length === 0) {
+    if (sortedVisibleOcrValidationHistory.length === 0) {
       toast.info('No hay validaciones OCR para exportar con los filtros actuales.');
       return;
     }
 
-    const rows = visibleOcrValidationHistory.map((row: any) => ({
+    const rows = sortedVisibleOcrValidationHistory.map((row: any) => ({
       id: row.id,
       fecha: row.createdAt,
       proyecto_id: row.projectId || '',
@@ -2616,7 +2691,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="mb-3 grid grid-cols-1 lg:grid-cols-6 gap-2">
+          <div className="mb-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-9 gap-2">
             <select
               value={ocrHistoryProjectFilter}
               onChange={(e) => setOcrHistoryProjectFilter(e.target.value)}
@@ -2666,6 +2741,25 @@ export default function Dashboard() {
               className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
             />
 
+            <select
+              value={ocrHistorySortBy}
+              onChange={(e) => setOcrHistorySortBy(e.target.value as 'date' | 'score' | 'amount')}
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
+            >
+              <option value="date">Ordenar por fecha</option>
+              <option value="score">Ordenar por score</option>
+              <option value="amount">Ordenar por monto</option>
+            </select>
+
+            <select
+              value={ocrHistorySortDirection}
+              onChange={(e) => setOcrHistorySortDirection(e.target.value as 'asc' | 'desc')}
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
+            >
+              <option value="desc">Descendente</option>
+              <option value="asc">Ascendente</option>
+            </select>
+
             <button
               onClick={exportVisibleOcrHistoryCsv}
               className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -2682,11 +2776,11 @@ export default function Dashboard() {
           </div>
 
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Trazabilidad OCR reciente</p>
-          {visibleOcrValidationHistory.length === 0 ? (
+          {sortedVisibleOcrValidationHistory.length === 0 ? (
             <p className="text-xs text-slate-500">Sin validaciones registradas todavía.</p>
           ) : (
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
-              {visibleOcrValidationHistory.map((row: any) => (
+              {sortedVisibleOcrValidationHistory.map((row: any) => (
                 <div key={row.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-black text-slate-900 dark:text-white">{row.invoiceNumber || 'Documento sin número'}</p>
