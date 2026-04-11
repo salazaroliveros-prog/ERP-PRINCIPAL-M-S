@@ -2666,6 +2666,8 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       const db = requireDatabase();
       const projectId = String(req.query.projectId || '').trim();
       const purchaseOrderId = String(req.query.purchaseOrderId || '').trim();
+      const supplier = String(req.query.supplier || '').trim();
+      const invoiceNumber = String(req.query.invoiceNumber || '').trim();
       const from = String(req.query.from || '').trim();
       const to = String(req.query.to || '').trim();
       const limit = Math.min(Math.max(Number(req.query.limit || 20), 1), 200);
@@ -2702,6 +2704,14 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       if (purchaseOrderId) {
         values.push(purchaseOrderId);
         where.push(`purchase_order_id = $${values.length}`);
+      }
+      if (supplier) {
+        values.push(`%${supplier.toLowerCase()}%`);
+        where.push(`lower(coalesce(supplier, '')) like $${values.length}`);
+      }
+      if (invoiceNumber) {
+        values.push(`%${invoiceNumber.toLowerCase()}%`);
+        where.push(`lower(coalesce(invoice_number, '')) like $${values.length}`);
       }
       if (from) {
         values.push(from);

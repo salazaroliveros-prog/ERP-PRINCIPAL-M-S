@@ -310,6 +310,8 @@ export default function Dashboard() {
   const [ocrHistoryProjectFilter, setOcrHistoryProjectFilter] = useState('all');
   const [ocrHistoryDecisionFilter, setOcrHistoryDecisionFilter] = useState<'all' | 'approved' | 'review' | 'rejected'>('all');
   const [ocrHistoryDateRange, setOcrHistoryDateRange] = useState<'7' | '30' | '90' | 'all'>('30');
+  const [ocrHistorySupplierFilter, setOcrHistorySupplierFilter] = useState('');
+  const [ocrHistoryInvoiceFilter, setOcrHistoryInvoiceFilter] = useState('');
   const [chartPreferences, setChartPreferences] = useState<DashboardChartPreferences>(
     THEME_DEFAULT_CHARTS.sunset
   );
@@ -376,9 +378,24 @@ export default function Dashboard() {
       if (ocrHistoryDecisionFilter !== 'all' && row.decision !== ocrHistoryDecisionFilter) {
         return false;
       }
+      const supplierFilter = ocrHistorySupplierFilter.trim().toLowerCase();
+      if (supplierFilter) {
+        const supplierValue = String(row.supplier || '').toLowerCase();
+        if (!supplierValue.includes(supplierFilter)) {
+          return false;
+        }
+      }
+
+      const invoiceFilter = ocrHistoryInvoiceFilter.trim().toLowerCase();
+      if (invoiceFilter) {
+        const invoiceValue = String(row.invoiceNumber || '').toLowerCase();
+        if (!invoiceValue.includes(invoiceFilter)) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [ocrValidationHistory, ocrHistoryDecisionFilter]);
+  }, [ocrValidationHistory, ocrHistoryDecisionFilter, ocrHistorySupplierFilter, ocrHistoryInvoiceFilter]);
 
   const ocrEffectiveness = useMemo(() => {
     const total = visibleOcrValidationHistory.length;
@@ -1577,12 +1594,24 @@ export default function Dashboard() {
     const query: {
       limit: number;
       projectId?: string;
+      supplier?: string;
+      invoiceNumber?: string;
       from?: string;
       to?: string;
     } = { limit: 150 };
 
     if (ocrHistoryProjectFilter !== 'all') {
       query.projectId = ocrHistoryProjectFilter;
+    }
+
+    const supplierFilter = ocrHistorySupplierFilter.trim();
+    if (supplierFilter) {
+      query.supplier = supplierFilter;
+    }
+
+    const invoiceFilter = ocrHistoryInvoiceFilter.trim();
+    if (invoiceFilter) {
+      query.invoiceNumber = invoiceFilter;
     }
 
     if (ocrHistoryDateRange !== 'all') {
@@ -1716,7 +1745,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [ocrHistoryProjectFilter, ocrHistoryDateRange]);
+  }, [ocrHistoryProjectFilter, ocrHistoryDateRange, ocrHistorySupplierFilter, ocrHistoryInvoiceFilter]);
 
   useEffect(() => {
     if (loading || !recentMaterialPriceHistory.materialName || recentMaterialPriceHistory.points.length < 2) return;
@@ -2511,7 +2540,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="mb-3 grid grid-cols-1 lg:grid-cols-4 gap-2">
+          <div className="mb-3 grid grid-cols-1 lg:grid-cols-6 gap-2">
             <select
               value={ocrHistoryProjectFilter}
               onChange={(e) => setOcrHistoryProjectFilter(e.target.value)}
@@ -2544,6 +2573,22 @@ export default function Dashboard() {
               <option value="90">Últimos 90 días</option>
               <option value="all">Todo el historial</option>
             </select>
+
+            <input
+              type="text"
+              value={ocrHistorySupplierFilter}
+              onChange={(e) => setOcrHistorySupplierFilter(e.target.value)}
+              placeholder="Proveedor (contiene...)"
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
+            />
+
+            <input
+              type="text"
+              value={ocrHistoryInvoiceFilter}
+              onChange={(e) => setOcrHistoryInvoiceFilter(e.target.value)}
+              placeholder="Factura (contiene...)"
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
+            />
 
             <button
               onClick={exportVisibleOcrHistoryCsv}

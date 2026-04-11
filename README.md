@@ -86,6 +86,14 @@ Nuevos endpoints de configuracion operativa:
 - POST /api/documents/ocr-validate
 - GET /api/documents/ocr-validations
 
+Filtros soportados en GET /api/documents/ocr-validations:
+
+- projectId, purchaseOrderId
+- supplier (busqueda parcial)
+- invoiceNumber (busqueda parcial)
+- from, to (rango por fecha de creacion)
+- limit (maximo 200)
+
 Scheduler backend de alertas (08:00 y 16:00):
 
 - Genera notificacion de resumen de costos aunque no haya navegador abierto.

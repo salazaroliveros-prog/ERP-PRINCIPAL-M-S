@@ -58,6 +58,8 @@ export async function validateDocumentOCR(payload: {
 export async function listOcrValidations(params: {
   projectId?: string;
   purchaseOrderId?: string;
+  supplier?: string;
+  invoiceNumber?: string;
   from?: string;
   to?: string;
   limit?: number;
@@ -65,6 +67,8 @@ export async function listOcrValidations(params: {
   const search = new URLSearchParams();
   if (params.projectId) search.set('projectId', params.projectId);
   if (params.purchaseOrderId) search.set('purchaseOrderId', params.purchaseOrderId);
+  if (params.supplier) search.set('supplier', params.supplier);
+  if (params.invoiceNumber) search.set('invoiceNumber', params.invoiceNumber);
   if (params.from) search.set('from', params.from);
   if (params.to) search.set('to', params.to);
   if (params.limit) search.set('limit', String(params.limit));
