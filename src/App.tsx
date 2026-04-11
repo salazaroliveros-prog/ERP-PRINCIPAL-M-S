@@ -19,7 +19,9 @@ import {
   Wifi,
   WifiOff,
   Moon,
-  Sun
+  Sun,
+  CalendarDays,
+  Clock3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
@@ -29,6 +31,8 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { Toaster, toast } from 'sonner';
 import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 // Lazy Loaded Components for Performance
 const loadDashboard = () => import('./components/Dashboard');
@@ -269,6 +273,82 @@ function getBrowserConnection() {
   return (navigator as Navigator & { connection?: NetworkConnection }).connection;
 }
 
+function DateTimeWidget({ compact = false }: { compact?: boolean }) {
+  const [now, setNow] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const widgetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const tickId = window.setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+
+    return () => window.clearInterval(tickId);
+  }, []);
+
+  useEffect(() => {
+    if (!isCalendarOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!widgetRef.current?.contains(event.target as Node)) {
+        setIsCalendarOpen(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    return () => window.removeEventListener('mousedown', handlePointerDown);
+  }, [isCalendarOpen]);
+
+  const timeLabel = now.toLocaleTimeString('es-GT', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: compact ? undefined : '2-digit',
+    hour12: false,
+  });
+
+  const dateLabel = selectedDate.toLocaleDateString('es-GT', {
+    weekday: compact ? undefined : 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  return (
+    <div ref={widgetRef} className="relative">
+      <div className="flex items-center gap-2 sm:gap-3 bg-slate-50/90 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 sm:px-3 py-2 shadow-sm">
+        <div className="flex items-center gap-1.5 sm:gap-2 text-primary">
+          <Clock3 size={compact ? 14 : 16} />
+          <span className="text-[11px] sm:text-sm font-black text-slate-900 dark:text-white tabular-nums tracking-wide">{timeLabel}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsCalendarOpen((prev) => !prev)}
+          className="flex items-center gap-1.5 text-[10px] sm:text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
+          title="Abrir calendario"
+        >
+          <CalendarDays size={compact ? 13 : 15} />
+          <span className="capitalize max-w-[140px] sm:max-w-[280px] truncate">{dateLabel}</span>
+        </button>
+      </div>
+
+      {isCalendarOpen && (
+        <div className="absolute left-0 top-[calc(100%+8px)] z-[80] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-3">
+          <DatePicker
+            inline
+            selected={selectedDate}
+            onChange={(date) => {
+              if (date) {
+                setSelectedDate(date);
+              }
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AppContent({ 
   user, 
   deferredPrompt, 
@@ -475,8 +555,8 @@ function AppContent({
         <Toaster position="top-right" richColors closeButton />
         
         {/* Mobile Header */}
-        <header className="lg:hidden sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
-          <Logo size="sm" />
+        <header className="lg:hidden sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 px-4 py-3 flex items-center justify-between gap-3">
+          <DateTimeWidget compact />
           <div className="flex items-center gap-3">
             <button 
               onClick={() => {
@@ -531,6 +611,9 @@ function AppContent({
           "flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar perf-content p-4 lg:p-8 pb-24 lg:pb-8 transition-[margin] duration-300",
           isSidebarCollapsed ? "lg:ml-20" : "lg:ml-64"
         )}>
+          <div className="hidden lg:flex items-center justify-start mb-6">
+            <DateTimeWidget />
+          </div>
           <Suspense fallback={<LoadingFallback />}>
             <AnimatePresence mode="wait">
               <Routes>
