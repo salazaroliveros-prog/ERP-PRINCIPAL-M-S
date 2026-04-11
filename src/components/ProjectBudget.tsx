@@ -125,7 +125,10 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
   const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
   const [projectSelectorItems, setProjectSelectorItems] = useState<any[]>([]);
   const [projectSelectorSearch, setProjectSelectorSearch] = useState('');
-  const [isProjectPanelCollapsed, setIsProjectPanelCollapsed] = useState(false);
+  const [isProjectPanelCollapsed, setIsProjectPanelCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('project-budget-side-panel-collapsed') === '1';
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -915,6 +918,11 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('project-budget-side-panel-collapsed', isProjectPanelCollapsed ? '1' : '0');
+  }, [isProjectPanelCollapsed]);
 
   const filteredProjectSelectorItems = useMemo(() => {
     const query = projectSelectorSearch.trim().toLowerCase();
