@@ -242,6 +242,13 @@ export default function Financials() {
   
   const [newTransaction, setNewTransaction] = useState(getDefaultTransactionForm());
 
+  const refreshTransactionsFromServer = async () => {
+    const response = await listTransactions({ limit: PAGE_SIZE, offset: 0 });
+    setTransactions(response.items);
+    setOffset(response.items.length);
+    setHasMore(response.hasMore);
+  };
+
   const resetTransactionForm = () => {
     setEditingTransactionId(null);
     setNewTransaction(getDefaultTransactionForm());
@@ -284,10 +291,7 @@ export default function Financials() {
 
     const loadInitialData = async () => {
       try {
-        const [response, projectItems] = await Promise.all([
-          listTransactions({ limit: PAGE_SIZE, offset: 0 }),
-          listProjects(),
-        ]);
+        const [response, projectItems] = await Promise.all([listTransactions({ limit: PAGE_SIZE, offset: 0 }), listProjects()]);
         if (!isActive) return;
         setTransactions(response.items);
         setOffset(response.items.length);
@@ -683,7 +687,7 @@ export default function Financials() {
     try {
       const transaction = transactions.find(t => t.id === transactionToDelete);
       await deleteTransactionById(transactionToDelete);
-      setTransactions(prev => prev.filter(t => t.id !== transactionToDelete));
+      await refreshTransactionsFromServer();
       toast.success('Transacción eliminada con éxito');
       await logAction('Eliminación de Transacción', 'Finanzas', `Transacción de ${formatCurrency(transaction?.amount || 0)} eliminada`, 'delete', { transactionId: transactionToDelete });
       setTransactionToDelete(null);
@@ -729,7 +733,7 @@ export default function Financials() {
 
       if (editingTransactionId) {
         const updated = await updateTransactionById(editingTransactionId, payload);
-        setTransactions(prev => prev.map(t => (String(t.id) === String(editingTransactionId) ? updated : t)));
+        await refreshTransactionsFromServer();
         toast.success('Transacción actualizada con éxito');
         await logAction(
           'Edición de Transacción',
@@ -740,8 +744,7 @@ export default function Financials() {
         );
       } else {
         const created = await createTransaction(payload);
-        setTransactions(prev => [created, ...prev]);
-        setOffset(prev => prev + 1);
+        await refreshTransactionsFromServer();
         toast.success('Transacción registrada con éxito');
         await logAction('Registro de Transacción', 'Finanzas', `${newTransaction.type === 'Income' ? 'Ingreso' : 'Egreso'} de ${formatCurrency(Number(newTransaction.amount))} registrado`, 'create', { transactionId: created.id });
       }

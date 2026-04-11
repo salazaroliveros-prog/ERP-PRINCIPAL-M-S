@@ -44,15 +44,10 @@ const QUICK_ACTIONS: QuickAction[] = [
 ];
 
 export function QuickActionsLauncher() {
-  const QUICK_FAB_VISIBLE_STORAGE_KEY = 'wm_quick_fab_visible_v1';
   const [isOpen, setIsOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<'finance' | 'forms'>('finance');
   const [quickPrompt, setQuickPrompt] = useState('');
   const [isListening, setIsListening] = useState(false);
-  const [isFabVisible, setIsFabVisible] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return window.localStorage.getItem(QUICK_FAB_VISIBLE_STORAGE_KEY) !== 'false';
-  });
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth < 1024 : false
   );
@@ -137,23 +132,6 @@ export function QuickActionsLauncher() {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(QUICK_FAB_VISIBLE_STORAGE_KEY, String(isFabVisible));
-  }, [isFabVisible]);
-
-  React.useEffect(() => {
-    const handleFabVisibility = (event: Event) => {
-      const customEvent = event as CustomEvent<{ visible?: boolean }>;
-      if (typeof customEvent.detail?.visible === 'boolean') {
-        setIsFabVisible(customEvent.detail.visible);
-      }
-    };
-
-    window.addEventListener('QUICK_ACTION_FAB_VISIBILITY', handleFabVisibility);
-    return () => window.removeEventListener('QUICK_ACTION_FAB_VISIBILITY', handleFabVisibility);
   }, []);
 
   React.useEffect(() => {
@@ -265,20 +243,6 @@ export function QuickActionsLauncher() {
 
   return (
     <>
-      {isMobile && isFabVisible && (
-        <button
-          onClick={() => {
-            window.dispatchEvent(new CustomEvent('SIDE_TOOL_WINDOW_OPEN', { detail: { source: 'quick-actions' } }));
-            setIsOpen((prev) => !prev);
-          }}
-          className="fixed z-[115] right-4 bottom-24 px-3 py-2 rounded-full bg-primary text-white shadow-xl border border-white/30 flex items-center gap-2"
-          title="Acción rápida"
-        >
-          <Zap size={16} />
-          <span className="text-[10px] font-black uppercase tracking-wider">Acción rápida</span>
-        </button>
-      )}
-
       <AnimatePresence>
         {isOpen && (
           <motion.div
