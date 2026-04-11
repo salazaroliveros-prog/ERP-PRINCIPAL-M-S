@@ -1322,6 +1322,11 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       credentials: true,
     })
   );
+  app.use((_req, res, next) => {
+    // Allow OAuth popup flows (Google Sign-In) without COOP window.closed warnings.
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    next();
+  });
   app.use(express.json());
   app.use("/uploads", express.static(UPLOADS_PUBLIC_DIR));
   app.use("/uploads", express.static(UPLOADS_FALLBACK_DIR));

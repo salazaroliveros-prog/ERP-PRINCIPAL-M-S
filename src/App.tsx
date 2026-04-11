@@ -612,7 +612,7 @@ function AppContent({
           >
             <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-4">
               <div className="flex items-center">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary/10 border border-primary/20 overflow-hidden">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-11 lg:h-11 rounded-lg overflow-hidden">
                   <img
                     src={user.photoURL || getFallbackAvatarUrl(user.displayName || 'Usuario')}
                     alt={user.displayName || ''}
@@ -632,16 +632,16 @@ function AppContent({
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <div
                     className={cn(
-                      "relative rounded-xl overflow-hidden border border-primary/20 bg-white/90 dark:bg-slate-900/90 shadow-sm shrink-0 transition-all duration-300",
+                      "relative rounded-lg overflow-hidden shrink-0 transition-all duration-300",
                       isSidebarOpen
-                        ? "w-11 h-11 -mb-4 sm:mb-0 sm:w-12 sm:h-12"
-                        : "w-16 h-16 -mb-8 sm:mb-0 sm:w-14 sm:h-14"
+                        ? "w-8 h-8 -mb-4 sm:mb-0 sm:w-10 sm:h-10 lg:w-11 lg:h-11"
+                        : "w-11 h-11 -mb-6 sm:mb-0 sm:w-10 sm:h-10 lg:w-11 lg:h-11"
                     )}
                   >
                     <img
                       src="/logo.svg"
                       alt="Constructora WM/M&S"
-                      className="w-full h-full object-contain p-1"
+                      className="w-full h-full object-contain"
                       loading="eager"
                       decoding="async"
                     />
