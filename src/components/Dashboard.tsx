@@ -353,7 +353,8 @@ export default function Dashboard() {
   const [ocrHistoryDateRange, setOcrHistoryDateRange] = useState<'7' | '30' | '90' | 'all'>('30');
   const [ocrHistorySupplierFilter, setOcrHistorySupplierFilter] = useState('');
   const [ocrHistoryInvoiceFilter, setOcrHistoryInvoiceFilter] = useState('');
-  const [ocrHistorySortBy, setOcrHistorySortBy] = useState<'date' | 'score' | 'amount'>('date');
+  const [ocrHistoryViewMode, setOcrHistoryViewMode] = useState<'cards' | 'table'>('cards');
+  const [ocrHistorySortBy, setOcrHistorySortBy] = useState<'date' | 'score' | 'amount' | 'supplier' | 'invoiceNumber' | 'decision' | 'resultStatus'>('date');
   const [ocrHistorySortDirection, setOcrHistorySortDirection] = useState<'asc' | 'desc'>('desc');
   const [ocrHistorySelectedColumns, setOcrHistorySelectedColumns] = useState<OcrHistoryColumnKey[]>(OCR_HISTORY_DEFAULT_COLUMNS);
   const [ocrHistoryOffset, setOcrHistoryOffset] = useState(0);
@@ -422,7 +423,18 @@ export default function Dashboard() {
       }
       if (typeof parsed?.supplierFilter === 'string') setOcrHistorySupplierFilter(parsed.supplierFilter);
       if (typeof parsed?.invoiceFilter === 'string') setOcrHistoryInvoiceFilter(parsed.invoiceFilter);
-      if (parsed?.sortBy === 'date' || parsed?.sortBy === 'score' || parsed?.sortBy === 'amount') {
+      if (parsed?.viewMode === 'cards' || parsed?.viewMode === 'table') {
+        setOcrHistoryViewMode(parsed.viewMode);
+      }
+      if (
+        parsed?.sortBy === 'date' ||
+        parsed?.sortBy === 'score' ||
+        parsed?.sortBy === 'amount' ||
+        parsed?.sortBy === 'supplier' ||
+        parsed?.sortBy === 'invoiceNumber' ||
+        parsed?.sortBy === 'decision' ||
+        parsed?.sortBy === 'resultStatus'
+      ) {
         setOcrHistorySortBy(parsed.sortBy);
       }
       if (parsed?.sortDirection === 'asc' || parsed?.sortDirection === 'desc') {
@@ -448,6 +460,7 @@ export default function Dashboard() {
       dateRange: ocrHistoryDateRange,
       supplierFilter: ocrHistorySupplierFilter,
       invoiceFilter: ocrHistoryInvoiceFilter,
+      viewMode: ocrHistoryViewMode,
       sortBy: ocrHistorySortBy,
       sortDirection: ocrHistorySortDirection,
       selectedColumns: ocrHistorySelectedColumns,
@@ -460,6 +473,7 @@ export default function Dashboard() {
     ocrHistoryDateRange,
     ocrHistorySupplierFilter,
     ocrHistoryInvoiceFilter,
+    ocrHistoryViewMode,
     ocrHistorySortBy,
     ocrHistorySortDirection,
     ocrHistorySelectedColumns,
@@ -520,6 +534,22 @@ export default function Dashboard() {
         return (Number(a.detectedTotal || 0) - Number(b.detectedTotal || 0)) * direction;
       }
 
+      if (ocrHistorySortBy === 'supplier') {
+        return String(a.supplier || '').localeCompare(String(b.supplier || '')) * direction;
+      }
+
+      if (ocrHistorySortBy === 'invoiceNumber') {
+        return String(a.invoiceNumber || '').localeCompare(String(b.invoiceNumber || '')) * direction;
+      }
+
+      if (ocrHistorySortBy === 'decision') {
+        return String(a.decision || '').localeCompare(String(b.decision || '')) * direction;
+      }
+
+      if (ocrHistorySortBy === 'resultStatus') {
+        return String(a.resultStatus || '').localeCompare(String(b.resultStatus || '')) * direction;
+      }
+
       const aDate = new Date(a.createdAt || 0).getTime();
       const bDate = new Date(b.createdAt || 0).getTime();
       return (aDate - bDate) * direction;
@@ -531,6 +561,31 @@ export default function Dashboard() {
     () => Object.fromEntries(OCR_HISTORY_COLUMN_OPTIONS.map((option) => [option.key, option.label])) as Record<OcrHistoryColumnKey, string>,
     []
   );
+
+  const handleOcrTableHeaderSort = (columnKey: OcrHistoryColumnKey) => {
+    const map: Partial<Record<OcrHistoryColumnKey, 'date' | 'score' | 'amount' | 'supplier' | 'invoiceNumber' | 'decision' | 'resultStatus'>> = {
+      date: 'date',
+      score: 'score',
+      detectedTotal: 'amount',
+      supplier: 'supplier',
+      invoiceNumber: 'invoiceNumber',
+      decision: 'decision',
+      resultStatus: 'resultStatus',
+    };
+
+    const mappedSortBy = map[columnKey];
+    if (!mappedSortBy) return;
+
+    setOcrHistorySortBy((prevSortBy) => {
+      if (prevSortBy === mappedSortBy) {
+        setOcrHistorySortDirection((prevDirection) => (prevDirection === 'asc' ? 'desc' : 'asc'));
+        return prevSortBy;
+      }
+
+      setOcrHistorySortDirection('desc');
+      return mappedSortBy;
+    });
+  };
 
   const getOcrColumnRawValue = (row: any, key: OcrHistoryColumnKey): string | number => {
     switch (key) {
@@ -2776,6 +2831,33 @@ export default function Dashboard() {
           </div>
 
           <div className="mb-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-9 gap-2">
+            <div className="lg:col-span-2 flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 p-1 bg-white dark:bg-slate-900">
+              <button
+                type="button"
+                onClick={() => setOcrHistoryViewMode('cards')}
+                className={cn(
+                  'flex-1 px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors',
+                  ocrHistoryViewMode === 'cards'
+                    ? 'bg-primary text-white'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                )}
+              >
+                Tarjetas
+              </button>
+              <button
+                type="button"
+                onClick={() => setOcrHistoryViewMode('table')}
+                className={cn(
+                  'flex-1 px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors',
+                  ocrHistoryViewMode === 'table'
+                    ? 'bg-primary text-white'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                )}
+              >
+                Tabla
+              </button>
+            </div>
+
             <select
               value={ocrHistoryProjectFilter}
               onChange={(e) => setOcrHistoryProjectFilter(e.target.value)}
@@ -2827,12 +2909,16 @@ export default function Dashboard() {
 
             <select
               value={ocrHistorySortBy}
-              onChange={(e) => setOcrHistorySortBy(e.target.value as 'date' | 'score' | 'amount')}
+              onChange={(e) => setOcrHistorySortBy(e.target.value as 'date' | 'score' | 'amount' | 'supplier' | 'invoiceNumber' | 'decision' | 'resultStatus')}
               className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
             >
               <option value="date">Ordenar por fecha</option>
               <option value="score">Ordenar por score</option>
               <option value="amount">Ordenar por monto</option>
+              <option value="supplier">Ordenar por proveedor</option>
+              <option value="invoiceNumber">Ordenar por factura</option>
+              <option value="decision">Ordenar por decisión</option>
+              <option value="resultStatus">Ordenar por resultado</option>
             </select>
 
             <select
@@ -2882,6 +2968,58 @@ export default function Dashboard() {
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Trazabilidad OCR reciente</p>
           {sortedVisibleOcrValidationHistory.length === 0 ? (
             <p className="text-xs text-slate-500">Sin validaciones registradas todavía.</p>
+          ) : ocrHistoryViewMode === 'table' ? (
+            <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/30">
+              <table className="min-w-full text-[11px]">
+                <thead className="bg-slate-100/90 dark:bg-slate-800/80 sticky top-0">
+                  <tr>
+                    {ocrHistorySelectedColumns.map((columnKey) => {
+                      const sortableByColumn: Partial<Record<OcrHistoryColumnKey, string>> = {
+                        date: 'date',
+                        score: 'score',
+                        detectedTotal: 'amount',
+                        supplier: 'supplier',
+                        invoiceNumber: 'invoiceNumber',
+                        decision: 'decision',
+                        resultStatus: 'resultStatus',
+                      };
+                      const active = sortableByColumn[columnKey] === ocrHistorySortBy;
+                      const isSortable = Boolean(sortableByColumn[columnKey]);
+
+                      return (
+                        <th key={columnKey} className="px-2.5 py-2 text-left text-[10px] uppercase tracking-wider font-black text-slate-600 dark:text-slate-200 whitespace-nowrap">
+                          <button
+                            type="button"
+                            disabled={!isSortable}
+                            onClick={() => handleOcrTableHeaderSort(columnKey)}
+                            className={cn(
+                              'inline-flex items-center gap-1',
+                              isSortable ? 'hover:text-slate-900 dark:hover:text-white' : 'cursor-default opacity-80'
+                            )}
+                          >
+                            {ocrHistoryColumnLabelMap[columnKey]}
+                            {active && (
+                              <span className="text-[9px]">{ocrHistorySortDirection === 'asc' ? '▲' : '▼'}</span>
+                            )}
+                          </button>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedVisibleOcrValidationHistory.map((row: any) => (
+                    <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800">
+                      {ocrHistorySelectedColumns.map((columnKey) => (
+                        <td key={`${row.id}_${columnKey}`} className="px-2.5 py-2 text-slate-700 dark:text-slate-200 whitespace-nowrap align-top">
+                          {getOcrColumnDisplayValue(row, columnKey)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
               {sortedVisibleOcrValidationHistory.map((row: any) => (
