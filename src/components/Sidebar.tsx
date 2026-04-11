@@ -154,6 +154,7 @@ export const Sidebar = ({
   const location = useLocation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showInstall, setShowInstall] = useState(!!deferredPrompt);
+  const hiddenOffset = isCollapsed ? -120 : -340;
 
   useEffect(() => {
     setShowInstall(!!deferredPrompt);
@@ -193,6 +194,7 @@ export const Sidebar = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
             onClick={onClose}
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-40 lg:hidden"
           />
@@ -210,13 +212,13 @@ export const Sidebar = ({
           }
         }}
         animate={{ 
-          x: (isOpen || window.innerWidth >= 1024) ? 0 : -320,
+          x: isOpen ? 0 : hiddenOffset,
           width: isCollapsed ? 80 : 288
         }}
-        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
           "fixed inset-y-0 left-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-100 dark:border-slate-800 shadow-2xl lg:shadow-none",
-          "lg:translate-x-0" // Ensure desktop is always visible
+          ""
         )}
       >
         <div className={cn("flex flex-col h-full", isCollapsed ? "p-2 sm:p-4" : "p-4 sm:p-6")}>

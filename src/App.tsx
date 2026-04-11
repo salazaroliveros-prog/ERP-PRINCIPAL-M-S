@@ -21,7 +21,8 @@ import {
   Moon,
   Sun,
   CalendarDays,
-  Clock3
+  Clock3,
+  ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
@@ -390,6 +391,12 @@ function AppContent({
   const prefetchedRoutesRef = useRef<Set<string>>(new Set());
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { unreadCount } = useNotifications();
+  const location = useLocation();
+
+  useEffect(() => {
+    setIsSidebarOpen(false);
+    setIsNotificationsOpen(false);
+  }, [location.pathname]);
 
   const reduceMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -575,44 +582,78 @@ function AppContent({
   }
 
   return (
-    <Router>
       <div className="h-screen h-[100dvh] min-h-0 bg-slate-50 dark:bg-slate-950 flex flex-col lg:flex-row overflow-hidden transition-colors duration-300">
         <Toaster position="top-right" richColors closeButton />
-        
-        {/* Mobile Header */}
-        <header className="lg:hidden sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 px-4 py-3 flex items-center justify-between gap-3">
-          <DateTimeWidget compact />
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => {
-                setIsNotificationsOpen(true);
-                setIsSidebarOpen(true);
-              }}
-              className="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-400 relative"
-            >
-              <Bell size={20} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900 shadow-sm animate-bounce">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
-            <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 overflow-hidden">
-              <img 
-                src={user.photoURL || getFallbackAvatarUrl(user.displayName || 'Usuario')} 
-                alt={user.displayName || ''} 
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-                onError={(event) => {
-                  const img = event.currentTarget;
-                  if (img.dataset.fallbackApplied === '1') return;
-                  img.dataset.fallbackApplied = '1';
-                  img.src = getFallbackAvatarUrl(user.displayName || 'Usuario');
-                }}
-              />
+
+        <header className="fixed top-0 inset-x-0 z-50 px-3 sm:px-5 lg:px-8 pt-2 sm:pt-3 pointer-events-none">
+          <div className="mx-auto max-w-[1600px] bg-white/70 dark:bg-slate-900/70 border border-slate-200/70 dark:border-slate-700/70 backdrop-blur-xl shadow-lg rounded-2xl px-3 sm:px-4 py-2 sm:py-3 pointer-events-auto">
+            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-4">
+              <div className="flex items-center">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary/10 border border-primary/20 overflow-hidden">
+                  <img
+                    src={user.photoURL || getFallbackAvatarUrl(user.displayName || 'Usuario')}
+                    alt={user.displayName || ''}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                    onError={(event) => {
+                      const img = event.currentTarget;
+                      if (img.dataset.fallbackApplied === '1') return;
+                      img.dataset.fallbackApplied = '1';
+                      img.src = getFallbackAvatarUrl(user.displayName || 'Usuario');
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full overflow-hidden border border-primary/25 bg-white/90 dark:bg-slate-900/90 shadow-sm shrink-0">
+                    <img
+                      src="/logo.svg"
+                      alt="Constructora WM/M&S"
+                      className="w-full h-full object-contain p-1"
+                      loading="eager"
+                      decoding="async"
+                    />
+                  </div>
+                  <div className="leading-tight min-w-0">
+                    <p className="text-[10px] sm:text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white truncate">
+                      CONSTRUCTORA WM/M&S
+                    </p>
+                    <p className="text-[8px] sm:text-xs font-semibold text-slate-600 dark:text-slate-300 truncate">
+                      Edificando El Futuro
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="justify-self-end">
+                <DateTimeWidget compact />
+              </div>
             </div>
           </div>
         </header>
+
+        {!isSidebarOpen && (
+          <motion.button
+            initial={{ x: -8, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            whileHover={{ x: 3 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+            onClick={() => setIsSidebarOpen(true)}
+            className="fixed left-0 top-1/2 -translate-y-1/2 z-[60] flex items-center gap-1.5 bg-primary text-white px-2.5 sm:px-3 py-2.5 sm:py-3 rounded-r-xl shadow-xl shadow-primary/30 hover:bg-primary-hover transition-colors"
+            title="Abrir menú de módulos"
+          >
+            <ChevronRight size={14} className="sm:w-4 sm:h-4" />
+            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider">Módulos</span>
+            {unreadCount > 0 && (
+              <span className="ml-1 min-w-[18px] h-[18px] px-1 bg-white text-primary text-[9px] font-black rounded-full flex items-center justify-center">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </motion.button>
+        )}
 
         <Suspense fallback={null}>
           <Sidebar 
@@ -633,12 +674,8 @@ function AppContent({
         </Suspense>
         
         <main className={cn(
-          "flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar perf-content p-4 lg:p-8 pb-24 lg:pb-8 transition-[margin] duration-300",
-          isSidebarCollapsed ? "lg:ml-20" : "lg:ml-64"
+          "flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar perf-content p-4 lg:p-8 pt-24 sm:pt-28 lg:pt-28 pb-24 lg:pb-8"
         )}>
-          <div className="hidden lg:flex items-center justify-start mb-6">
-            <DateTimeWidget />
-          </div>
           <Suspense fallback={<LoadingFallback />}>
             <AnimatePresence mode="wait">
               <Routes>
@@ -698,7 +735,6 @@ function AppContent({
           </Suspense>
         )}
       </div>
-    </Router>
   );
 }
 
@@ -772,11 +808,13 @@ export default function App() {
           <Suspense fallback={null}>
             <NotificationManager />
           </Suspense>
-          <AppContent 
-            user={user} 
-            deferredPrompt={deferredPrompt}
-            onInstall={handleInstall}
-          />
+          <Router>
+            <AppContent 
+              user={user} 
+              deferredPrompt={deferredPrompt}
+              onInstall={handleInstall}
+            />
+          </Router>
           <VercelAnalytics />
         </NotificationProvider>
       </ThemeProvider>
