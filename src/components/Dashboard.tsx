@@ -129,7 +129,7 @@ type OcrHistoryColumnKey =
   | 'autoActionSummary';
 
 type OcrHistorySortBy = 'date' | 'score' | 'amount' | 'supplier' | 'invoiceNumber' | 'decision' | 'resultStatus';
-type OcrHistoryPresetKey = 'auditoria' | 'operaciones' | 'gerencia' | 'custom';
+type OcrHistoryPresetKey = 'auditoria' | 'operaciones' | 'gerencia';
 
 type OcrHistoryPresetConfig = {
   viewMode: 'cards' | 'table';
@@ -139,10 +139,17 @@ type OcrHistoryPresetConfig = {
   stickyColumnsEnabled: boolean;
 };
 
+type OcrCustomNamedPreset = {
+  id: string;
+  name: string;
+  config: OcrHistoryPresetConfig;
+};
+
 type OcrPresetExchangePayload = {
   schemaVersion: 1;
   exportedAt: string;
   source: string;
+  name?: string;
   preset: OcrHistoryPresetConfig;
 };
 
@@ -172,7 +179,7 @@ const OCR_HISTORY_DEFAULT_COLUMNS: OcrHistoryColumnKey[] = [
   'autoActionSummary',
 ];
 
-const OCR_HISTORY_PRESET_CONFIGS: Record<Exclude<OcrHistoryPresetKey, 'custom'>, OcrHistoryPresetConfig> = {
+const OCR_HISTORY_PRESET_CONFIGS: Record<OcrHistoryPresetKey, OcrHistoryPresetConfig> = {
   auditoria: {
     viewMode: 'table',
     sortBy: 'date',
@@ -401,8 +408,9 @@ export default function Dashboard() {
   const [ocrHistorySortDirection, setOcrHistorySortDirection] = useState<'asc' | 'desc'>('desc');
   const [ocrHistorySelectedColumns, setOcrHistorySelectedColumns] = useState<OcrHistoryColumnKey[]>(OCR_HISTORY_DEFAULT_COLUMNS);
   const [ocrHistoryStickyColumnsEnabled, setOcrHistoryStickyColumnsEnabled] = useState(true);
-  const [ocrHistorySelectedPreset, setOcrHistorySelectedPreset] = useState<OcrHistoryPresetKey>('operaciones');
-  const [ocrHistoryCustomPreset, setOcrHistoryCustomPreset] = useState<OcrHistoryPresetConfig | null>(null);
+  const [ocrHistorySelectedPresetId, setOcrHistorySelectedPresetId] = useState<string>('operaciones');
+  const [ocrHistoryCustomPresets, setOcrHistoryCustomPresets] = useState<OcrCustomNamedPreset[]>([]);
+  const [ocrHistoryPresetNameInput, setOcrHistoryPresetNameInput] = useState('Mi preset OCR');
   const [ocrHistoryOffset, setOcrHistoryOffset] = useState(0);
   const [ocrHistoryHasMore, setOcrHistoryHasMore] = useState(false);
   const [isLoadingMoreOcrHistory, setIsLoadingMoreOcrHistory] = useState(false);
@@ -497,13 +505,54 @@ export default function Dashboard() {
       if (typeof parsed?.stickyColumnsEnabled === 'boolean') {
         setOcrHistoryStickyColumnsEnabled(parsed.stickyColumnsEnabled);
       }
-      if (
+      if (typeof parsed?.selectedPresetId === 'string') {
+        setOcrHistorySelectedPresetId(parsed.selectedPresetId);
+      } else if (
         parsed?.selectedPreset === 'auditoria' ||
         parsed?.selectedPreset === 'operaciones' ||
-        parsed?.selectedPreset === 'gerencia' ||
-        parsed?.selectedPreset === 'custom'
+        parsed?.selectedPreset === 'gerencia'
       ) {
-        setOcrHistorySelectedPreset(parsed.selectedPreset);
+        setOcrHistorySelectedPresetId(parsed.selectedPreset);
+      }
+      if (Array.isArray(parsed?.customPresets)) {
+        const normalizedCustomPresets = parsed.customPresets
+          .map((item: any) => {
+            if (!item || typeof item !== 'object' || typeof item.id !== 'string' || typeof item.name !== 'string') return null;
+            if (!item.config || typeof item.config !== 'object') return null;
+            const config = item.config;
+            if (
+              (config.viewMode !== 'cards' && config.viewMode !== 'table') ||
+              (config.sortDirection !== 'asc' && config.sortDirection !== 'desc') ||
+              (config.sortBy !== 'date' &&
+                config.sortBy !== 'score' &&
+                config.sortBy !== 'amount' &&
+                config.sortBy !== 'supplier' &&
+                config.sortBy !== 'invoiceNumber' &&
+                config.sortBy !== 'decision' &&
+                config.sortBy !== 'resultStatus') ||
+              !Array.isArray(config.selectedColumns)
+            ) {
+              return null;
+            }
+            const allowed = new Set<OcrHistoryColumnKey>(OCR_HISTORY_COLUMN_OPTIONS.map((option) => option.key));
+            const normalizedColumns = config.selectedColumns
+              .filter((key: unknown): key is OcrHistoryColumnKey => typeof key === 'string' && allowed.has(key as OcrHistoryColumnKey));
+            if (normalizedColumns.length === 0) return null;
+
+            return {
+              id: item.id,
+              name: item.name,
+              config: {
+                viewMode: config.viewMode,
+                sortBy: config.sortBy,
+                sortDirection: config.sortDirection,
+                selectedColumns: normalizedColumns,
+                stickyColumnsEnabled: Boolean(config.stickyColumnsEnabled),
+              },
+            } as OcrCustomNamedPreset;
+          })
+          .filter((item: OcrCustomNamedPreset | null): item is OcrCustomNamedPreset => Boolean(item));
+        setOcrHistoryCustomPresets(normalizedCustomPresets);
       }
       if (parsed?.customPreset && typeof parsed.customPreset === 'object') {
         const custom = parsed.customPreset;
@@ -523,12 +572,21 @@ export default function Dashboard() {
           const normalizedColumns = custom.selectedColumns
             .filter((key: unknown): key is OcrHistoryColumnKey => typeof key === 'string' && allowed.has(key as OcrHistoryColumnKey));
           if (normalizedColumns.length > 0) {
-            setOcrHistoryCustomPreset({
-              viewMode: custom.viewMode,
-              sortBy: custom.sortBy,
-              sortDirection: custom.sortDirection,
-              selectedColumns: normalizedColumns,
-              stickyColumnsEnabled: Boolean(custom.stickyColumnsEnabled),
+            setOcrHistoryCustomPresets((prev) => {
+              if (prev.length > 0) return prev;
+              return [
+                {
+                  id: `custom_${Date.now()}`,
+                  name: 'Migrado',
+                  config: {
+                    viewMode: custom.viewMode,
+                    sortBy: custom.sortBy,
+                    sortDirection: custom.sortDirection,
+                    selectedColumns: normalizedColumns,
+                    stickyColumnsEnabled: Boolean(custom.stickyColumnsEnabled),
+                  },
+                },
+              ];
             });
           }
         }
@@ -550,8 +608,8 @@ export default function Dashboard() {
       sortDirection: ocrHistorySortDirection,
       selectedColumns: ocrHistorySelectedColumns,
       stickyColumnsEnabled: ocrHistoryStickyColumnsEnabled,
-      selectedPreset: ocrHistorySelectedPreset,
-      customPreset: ocrHistoryCustomPreset,
+      selectedPresetId: ocrHistorySelectedPresetId,
+      customPresets: ocrHistoryCustomPresets,
     };
     localStorage.setItem(ocrHistoryPreferencesStorageKey, JSON.stringify(payload));
   }, [
@@ -566,8 +624,8 @@ export default function Dashboard() {
     ocrHistorySortDirection,
     ocrHistorySelectedColumns,
     ocrHistoryStickyColumnsEnabled,
-    ocrHistorySelectedPreset,
-    ocrHistoryCustomPreset,
+    ocrHistorySelectedPresetId,
+    ocrHistoryCustomPresets,
   ]);
 
   const ocrHistoryProjectOptions = useMemo(() => {
@@ -768,10 +826,12 @@ export default function Dashboard() {
     });
   };
 
-  const applyOcrPreset = (presetKey: OcrHistoryPresetKey) => {
-    const config = presetKey === 'custom' ? ocrHistoryCustomPreset : OCR_HISTORY_PRESET_CONFIGS[presetKey];
+  const applyOcrPresetById = (presetId: string) => {
+    const config = (presetId === 'auditoria' || presetId === 'operaciones' || presetId === 'gerencia')
+      ? OCR_HISTORY_PRESET_CONFIGS[presetId]
+      : ocrHistoryCustomPresets.find((preset) => preset.id === presetId)?.config;
     if (!config) {
-      toast.info('No hay preset personalizado guardado todavía.');
+      toast.info('Preset OCR no encontrado.');
       return;
     }
 
@@ -780,7 +840,12 @@ export default function Dashboard() {
     setOcrHistorySortDirection(config.sortDirection);
     setOcrHistorySelectedColumns(config.selectedColumns);
     setOcrHistoryStickyColumnsEnabled(config.stickyColumnsEnabled);
-    setOcrHistorySelectedPreset(presetKey);
+    setOcrHistorySelectedPresetId(presetId);
+
+    const customPreset = ocrHistoryCustomPresets.find((preset) => preset.id === presetId);
+    if (customPreset) {
+      setOcrHistoryPresetNameInput(customPreset.name);
+    }
   };
 
   const saveCurrentAsCustomOcrPreset = () => {
@@ -791,14 +856,55 @@ export default function Dashboard() {
       selectedColumns: ocrHistorySelectedColumns,
       stickyColumnsEnabled: ocrHistoryStickyColumnsEnabled,
     };
-    setOcrHistoryCustomPreset(config);
-    setOcrHistorySelectedPreset('custom');
+
+    const inputName = ocrHistoryPresetNameInput.trim();
+    if (!inputName) {
+      toast.error('Ingresa un nombre para el preset personalizado.');
+      return;
+    }
+
+    const existingById = ocrHistoryCustomPresets.find((preset) => preset.id === ocrHistorySelectedPresetId);
+
+    if (existingById) {
+      setOcrHistoryCustomPresets((prev) =>
+        prev.map((preset) =>
+          preset.id === existingById.id
+            ? { ...preset, name: inputName, config }
+            : preset
+        )
+      );
+      toast.success('Preset personalizado OCR actualizado.');
+      return;
+    }
+
+    const newPreset: OcrCustomNamedPreset = {
+      id: `custom_${Date.now()}`,
+      name: inputName,
+      config,
+    };
+
+    setOcrHistoryCustomPresets((prev) => [...prev, newPreset]);
+    setOcrHistorySelectedPresetId(newPreset.id);
     toast.success('Preset personalizado OCR guardado.');
   };
 
+  const deleteSelectedCustomOcrPreset = () => {
+    const existing = ocrHistoryCustomPresets.find((preset) => preset.id === ocrHistorySelectedPresetId);
+    if (!existing) {
+      toast.info('Selecciona un preset personalizado para eliminar.');
+      return;
+    }
+
+    setOcrHistoryCustomPresets((prev) => prev.filter((preset) => preset.id !== existing.id));
+    setOcrHistorySelectedPresetId('operaciones');
+    setOcrHistoryPresetNameInput('Mi preset OCR');
+    toast.success('Preset personalizado eliminado.');
+  };
+
   const exportCustomOcrPresetJson = () => {
-    if (!ocrHistoryCustomPreset) {
-      toast.info('Primero guarda un preset personalizado.');
+    const selectedCustomPreset = ocrHistoryCustomPresets.find((preset) => preset.id === ocrHistorySelectedPresetId);
+    if (!selectedCustomPreset) {
+      toast.info('Selecciona un preset personalizado para exportar.');
       return;
     }
 
@@ -806,7 +912,8 @@ export default function Dashboard() {
       schemaVersion: 1,
       exportedAt: new Date().toISOString(),
       source: auth.currentUser?.email || auth.currentUser?.displayName || 'ERP OCR',
-      preset: ocrHistoryCustomPreset,
+      name: selectedCustomPreset.name,
+      preset: selectedCustomPreset.config,
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
@@ -875,14 +982,23 @@ export default function Dashboard() {
           toast.error('Archivo de preset OCR inválido.');
           return;
         }
+        const importedName = typeof parsed?.name === 'string' && parsed.name.trim()
+          ? parsed.name.trim()
+          : `Importado ${new Date().toLocaleDateString('es-GT')}`;
+        const importedPreset: OcrCustomNamedPreset = {
+          id: `custom_${Date.now()}`,
+          name: importedName,
+          config: preset,
+        };
 
-        setOcrHistoryCustomPreset(preset);
+        setOcrHistoryCustomPresets((prev) => [...prev, importedPreset]);
         setOcrHistoryViewMode(preset.viewMode);
         setOcrHistorySortBy(preset.sortBy);
         setOcrHistorySortDirection(preset.sortDirection);
         setOcrHistorySelectedColumns(preset.selectedColumns);
         setOcrHistoryStickyColumnsEnabled(preset.stickyColumnsEnabled);
-        setOcrHistorySelectedPreset('custom');
+        setOcrHistorySelectedPresetId(importedPreset.id);
+        setOcrHistoryPresetNameInput(importedPreset.name);
         toast.success('Preset OCR importado y aplicado correctamente.');
       } catch {
         toast.error('No se pudo leer el archivo JSON del preset OCR.');
@@ -3085,10 +3201,10 @@ export default function Dashboard() {
               <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Presets OCR</span>
               <button
                 type="button"
-                onClick={() => applyOcrPreset('auditoria')}
+                onClick={() => applyOcrPresetById('auditoria')}
                 className={cn(
                   'px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border',
-                  ocrHistorySelectedPreset === 'auditoria'
+                  ocrHistorySelectedPresetId === 'auditoria'
                     ? 'bg-primary text-white border-primary'
                     : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
                 )}
@@ -3097,10 +3213,10 @@ export default function Dashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => applyOcrPreset('operaciones')}
+                onClick={() => applyOcrPresetById('operaciones')}
                 className={cn(
                   'px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border',
-                  ocrHistorySelectedPreset === 'operaciones'
+                  ocrHistorySelectedPresetId === 'operaciones'
                     ? 'bg-primary text-white border-primary'
                     : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
                 )}
@@ -3109,34 +3225,49 @@ export default function Dashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => applyOcrPreset('gerencia')}
+                onClick={() => applyOcrPresetById('gerencia')}
                 className={cn(
                   'px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border',
-                  ocrHistorySelectedPreset === 'gerencia'
+                  ocrHistorySelectedPresetId === 'gerencia'
                     ? 'bg-primary text-white border-primary'
                     : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
                 )}
               >
                 Gerencia
               </button>
-              <button
-                type="button"
-                onClick={() => applyOcrPreset('custom')}
-                className={cn(
-                  'px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border',
-                  ocrHistorySelectedPreset === 'custom'
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
-                )}
+              <select
+                value={ocrHistorySelectedPresetId.startsWith('custom_') ? ocrHistorySelectedPresetId : ''}
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  applyOcrPresetById(e.target.value);
+                }}
+                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
               >
-                Personalizado
-              </button>
+                <option value="">Personalizados...</option>
+                {ocrHistoryCustomPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>{preset.name}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={ocrHistoryPresetNameInput}
+                onChange={(e) => setOcrHistoryPresetNameInput(e.target.value)}
+                placeholder="Nombre preset"
+                className="px-2 py-1 rounded-md text-[10px] font-bold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+              />
               <button
                 type="button"
                 onClick={saveCurrentAsCustomOcrPreset}
                 className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-200 bg-emerald-50/70 dark:bg-emerald-900/20"
               >
                 Guardar Actual
+              </button>
+              <button
+                type="button"
+                onClick={deleteSelectedCustomOcrPreset}
+                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-200 bg-rose-50/70 dark:bg-rose-900/20"
+              >
+                Eliminar
               </button>
               <button
                 type="button"
