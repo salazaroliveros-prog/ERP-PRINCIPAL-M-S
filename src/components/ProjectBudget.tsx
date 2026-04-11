@@ -7,6 +7,8 @@ import {
   Calculator, 
   ChevronDown, 
   ChevronUp, 
+  ChevronLeft,
+  ChevronRight,
   AlertCircle,
   Clock,
   Package,
@@ -123,6 +125,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
   const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
   const [projectSelectorItems, setProjectSelectorItems] = useState<any[]>([]);
   const [projectSelectorSearch, setProjectSelectorSearch] = useState('');
+  const [isProjectPanelCollapsed, setIsProjectPanelCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -2262,10 +2265,26 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-4 lg:items-start">
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3 sm:p-4 space-y-3 lg:sticky lg:top-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <h3 className="text-[10px] sm:text-xs font-black text-slate-500 uppercase tracking-widest">Lista de Proyectos</h3>
-                  <div className="relative w-full sm:w-72">
+              <div className={cn(
+                "bg-white rounded-2xl border border-slate-100 shadow-sm p-3 sm:p-4 space-y-3 lg:sticky lg:top-4 transition-all",
+                isProjectPanelCollapsed ? "lg:w-[88px]" : "lg:w-[300px]"
+              )}>
+                <div className="flex items-center justify-between gap-2">
+                  {!isProjectPanelCollapsed && (
+                    <h3 className="text-[10px] sm:text-xs font-black text-slate-500 uppercase tracking-widest">Lista de Proyectos</h3>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsProjectPanelCollapsed((prev) => !prev)}
+                    className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:text-primary hover:border-primary/30 transition-all"
+                    title={isProjectPanelCollapsed ? 'Expandir panel de proyectos' : 'Colapsar panel de proyectos'}
+                  >
+                    {isProjectPanelCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                  </button>
+                </div>
+
+                {!isProjectPanelCollapsed && (
+                  <div className="relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                     <input
                       type="text"
@@ -2275,9 +2294,12 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
                       onChange={(e) => setProjectSelectorSearch(e.target.value)}
                     />
                   </div>
-                </div>
+                )}
 
-                <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-2 pr-1">
+                <div className={cn(
+                  "overflow-y-auto custom-scrollbar space-y-2 pr-1",
+                  isProjectPanelCollapsed ? "max-h-72" : "max-h-40"
+                )}>
                   {filteredProjectSelectorItems.map((item) => {
                     const isActive = String(item.id) === String(project.id);
                     return (
@@ -2288,15 +2310,25 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
                           if (isActive) return;
                           onProjectChange?.(item);
                         }}
+                        title={`${item.name} - ${item.location || 'Sin ubicación'}`}
                         className={cn(
-                          "w-full text-left px-3 py-2 rounded-xl border transition-all",
+                          "w-full rounded-xl border transition-all",
+                          isProjectPanelCollapsed
+                            ? "px-0 py-2 flex items-center justify-center"
+                            : "text-left px-3 py-2",
                           isActive
                             ? "bg-primary-light border-primary/30 text-primary"
                             : "bg-slate-50 border-slate-200 text-slate-700 hover:border-primary/30 hover:bg-primary-light/40"
                         )}
                       >
-                        <p className="text-xs font-black truncate">{item.name}</p>
-                        <p className="text-[10px] font-medium opacity-70 truncate">{item.location || 'Sin ubicación'}</p>
+                        {isProjectPanelCollapsed ? (
+                          <span className="text-xs font-black uppercase">{String(item.name || '?').charAt(0)}</span>
+                        ) : (
+                          <>
+                            <p className="text-xs font-black truncate">{item.name}</p>
+                            <p className="text-[10px] font-medium opacity-70 truncate">{item.location || 'Sin ubicación'}</p>
+                          </>
+                        )}
                       </button>
                     );
                   })}
