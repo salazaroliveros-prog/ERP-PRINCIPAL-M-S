@@ -4,6 +4,7 @@ import { cn } from '../lib/utils';
 import {
   Zap,
   X,
+  Plus,
   ArrowDownCircle,
   ArrowUpCircle,
   FileText,
@@ -42,7 +43,17 @@ const QUICK_ACTIONS: QuickAction[] = [
 
 export function QuickActionsLauncher() {
   const [isOpen, setIsOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'finance' | 'forms'>('finance');
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 1024 : false
+  );
   const panelRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   React.useEffect(() => {
     const handleOpenQuickActions = () => {
@@ -125,16 +136,42 @@ export function QuickActionsLauncher() {
     setIsOpen(false);
   };
 
+  const financialQuickActions = QUICK_ACTIONS.filter(
+    (action) => action.id === 'new-income' || action.id === 'new-expense'
+  );
+  const formsQuickActions = QUICK_ACTIONS.filter(
+    (action) => action.id !== 'new-income' && action.id !== 'new-expense'
+  );
+
   return (
     <>
+      {isMobile && (
+        <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('SIDE_TOOL_WINDOW_OPEN', { detail: { source: 'quick-actions' } }));
+            setIsOpen((prev) => !prev);
+          }}
+          className="fixed z-[115] right-4 bottom-24 px-3 py-2 rounded-full bg-primary text-white shadow-xl border border-white/30 flex items-center gap-2"
+          title="Acción rápida"
+        >
+          <Zap size={16} />
+          <span className="text-[10px] font-black uppercase tracking-wider">Acción rápida</span>
+        </button>
+      )}
+
       <AnimatePresence>
         {isOpen && (
           <motion.div
             ref={panelRef}
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 30 }}
-            className="fixed z-[95] right-16 top-1/2 -translate-y-1/2 w-[300px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden"
+            initial={isMobile ? { opacity: 0, y: 20 } : { opacity: 0, x: 30 }}
+            animate={isMobile ? { opacity: 1, y: 0 } : { opacity: 1, x: 0 }}
+            exit={isMobile ? { opacity: 0, y: 20 } : { opacity: 0, x: 30 }}
+            className={cn(
+              'fixed z-[115] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden',
+              isMobile
+                ? 'left-3 right-3 bottom-28 max-h-[70vh]'
+                : 'right-16 top-1/2 -translate-y-1/2 w-[300px]'
+            )}
           >
             <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -143,7 +180,7 @@ export function QuickActionsLauncher() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold">Acciones rapidas</h3>
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400">Crear registros</p>
+                  <p className="text-[10px] uppercase tracking-wider text-slate-400">Formularios y captura rápida</p>
                 </div>
               </div>
               <button
@@ -155,8 +192,38 @@ export function QuickActionsLauncher() {
               </button>
             </div>
 
-            <div className="p-3 grid grid-cols-1 gap-2 bg-slate-50 dark:bg-slate-900/40">
-              {QUICK_ACTIONS.map((action) => (
+            {isMobile && (
+              <div className="px-3 pt-3 pb-1 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+                <button
+                  onClick={() => setMobileTab('finance')}
+                  className={cn(
+                    'flex-1 px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border',
+                    mobileTab === 'finance'
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                  )}
+                >
+                  Ingreso rápido
+                </button>
+                <button
+                  onClick={() => setMobileTab('forms')}
+                  className={cn(
+                    'flex-1 px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider border',
+                    mobileTab === 'forms'
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                  )}
+                >
+                  Formularios
+                </button>
+              </div>
+            )}
+
+            <div className={cn('p-3 grid grid-cols-1 gap-2 bg-slate-50 dark:bg-slate-900/40', isMobile && 'overflow-y-auto')}>
+              {(isMobile
+                ? (mobileTab === 'finance' ? financialQuickActions : formsQuickActions)
+                : QUICK_ACTIONS
+              ).map((action) => (
                 <button
                   key={action.id}
                   onClick={() => triggerQuickAction(action)}
@@ -170,6 +237,9 @@ export function QuickActionsLauncher() {
                     <action.icon size={16} />
                   </div>
                   <span className="text-sm font-bold text-slate-700 dark:text-slate-100">{action.label}</span>
+                  {isMobile && action.id !== 'new-income' && action.id !== 'new-expense' && (
+                    <Plus size={14} className="ml-auto text-slate-400" />
+                  )}
                 </button>
               ))}
             </div>

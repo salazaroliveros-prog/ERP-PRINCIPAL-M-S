@@ -390,11 +390,52 @@ function AppContent({
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { unreadCount } = useNotifications();
   const location = useLocation();
+  const lastQuickActionTokenRef = useRef<string>('');
 
   useEffect(() => {
     setIsSidebarOpen(false);
     setIsNotificationsOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '');
+    const quickAction = params.get('quickAction');
+    const quickPanel = params.get('quickPanel');
+
+    const allowedQuickActions = new Set([
+      'new-income',
+      'new-expense',
+      'new-quote',
+      'new-project',
+      'new-subcontract',
+      'new-client',
+      'new-supplier',
+      'new-purchase-order',
+    ]);
+
+    const token = `${location.pathname}|${location.search}`;
+    if (lastQuickActionTokenRef.current === token) {
+      return;
+    }
+    lastQuickActionTokenRef.current = token;
+
+    if (quickPanel === '1') {
+      window.dispatchEvent(new Event('OPEN_QUICK_ACTIONS'));
+    }
+
+    if (quickAction && allowedQuickActions.has(quickAction)) {
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent('QUICK_ACTION_TRIGGER', {
+            detail: {
+              action: quickAction,
+              route: location.pathname,
+            },
+          })
+        );
+      }, 350);
+    }
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     const playedKey = 'startup-sound-played';
