@@ -30,6 +30,7 @@ export const FormModal = ({
   const [isFullscreen, setIsFullscreen] = useState(initialFullscreen);
   const [isZoomEnabled, setIsZoomEnabled] = useState(false);
   const transformComponentRef = useRef<any>(null);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
 
   const toggleFullscreen = () => setIsFullscreen(!isFullscreen);
   const toggleZoom = () => setIsZoomEnabled(!isZoomEnabled);
@@ -43,6 +44,21 @@ export const FormModal = ({
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      contentScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+
+      const firstField = contentScrollRef.current?.querySelector<HTMLElement>(
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+      );
+      firstField?.focus({ preventScroll: true });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -184,7 +200,7 @@ export const FormModal = ({
               </TransformComponent>
             </TransformWrapper>
           ) : (
-            <div className="w-full h-full overflow-y-auto custom-scrollbar p-3 md:p-8 pb-20">
+            <div ref={contentScrollRef} className="w-full h-full overflow-y-auto custom-scrollbar p-3 md:p-8 pb-20">
               <div className={cn(
                 "mx-auto transition-all duration-300",
                 isFullscreen ? "max-w-7xl" : "max-w-full"

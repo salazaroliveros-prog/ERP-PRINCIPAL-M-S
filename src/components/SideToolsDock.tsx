@@ -1,17 +1,15 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Bot } from 'lucide-react';
+import { Bot, Zap } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export function SideToolsDock() {
-  const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
-
-  if (isMobile) {
-    return null;
-  }
-
   const openAI = () => {
     window.dispatchEvent(new Event('OPEN_AI_CHAT'));
+  };
+
+  const openQuickActions = () => {
+    window.dispatchEvent(new Event('OPEN_QUICK_ACTIONS'));
   };
 
   return (
@@ -32,6 +30,20 @@ export function SideToolsDock() {
           <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-black tracking-[0.18em] uppercase flex items-center gap-1">
             <Bot size={14} />
             IA
+          </span>
+        </button>
+
+        <button
+          onClick={openQuickActions}
+          title="Atajos"
+          className={cn(
+            'px-2 py-3 rounded-l-xl rounded-r-md text-white transition-all',
+            'bg-slate-800/70 hover:bg-slate-700/90 border border-white/20'
+          )}
+        >
+          <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-black tracking-[0.18em] uppercase flex items-center gap-1">
+            <Zap size={14} />
+            Atajos
           </span>
         </button>
       </div>

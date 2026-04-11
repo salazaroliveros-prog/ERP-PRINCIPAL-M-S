@@ -45,60 +45,6 @@
       ]
     },
     {
-      "name": "Nuevo cliente",
-      "short_name": "Cliente",
-      "description": "Registrar cliente rápido",
-      "url": "/#/clients?quickAction=new-client",
-      "icons": [
-        { "src": "/icon-round-192.png", "sizes": "192x192", "type": "image/png" }
-      ]
-    },
-    {
-      "name": "Nuevo proveedor",
-      "short_name": "Proveedor",
-      "description": "Registrar proveedor rápido",
-      "url": "/#/suppliers?quickAction=new-supplier",
-      "icons": [
-        { "src": "/icon-round-192.png", "sizes": "192x192", "type": "image/png" }
-      ]
-    },
-    {
-      "name": "Nueva obra",
-      "short_name": "Obra",
-      "description": "Registrar proyecto rápido",
-      "url": "/#/projects?quickAction=new-project",
-      "icons": [
-        { "src": "/icon-round-192.png", "sizes": "192x192", "type": "image/png" }
-      ]
-    },
-    {
-      "name": "Nueva cotización",
-      "short_name": "Cotización",
-      "description": "Crear cotización rápida",
-      "url": "/#/quotes?quickAction=new-quote",
-      "icons": [
-        { "src": "/icon-round-192.png", "sizes": "192x192", "type": "image/png" }
-      ]
-    },
-    {
-      "name": "Nuevo subcontrato",
-      "short_name": "Subcontrato",
-      "description": "Registrar subcontrato rápido",
-      "url": "/#/subcontracts?quickAction=new-subcontract",
-      "icons": [
-        { "src": "/icon-round-192.png", "sizes": "192x192", "type": "image/png" }
-      ]
-    },
-    {
-      "name": "Orden de compra",
-      "short_name": "Compra",
-      "description": "Crear orden de compra rápida",
-      "url": "/#/purchase-orders?quickAction=new-purchase-order",
-      "icons": [
-        { "src": "/icon-round-192.png", "sizes": "192x192", "type": "image/png" }
-      ]
-    },
-    {
       "name": "Acciones rápidas",
       "short_name": "Atajos",
       "description": "Abrir panel de formularios rápidos",
