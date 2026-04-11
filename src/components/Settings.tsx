@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Palette, Check, Save, Building2, Globe, DollarSign } from 'lucide-react';
+import { Settings as SettingsIcon, Palette, Check, Save, Building2, Globe, DollarSign, Play, Volume2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { logAction } from '../lib/audit';
 import { getOfflineQueueStatus, onOfflineQueueStatusChange, retryOfflineSync } from '../lib/api';
+import { cn } from '../lib/utils';
+import { getSavedStartupSound, playStartupSound, STARTUP_SOUND_OPTIONS, STARTUP_SOUND_STORAGE_KEY, type StartupSoundId } from '../lib/startupSound';
 
 import { useTheme, THEME_COLORS } from '../contexts/ThemeContext';
 
@@ -16,6 +18,7 @@ export default function Settings() {
     const saved = localStorage.getItem('clock-format');
     return saved === '12h' ? '12h' : '24h';
   });
+  const [startupSound, setStartupSound] = useState<StartupSoundId>(() => getSavedStartupSound());
   const [taxRate, setTaxRate] = useState(12);
   const [queuePending, setQueuePending] = useState(0);
   const [queueSyncing, setQueueSyncing] = useState(false);
@@ -46,9 +49,22 @@ export default function Settings() {
   const handleSaveSettings = async () => {
     setTheme(selectedTheme);
     localStorage.setItem('clock-format', clockFormat);
+    localStorage.setItem(STARTUP_SOUND_STORAGE_KEY, startupSound);
     window.dispatchEvent(new Event('CLOCK_FORMAT_CHANGED'));
     await logAction('Actualizar Configuración', 'Configuración', 'Se actualizó la configuración general del sistema', 'update');
     toast.success('Configuración guardada con éxito');
+  };
+
+  const handlePreviewSound = async (soundId: StartupSoundId) => {
+    if (soundId === 'none') {
+      toast.info('Esta opción no reproduce audio.');
+      return;
+    }
+
+    const played = await playStartupSound(soundId);
+    if (!played) {
+      toast.error('No se pudo reproducir el sonido en este momento.');
+    }
   };
 
   return (
@@ -119,6 +135,47 @@ export default function Settings() {
                 )}
               </button>
             ))}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/70 bg-slate-50/70 dark:bg-slate-800/40 p-4 sm:p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Volume2 size={16} className="text-violet-600" />
+              <p className="text-[10px] sm:text-xs uppercase tracking-[0.18em] font-black text-slate-500 dark:text-slate-400">Catálogo Sonido de Inicio</p>
+            </div>
+            <div className="space-y-3">
+              {STARTUP_SOUND_OPTIONS.map((sound) => (
+                <div
+                  key={sound.id}
+                  className={cn(
+                    'rounded-xl border p-3 sm:p-4 flex items-center justify-between gap-3 transition-colors',
+                    startupSound === sound.id
+                      ? 'border-primary bg-primary-light/20 dark:bg-primary/10'
+                      : 'border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/40',
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setStartupSound(sound.id)}
+                    className="flex-1 text-left"
+                  >
+                    <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">{sound.label}</p>
+                    <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1">{sound.description}</p>
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handlePreviewSound(sound.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 hover:opacity-90 transition-opacity"
+                    >
+                      <Play size={12} />
+                      Probar
+                    </button>
+                    {startupSound === sound.id && <Check size={16} className="text-primary" />}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="pt-4 sm:pt-6 border-t border-slate-100 dark:border-slate-800 flex justify-end">

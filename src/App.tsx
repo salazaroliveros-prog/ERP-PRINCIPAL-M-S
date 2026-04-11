@@ -27,6 +27,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { exportNavMetricsSnapshot, markNavigationComplete, markNavigationStart } from './lib/navMetrics';
+import { getSavedStartupSound, playStartupSound } from './lib/startupSound';
 
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -72,9 +73,6 @@ const NotificationManager = lazy(() =>
 );
 const Sidebar = lazy(() =>
   import('./components/Sidebar').then((module) => ({ default: module.Sidebar }))
-);
-const BottomNav = lazy(() =>
-  import('./components/BottomNav').then((module) => ({ default: module.BottomNav }))
 );
 const SyncStatus = lazy(() =>
   import('./components/SyncStatus').then((module) => ({ default: module.SyncStatus }))
@@ -398,6 +396,19 @@ function AppContent({
     setIsNotificationsOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    const playedKey = 'startup-sound-played';
+    if (sessionStorage.getItem(playedKey) === '1') return;
+
+    const selected = getSavedStartupSound();
+    const timer = window.setTimeout(() => {
+      void playStartupSound(selected);
+      sessionStorage.setItem(playedKey, '1');
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const reduceMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
 
@@ -586,7 +597,7 @@ function AppContent({
         <Toaster position="top-right" richColors closeButton />
 
         <header className="fixed top-0 inset-x-0 z-50 px-3 sm:px-5 lg:px-8 pt-2 sm:pt-3 pointer-events-none">
-          <div className="mx-auto max-w-[1600px] bg-white/70 dark:bg-slate-900/70 border border-slate-200/70 dark:border-slate-700/70 backdrop-blur-xl shadow-lg rounded-2xl px-3 sm:px-4 py-2 sm:py-3 pointer-events-auto">
+          <div className="mx-auto max-w-[1600px] bg-white/50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-700/50 backdrop-blur-xl shadow-lg rounded-2xl px-3 sm:px-4 py-2 sm:py-3 pointer-events-auto">
             <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-4">
               <div className="flex items-center">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary/10 border border-primary/20 overflow-hidden">
@@ -607,7 +618,7 @@ function AppContent({
 
               <div className="flex items-center justify-center min-w-0">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                  <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full overflow-hidden border border-primary/25 bg-white/90 dark:bg-slate-900/90 shadow-sm shrink-0">
+                  <div className="relative w-16 h-16 -mb-8 sm:mb-0 sm:w-14 sm:h-14 rounded-full overflow-hidden border border-primary/25 bg-white/90 dark:bg-slate-900/90 shadow-md shrink-0">
                     <img
                       src="/logo.svg"
                       alt="Constructora WM/M&S"
@@ -642,13 +653,15 @@ function AppContent({
             whileTap={{ scale: 0.97 }}
             transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
             onClick={() => setIsSidebarOpen(true)}
-            className="fixed left-0 top-1/2 -translate-y-1/2 z-[60] flex items-center gap-1.5 bg-primary text-white px-2.5 sm:px-3 py-2.5 sm:py-3 rounded-r-xl shadow-xl shadow-primary/30 hover:bg-primary-hover transition-colors"
+            className="fixed left-0 top-1/2 -translate-y-1/2 z-[110] px-3 py-2 rounded-r-2xl border border-white/20 bg-slate-900/60 backdrop-blur-md shadow-2xl text-white hover:bg-slate-900/75 transition-all"
             title="Abrir menú de módulos"
           >
-            <ChevronRight size={14} className="sm:w-4 sm:h-4" />
-            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider">Módulos</span>
+            <span className="[writing-mode:vertical-rl] rotate-180 text-[9px] font-black tracking-[0.16em] uppercase flex items-center gap-1">
+              <ChevronRight size={13} />
+              Menú
+            </span>
             {unreadCount > 0 && (
-              <span className="ml-1 min-w-[18px] h-[18px] px-1 bg-white text-primary text-[9px] font-black rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-white text-primary text-[9px] font-black rounded-full flex items-center justify-center">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
@@ -674,7 +687,7 @@ function AppContent({
         </Suspense>
         
         <main className={cn(
-          "flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar perf-content p-4 lg:p-8 pt-24 sm:pt-28 lg:pt-28 pb-24 lg:pb-8"
+          "flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar perf-content p-4 lg:p-8 pt-32 sm:pt-28 lg:pt-28 pb-24 lg:pb-8"
         )}>
           <Suspense fallback={<LoadingFallback />}>
             <AnimatePresence mode="wait">
@@ -717,16 +730,6 @@ function AppContent({
         </Suspense>
         <Suspense fallback={null}>
           <SideToolsDock />
-        </Suspense>
-
-        <Suspense fallback={null}>
-          <BottomNav 
-            onMenuClick={() => setIsSidebarOpen(true)} 
-            onPrefetchRoute={prefetchRouteComponent}
-            onNavigateIntent={markRouteIntent}
-            deferredPrompt={deferredPrompt}
-            onInstall={onInstall}
-          />
         </Suspense>
 
         {NAV_METRICS_ENABLED && (

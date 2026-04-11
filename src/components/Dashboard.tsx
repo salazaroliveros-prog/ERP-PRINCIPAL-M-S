@@ -757,8 +757,13 @@ export default function Dashboard() {
     totalExpense: totalSpent,
   };
 
+  const financialSplitData = [
+    { name: 'Ingresos', value: financialSummary.totalIncome, color: '#10b981' },
+    { name: 'Gastos', value: financialSummary.totalExpense, color: '#ef4444' },
+  ].filter((item) => item.value > 0);
+
   return (
-    <div className="space-y-8 min-w-0 overflow-x-hidden">
+    <div className="space-y-6 lg:space-y-5 min-w-0 overflow-x-hidden lg:h-[calc(100dvh-9.5rem)] lg:overflow-y-auto lg:pr-2 custom-scrollbar">
       <header>
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Tablero de Control</h1>
         <p className="text-slate-500 dark:text-slate-400">Resumen ejecutivo y salud de proyectos</p>
@@ -805,9 +810,9 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
-        <div className="lg:col-span-2 space-y-8 min-w-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 min-w-0">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 lg:gap-5 min-w-0">
+        <div className="xl:col-span-3 space-y-6 lg:space-y-5 min-w-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-5 min-w-0">
             <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all duration-300">
               <div className="mb-6 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Tendencia de Ganancia Global</h3>
@@ -1062,7 +1067,7 @@ export default function Dashboard() {
           </div>
 
           {/* Stacked Bar Chart for Progress Comparison */}
-          <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
+          <div className="bg-white dark:bg-slate-900 p-6 lg:p-7 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
             <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
                 <TrendingUp size={18} className="text-primary" />
@@ -1154,7 +1159,7 @@ export default function Dashboard() {
           </div>
 
           {/* Gantt-style Progress Chart */}
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
+          <div className="bg-white dark:bg-slate-900 p-5 lg:p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-5">
               <div className="flex items-center gap-4">
                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
@@ -1379,7 +1384,37 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-6 lg:space-y-5">
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Balance General</h3>
+            <div className="h-52 min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
+                <PieChart>
+                  <Pie
+                    data={financialSplitData.length > 0 ? financialSplitData : [{ name: 'Sin datos', value: 1, color: '#94a3b8' }]}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={55}
+                    outerRadius={78}
+                    paddingAngle={4}
+                  >
+                    {(financialSplitData.length > 0 ? financialSplitData : [{ name: 'Sin datos', value: 1, color: '#94a3b8' }]).map((entry, index) => (
+                      <Cell key={`financial-split-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }}
+                    itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }}
+                    formatter={(value: number) => [formatCurrency(value), '']}
+                  />
+                  <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingTop: '12px' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
           <div className="bg-white dark:bg-slate-900 p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
               <AlertTriangle className="text-rose-600" size={20} />

@@ -196,7 +196,7 @@ export const Sidebar = ({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
             onClick={onClose}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-40 lg:hidden"
+            className="fixed inset-0 bg-slate-900/45 backdrop-blur-sm z-30"
           />
         )}
       </AnimatePresence>
