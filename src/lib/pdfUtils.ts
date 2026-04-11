@@ -171,7 +171,7 @@ export const drawReportHeader = (
   return nextY + 4;
 };
 
-export const generateExecutiveReport = (data: {
+export const buildExecutiveReportPdf = (data: {
   projects: any[],
   financials: { totalIncome: number, totalExpense: number },
   inventoryAlerts: any[],
@@ -256,5 +256,82 @@ export const generateExecutiveReport = (data: {
     doc.text(`Página ${i} de ${pageCount} - Generado por Asistente IA WM_M&S`, 105, 285, { align: 'center' });
   }
 
+  return doc;
+};
+
+export const generateExecutiveReport = (data: {
+  projects: any[],
+  financials: { totalIncome: number, totalExpense: number },
+  inventoryAlerts: any[],
+  risks: any[]
+}) => {
+  const doc = buildExecutiveReportPdf(data);
   doc.save(`Informe_Ejecutivo_${new Date().toISOString().split('T')[0]}.pdf`);
+};
+
+export const buildMaterialsLineReportPdf = (input: {
+  project: { name: string; location?: string | null };
+  lineItem: {
+    order?: number | null;
+    description: string;
+    unit?: string;
+    quantity?: number;
+    totalItemPrice?: number;
+    materials?: Array<{ name?: string; unit?: string; quantity?: number; unitPrice?: number }>;
+  };
+}) => {
+  const doc = new jsPDF() as any;
+  const { project, lineItem } = input;
+  const materials = Array.isArray(lineItem.materials) ? lineItem.materials : [];
+
+  const titleSuffix = lineItem.order ? `Renglón ${lineItem.order}` : 'Renglón';
+  const headerBottom = drawReportHeader(doc, `DESGLOSE DE MATERIALES - ${titleSuffix.toUpperCase()}`, {
+    subtitle: `Proyecto: ${project.name}${project.location ? ` · ${project.location}` : ''}`,
+    dateText: `Fecha de Emisión: ${new Date().toLocaleDateString()}`,
+  });
+
+  doc.setTextColor(30, 41, 59);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text(lineItem.description || 'Sin descripción', 14, headerBottom + 6);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(71, 85, 105);
+  doc.text(
+    `Unidad: ${lineItem.unit || '-'} | Cantidad: ${Number(lineItem.quantity || 0).toFixed(2)} | Total renglón: ${Number(lineItem.totalItemPrice || 0).toLocaleString('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 })}`,
+    14,
+    headerBottom + 12
+  );
+
+  const rows = materials.map((material) => {
+    const quantity = Number(material?.quantity || 0);
+    const unitPrice = Number(material?.unitPrice || 0);
+    return [
+      String(material?.name || 'Material'),
+      String(material?.unit || '-'),
+      quantity.toFixed(2),
+      unitPrice.toLocaleString('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 }),
+      (quantity * unitPrice).toLocaleString('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 }),
+    ];
+  });
+
+  autoTable(doc, {
+    startY: headerBottom + 17,
+    head: [['Material', 'Unidad', 'Cantidad', 'P. Unitario', 'Subtotal']],
+    body: rows.length > 0 ? rows : [['Sin materiales cargados', '-', '-', '-', '-']],
+    theme: 'grid',
+    headStyles: { fillColor: [37, 99, 235] },
+    styles: { fontSize: 9 },
+  });
+
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`Página ${page} de ${pageCount} - Reporte de materiales WM_M&S`, 105, 285, { align: 'center' });
+  }
+
+  return doc;
 };

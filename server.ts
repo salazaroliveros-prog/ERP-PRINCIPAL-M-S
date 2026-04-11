@@ -19,6 +19,8 @@ const AI_PROVIDER = String(process.env.AI_PROVIDER || 'gemini').trim().toLowerCa
 const GITHUB_MODELS_ENDPOINT = String(process.env.GITHUB_MODELS_ENDPOINT || 'https://models.inference.ai.azure.com/chat/completions').trim();
 const GITHUB_MODELS_MODEL = String(process.env.GITHUB_MODELS_MODEL || 'gpt-4.1-mini').trim();
 const GITHUB_MODELS_TOKEN = String(process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || '').trim();
+const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim();
+const REPORTS_FROM_EMAIL = String(process.env.REPORTS_FROM_EMAIL || 'onboarding@resend.dev').trim();
 const PG_POOL_MAX = Number(process.env.PG_POOL_MAX || 20);
 const PG_IDLE_TIMEOUT_MS = Number(process.env.PG_IDLE_TIMEOUT_MS || 30000);
 const PG_CONNECTION_TIMEOUT_MS = Number(process.env.PG_CONNECTION_TIMEOUT_MS || 10000);
@@ -1681,6 +1683,10 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
     const dbAvailable = await isDatabaseAvailable();
     if (dbAvailable) return next();
 
+    if (req.path === '/reports/email' && req.method === 'POST') {
+      return next();
+    }
+
     if (req.path === '/auth/login' && req.method === 'POST') {
       const email = String(req.body?.email || '').trim().toLowerCase();
       if (!email) {
@@ -1773,6 +1779,68 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       return res.json(mapAppUser(result.rows[0]));
     } catch (error: any) {
       return res.status(500).json({ error: error?.message || 'No se pudo iniciar sesion' });
+    }
+  });
+
+  app.post('/api/reports/email', async (req, res) => {
+    try {
+      const to = String(req.body?.to || '').trim();
+      const subject = String(req.body?.subject || '').trim();
+      const html = String(req.body?.html || '').trim();
+      const fileName = String(req.body?.fileName || 'reporte.pdf').trim();
+      const pdfBase64 = String(req.body?.pdfBase64 || '').trim();
+
+      if (!to || !subject || !html || !pdfBase64) {
+        return res.status(400).json({ error: 'to, subject, html y pdfBase64 son obligatorios' });
+      }
+
+      const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!validEmail.test(to)) {
+        return res.status(400).json({ error: 'correo destino inválido' });
+      }
+
+      if (!RESEND_API_KEY) {
+        return res.status(501).json({
+          error: 'Servicio de correo no configurado. Define RESEND_API_KEY y REPORTS_FROM_EMAIL.',
+        });
+      }
+
+      const safeFileName = fileName.toLowerCase().endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: REPORTS_FROM_EMAIL,
+          to: [to],
+          subject,
+          html,
+          attachments: [
+            {
+              filename: safeFileName,
+              content: pdfBase64,
+            },
+          ],
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return res.status(502).json({
+          error: 'No se pudo enviar el correo con reporte PDF',
+          details: result,
+        });
+      }
+
+      return res.json({ success: true, providerId: result?.id || null });
+    } catch (error: any) {
+      return res.status(500).json({
+        error: 'Error inesperado al enviar reporte por correo',
+        details: String(error?.message || error || ''),
+      });
     }
   });
 

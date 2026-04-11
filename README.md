@@ -72,6 +72,8 @@ Variables requeridas para backend:
 - AI_PROVIDER=gemini|github-models (opcional, por defecto gemini)
 - GEMINI_API_KEY (si AI_PROVIDER=gemini)
 - GITHUB_MODELS_TOKEN (si AI_PROVIDER=github-models)
+- RESEND_API_KEY (para envio automatico de PDFs por correo)
+- REPORTS_FROM_EMAIL (correo remitente validado en Resend, opcional; por defecto onboarding@resend.dev)
 - SERVER_SCHEDULED_ALERTS_ENABLED=true|false (opcional, por defecto true)
 - SERVER_SCHEDULED_ALERTS_INTERVAL_MS=60000 (opcional, minimo 30000)
 - OCR_AUTO_APPROVE_MIN_SCORE=85 (opcional)
@@ -168,6 +170,8 @@ Vercel (Project Settings > Environment Variables):
 - `DATABASE_URL=postgresql://...`
 - `JWT_SECRET=...`
 - `CORS_ORIGINS=https://salazaroliveros-prog.github.io`
+- `RESEND_API_KEY=...`
+- `REPORTS_FROM_EMAIL=reportes@tu-dominio.com`
 
 Verificacion rapida:
 

@@ -3,11 +3,13 @@ import { Bot, Send, X, MessageSquare, Sparkles, AlertTriangle, TrendingUp, Wrenc
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, handleApiError, OperationType } from '../lib/utils';
 import { getAIResponse } from '../lib/gemini';
-import { listProjects } from '../lib/projectsApi';
+import { auth } from '../lib/authStorageClient';
+import { listProjectBudgetItemsDetailed, listProjects } from '../lib/projectsApi';
 import { listTransactions } from '../lib/financialsApi';
 import { listInventory } from '../lib/operationsApi';
 import { listRisks } from '../lib/risksApi';
-import { generateExecutiveReport } from '../lib/pdfUtils';
+import { buildExecutiveReportPdf, buildMaterialsLineReportPdf } from '../lib/pdfUtils';
+import { sendPdfReportByEmail } from '../lib/reportsApi';
 import { sendNotification } from '../lib/notifications';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -79,6 +81,27 @@ const persistControlHistory = (items: PortfolioControlSnapshot[]) => {
 
 const GEMINI_DIAGNOSTIC_PREFIX = '[GEMINI_DIAGNOSTIC]';
 const AI_DIAGNOSTIC_PREFIX = '[AI_DIAGNOSTIC]';
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+
+const getEmailFromPrompt = (prompt: string) => {
+  const match = prompt.match(EMAIL_REGEX);
+  return match ? match[0].toLowerCase() : '';
+};
+
+const slugifyText = (value: string) =>
+  String(value || 'reporte')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+
+const getPdfBase64 = (doc: any) => {
+  const dataUri = String(doc.output('datauristring') || '');
+  const base64Content = dataUri.includes(',') ? dataUri.split(',')[1] : dataUri;
+  return base64Content.trim();
+};
 
 const parseGeminiDiagnostic = (text: string) => {
   if (!text.startsWith(GEMINI_DIAGNOSTIC_PREFIX) && !text.startsWith(AI_DIAGNOSTIC_PREFIX)) {
@@ -415,30 +438,8 @@ export default function AIChat() {
         const prompt = String(params?.text || '').trim();
         if (!prompt) return;
 
-        const userMsg: Message = { role: 'user', text: prompt, timestamp: new Date() };
-        setMessages(prev => [...prev, userMsg]);
-        setInput('');
-        setIsLoading(true);
-        setError(null);
-
-        try {
-          const response = await getAIResponse(prompt, messages.map(m => ({ role: m.role, text: m.text })));
-          const diagnostic = response ? parseGeminiDiagnostic(response) : null;
-          if (diagnostic) {
-            setError(diagnostic);
-          } else {
-            setMessages(prev => [...prev, {
-              role: 'assistant',
-              text: response || 'No fue posible generar respuesta en este momento.',
-              timestamp: new Date(),
-            }]);
-          }
-        } catch {
-          setError('Error al procesar la solicitud rapida.');
-        } finally {
-          setIsLoading(false);
-          autoHideAssistant();
-        }
+        // Reuse the main send flow to keep command handling consistent.
+        void handleSend(prompt);
         return;
       }
       
@@ -477,7 +478,8 @@ export default function AIChat() {
         if (data) {
           // Filter data for specific project if needed, but fetchReportData gets all.
           // For now, we'll generate the global one or a specific one if pdfUtils supports it.
-          generateExecutiveReport(data);
+          const reportDoc = buildExecutiveReportPdf(data);
+          reportDoc.save(`Informe_Ejecutivo_${new Date().toISOString().split('T')[0]}.pdf`);
           setMessages(prev => [...prev, { 
             role: 'assistant', 
             text: `He generado el informe ejecutivo para ${params.projectName}. El archivo PDF se ha descargado automáticamente.`, 
@@ -645,9 +647,9 @@ export default function AIChat() {
     };
   }, [isOpen, isAutoHideEnabled]);
 
-  const handleSend = async () => {
+  const handleSend = async (forcedInput?: string) => {
     // Validation: Prevent empty or whitespace-only messages, ensure valid characters
-    const trimmedInput = input.trim();
+    const trimmedInput = (forcedInput ?? input).trim();
     const messagePattern = /[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s\?\!\.\,]/;
     
     if (!trimmedInput || !messagePattern.test(trimmedInput)) {
@@ -856,24 +858,132 @@ export default function AIChat() {
     if (lowerInput.includes('informe ejecutivo') || lowerInput.includes('generar reporte') || lowerInput.includes('enviar pdf')) {
       const assistantMessage: Message = {
         role: 'assistant',
-        text: 'Entendido. Estoy recopilando los datos consolidados de todos los módulos para generar tu informe ejecutivo gerencial en PDF. Un momento por favor...',
+        text: 'Entendido. Estoy generando y enviando el informe ejecutivo en PDF por correo de inmediato.',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, assistantMessage]);
       
-      const data = await fetchReportData();
-      if (data) {
-        generateExecutiveReport(data);
+      try {
+        const data = await fetchReportData();
+        if (!data) {
+          setError('No se pudieron obtener los datos para el informe.');
+          setIsLoading(false);
+          autoHideAssistant();
+          return;
+        }
+
+        const recipientEmail = getEmailFromPrompt(trimmedInput) || String(auth.currentUser?.email || '').trim().toLowerCase();
+        if (!recipientEmail) {
+          setError('No encontré un correo destino. Incluye un correo en tu mensaje.');
+          setIsLoading(false);
+          autoHideAssistant();
+          return;
+        }
+
+        const reportDoc = buildExecutiveReportPdf(data);
+        const pdfBase64 = getPdfBase64(reportDoc);
+        await sendPdfReportByEmail({
+          to: recipientEmail,
+          subject: 'Informe Ejecutivo Gerencial WM_M&S',
+          html: '<p>Adjunto encontrarás el informe ejecutivo gerencial en PDF.</p>',
+          fileName: `Informe_Ejecutivo_${new Date().toISOString().slice(0, 10)}.pdf`,
+          pdfBase64,
+        });
+
         const successMessage: Message = {
           role: 'assistant',
-          text: '¡Listo! El informe ejecutivo ha sido generado y descargado con éxito. Contiene el resumen financiero, estado de proyectos y alertas críticas.',
+          text: `¡Listo! El informe ejecutivo fue enviado por correo a ${recipientEmail}.`,
           timestamp: new Date()
         };
         setMessages(prev => [...prev, successMessage]);
-        toast.success('Informe generado con éxito');
-      } else {
-        setError("No se pudieron obtener los datos para el informe.");
+        toast.success(`Informe enviado a ${recipientEmail}`);
+      } catch (error) {
+        handleApiError(error, OperationType.CREATE, 'reporte ejecutivo por correo');
       }
+
+      setIsLoading(false);
+      autoHideAssistant();
+      return;
+    }
+
+    if (
+      lowerInput.includes('desglose de materiales') ||
+      lowerInput.includes('materiales del renglon') ||
+      lowerInput.includes('materiales del renglón')
+    ) {
+      const lineMatch = trimmedInput.match(/rengl[oó]n\s*(?:n[oº°.]*)?\s*(\d+)/i);
+      const requestedLineOrder = Number(lineMatch?.[1] || 0);
+      const allProjects = await listProjects();
+      const normalizedInput = trimmedInput.toLowerCase();
+      const targetProject = allProjects.find((project) => normalizedInput.includes(String(project.name || '').toLowerCase()));
+
+      if (!targetProject || !requestedLineOrder) {
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: 'Para enviar el desglose de materiales en PDF necesito que indiques el nombre del proyecto y el número de renglón. Ejemplo: "Envía desglose de materiales del proyecto Torre Norte renglón 12 a correo@dominio.com".',
+            timestamp: new Date(),
+          },
+        ]);
+        setIsLoading(false);
+        autoHideAssistant();
+        return;
+      }
+
+      const recipientEmail = getEmailFromPrompt(trimmedInput) || String(auth.currentUser?.email || '').trim().toLowerCase();
+      if (!recipientEmail) {
+        setError('No encontré un correo destino. Incluye un correo en tu mensaje.');
+        setIsLoading(false);
+        autoHideAssistant();
+        return;
+      }
+
+      try {
+        const detailedItems = await listProjectBudgetItemsDetailed(targetProject.id);
+        const targetLine = detailedItems.find((item) => Number(item.order || 0) === requestedLineOrder);
+
+        if (!targetLine) {
+          setMessages(prev => [
+            ...prev,
+            {
+              role: 'assistant',
+              text: `No encontré el renglón ${requestedLineOrder} en el proyecto ${targetProject.name}.`,
+              timestamp: new Date(),
+            },
+          ]);
+          setIsLoading(false);
+          autoHideAssistant();
+          return;
+        }
+
+        const materialsDoc = buildMaterialsLineReportPdf({
+          project: { name: targetProject.name, location: targetProject.location },
+          lineItem: targetLine,
+        });
+
+        await sendPdfReportByEmail({
+          to: recipientEmail,
+          subject: `Desglose de materiales - ${targetProject.name} renglón ${requestedLineOrder}`,
+          html: `<p>Adjunto se envía el desglose de materiales del proyecto <strong>${targetProject.name}</strong>, renglón <strong>${requestedLineOrder}</strong>.</p>`,
+          fileName: `Desglose_Materiales_${slugifyText(targetProject.name)}_renglon_${requestedLineOrder}.pdf`,
+          pdfBase64: getPdfBase64(materialsDoc),
+        });
+
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: `Listo. Envié el desglose de materiales del renglón ${requestedLineOrder} de ${targetProject.name} a ${recipientEmail}.`,
+            timestamp: new Date(),
+          },
+        ]);
+
+        toast.success(`Desglose enviado a ${recipientEmail}`);
+      } catch (error) {
+        handleApiError(error, OperationType.CREATE, 'desglose de materiales por correo');
+      }
+
       setIsLoading(false);
       autoHideAssistant();
       return;
