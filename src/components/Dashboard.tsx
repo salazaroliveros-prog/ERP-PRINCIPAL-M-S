@@ -901,6 +901,26 @@ export default function Dashboard() {
     toast.success('Preset personalizado eliminado.');
   };
 
+  const moveSelectedCustomOcrPreset = (direction: 'up' | 'down') => {
+    const currentIndex = ocrHistoryCustomPresets.findIndex((preset) => preset.id === ocrHistorySelectedPresetId);
+    if (currentIndex < 0) {
+      toast.info('Selecciona un preset personalizado para reordenar.');
+      return;
+    }
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= ocrHistoryCustomPresets.length) {
+      return;
+    }
+
+    setOcrHistoryCustomPresets((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(currentIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  };
+
   const exportCustomOcrPresetJson = () => {
     const selectedCustomPreset = ocrHistoryCustomPresets.find((preset) => preset.id === ocrHistorySelectedPresetId);
     if (!selectedCustomPreset) {
@@ -1010,6 +1030,13 @@ export default function Dashboard() {
     };
     reader.readAsText(file);
   };
+
+  const selectedCustomPresetIndex = useMemo(
+    () => ocrHistoryCustomPresets.findIndex((preset) => preset.id === ocrHistorySelectedPresetId),
+    [ocrHistoryCustomPresets, ocrHistorySelectedPresetId]
+  );
+
+  const hasSelectedCustomPreset = selectedCustomPresetIndex >= 0;
 
   const ocrEffectiveness = useMemo(() => {
     const total = visibleOcrValidationHistory.length;
@@ -3248,6 +3275,22 @@ export default function Dashboard() {
                   <option key={preset.id} value={preset.id}>{preset.name}</option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => moveSelectedCustomOcrPreset('up')}
+                disabled={!hasSelectedCustomPreset || selectedCustomPresetIndex === 0}
+                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 disabled:opacity-50"
+              >
+                Subir
+              </button>
+              <button
+                type="button"
+                onClick={() => moveSelectedCustomOcrPreset('down')}
+                disabled={!hasSelectedCustomPreset || selectedCustomPresetIndex === ocrHistoryCustomPresets.length - 1}
+                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 disabled:opacity-50"
+              >
+                Bajar
+              </button>
               <input
                 type="text"
                 value={ocrHistoryPresetNameInput}
@@ -3265,6 +3308,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={deleteSelectedCustomOcrPreset}
+                disabled={!hasSelectedCustomPreset}
                 className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-200 bg-rose-50/70 dark:bg-rose-900/20"
               >
                 Eliminar
