@@ -1349,9 +1349,9 @@ export default function Dashboard() {
           projectsForBaseline.map(async (project: any) => {
             try {
               const items = await listProjectBudgetItemsDetailed(project.id);
-              return [project.id, items] as const;
+              return [project.id, items] as [string, any[]];
             } catch {
-              return [project.id, []] as const;
+              return [project.id, [] as any[]] as [string, any[]];
             }
           })
         );
@@ -2328,7 +2328,7 @@ export default function Dashboard() {
       setIsLoadingMoreOcrHistory(true);
       await refreshOcrValidationHistory('append');
     } catch (error) {
-      handleApiError(error, OperationType.READ, 'documents/ocr-validations/load-more');
+      handleApiError(error, OperationType.GET, 'documents/ocr-validations/load-more');
     } finally {
       setIsLoadingMoreOcrHistory(false);
     }

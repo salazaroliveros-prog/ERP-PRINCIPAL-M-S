@@ -104,6 +104,12 @@ export const markNotificationAsRead = async (id: string) => {
   });
 };
 
+export const deleteNotification = async (id: string) => {
+  return requestJson<void>(`/api/notifications/${id}`, {
+    method: 'DELETE',
+  });
+};
+
 export const listenForNotifications = (onNewNotification: (n: Notification) => void) => {
   let active = true;
   const knownIds = new Set<string>();

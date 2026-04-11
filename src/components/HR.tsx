@@ -32,16 +32,21 @@ import { logAction } from '../lib/audit';
 import jsPDF from 'jspdf';
 import SignaturePad from './SignaturePad';
 import {
+  AttendanceRecord,
   createAttendance,
   createEmployee,
+  deleteAttendance,
   createEmploymentContract,
   createVacancy,
   deleteEmployee,
+  deleteEmploymentContract,
   deleteVacancy,
   EmploymentContractRecord,
+  listAttendance,
   listEmployees,
   listEmploymentContracts,
   listVacancies,
+  updateAttendance,
   updateEmployee,
   updateEmploymentContract,
   updateVacancy,
@@ -64,6 +69,8 @@ export default function HR() {
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
   const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [attendanceItems, setAttendanceItems] = useState<AttendanceRecord[]>([]);
+  const [editingAttendanceId, setEditingAttendanceId] = useState<string | null>(null);
   const [attendanceRecord, setAttendanceRecord] = useState({
     employeeId: '',
     type: 'Entry',
@@ -127,6 +134,15 @@ export default function HR() {
     }
   }, []);
 
+  const loadAttendance = useCallback(async () => {
+    try {
+      const response = await listAttendance({ limit: 20, offset: 0 });
+      setAttendanceItems(response.items);
+    } catch (error) {
+      handleApiError(error, OperationType.GET, 'attendance');
+    }
+  }, []);
+
   useEffect(() => {
     loadEmployees();
   }, [loadEmployees]);
@@ -134,6 +150,10 @@ export default function HR() {
   useEffect(() => {
     loadVacanciesAndContracts();
   }, [loadVacanciesAndContracts]);
+
+  useEffect(() => {
+    loadAttendance();
+  }, [loadAttendance]);
 
   const handleSubmitVacancy = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -546,19 +566,95 @@ export default function HR() {
     }
   };
 
+  const toLocalDateTimeInput = (value: string) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return new Date().toISOString().slice(0, 16);
+    }
+    const timezoneOffsetMs = parsed.getTimezoneOffset() * 60 * 1000;
+    return new Date(parsed.getTime() - timezoneOffsetMs).toISOString().slice(0, 16);
+  };
+
+  const resetAttendanceForm = () => {
+    setEditingAttendanceId(null);
+    setAttendanceRecord({
+      employeeId: '',
+      type: 'Entry',
+      timestamp: new Date().toISOString().slice(0, 16),
+    });
+  };
+
+  const handleEditAttendance = (item: AttendanceRecord) => {
+    setEditingAttendanceId(item.id);
+    setAttendanceRecord({
+      employeeId: item.employeeId,
+      type: item.type,
+      timestamp: toLocalDateTimeInput(item.timestamp),
+    });
+    setIsAttendanceModalOpen(true);
+  };
+
+  const handleDeleteAttendance = async (item: AttendanceRecord) => {
+    const confirmed = window.confirm(`¿Eliminar registro de asistencia de ${item.employeeName || 'empleado'}?`);
+    if (!confirmed) return;
+
+    try {
+      await deleteAttendance(item.id);
+      toast.success('Registro de asistencia eliminado');
+      await logAction('Eliminación de Asistencia', 'RRHH', `Asistencia eliminada para ${item.employeeName}`, 'delete', {
+        attendanceId: item.id,
+        employeeId: item.employeeId,
+      });
+      await loadAttendance();
+    } catch (error) {
+      handleApiError(error, OperationType.DELETE, 'attendance');
+    }
+  };
+
+  const handleDeleteContract = async (contract: EmploymentContractRecord) => {
+    const confirmed = window.confirm(`¿Eliminar contrato de ${contract.employeeName}?`);
+    if (!confirmed) return;
+
+    try {
+      await deleteEmploymentContract(contract.id);
+      toast.success('Contrato eliminado');
+      await logAction('Eliminación de Contrato', 'RRHH', `Contrato eliminado de ${contract.employeeName}`, 'delete', {
+        contractId: contract.id,
+      });
+      await loadVacanciesAndContracts();
+    } catch (error) {
+      handleApiError(error, OperationType.DELETE, 'contracts');
+    }
+  };
+
   const handleAttendanceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const emp = employees.find(e => e.id === attendanceRecord.employeeId);
-      await createAttendance({
-        ...attendanceRecord,
-        employeeName: emp?.name,
-      });
-      toast.success(`Asistencia (${attendanceRecord.type}) registrada para ${emp?.name}`);
-      await logAction('Registro de Asistencia', 'RRHH', `Asistencia ${attendanceRecord.type} para ${emp?.name}`, 'create', { employeeId: attendanceRecord.employeeId });
+      if (editingAttendanceId) {
+        await updateAttendance(editingAttendanceId, {
+          ...attendanceRecord,
+          employeeName: emp?.name,
+        });
+        toast.success('Asistencia actualizada');
+        await logAction('Edición de Asistencia', 'RRHH', `Asistencia ${attendanceRecord.type} actualizada para ${emp?.name}`, 'update', {
+          attendanceId: editingAttendanceId,
+          employeeId: attendanceRecord.employeeId,
+        });
+      } else {
+        await createAttendance({
+          ...attendanceRecord,
+          employeeName: emp?.name,
+        });
+        toast.success(`Asistencia (${attendanceRecord.type}) registrada para ${emp?.name}`);
+        await logAction('Registro de Asistencia', 'RRHH', `Asistencia ${attendanceRecord.type} para ${emp?.name}`, 'create', { employeeId: attendanceRecord.employeeId });
+      }
+
+      await loadAttendance();
       setIsAttendanceModalOpen(false);
+      resetAttendanceForm();
     } catch (error) {
-      handleApiError(error, OperationType.WRITE, 'attendance');
+      handleApiError(error, editingAttendanceId ? OperationType.UPDATE : OperationType.WRITE, 'attendance');
     }
   };
 
@@ -655,7 +751,10 @@ export default function HR() {
             Generar Demo
           </button>
           <button 
-            onClick={() => setIsAttendanceModalOpen(true)}
+            onClick={() => {
+              resetAttendanceForm();
+              setIsAttendanceModalOpen(true);
+            }}
             className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-all shadow-sm"
           >
             <Clock size={18} />
@@ -684,8 +783,18 @@ export default function HR() {
               className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 dark:border-slate-800"
             >
               <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <h3 className="text-xl font-black text-slate-900 dark:text-white">Control de Asistencia</h3>
-                <button title="Cerrar modal de asistencia" aria-label="Cerrar modal de asistencia" onClick={() => setIsAttendanceModalOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                  {editingAttendanceId ? 'Editar Asistencia' : 'Control de Asistencia'}
+                </h3>
+                <button
+                  title="Cerrar modal de asistencia"
+                  aria-label="Cerrar modal de asistencia"
+                  onClick={() => {
+                    setIsAttendanceModalOpen(false);
+                    resetAttendanceForm();
+                  }}
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                >
                   <X size={20} className="text-slate-500" />
                 </button>
               </div>
@@ -733,9 +842,56 @@ export default function HR() {
                   </div>
                 </div>
                 <button type="submit" className="w-full py-4 bg-primary text-white rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all mt-4">
-                  Registrar Asistencia
+                  {editingAttendanceId ? 'Guardar Cambios' : 'Registrar Asistencia'}
                 </button>
+                {editingAttendanceId && (
+                  <button
+                    type="button"
+                    onClick={resetAttendanceForm}
+                    className="w-full py-2.5 border border-slate-300 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600"
+                  >
+                    Cancelar Edición
+                  </button>
+                )}
               </form>
+
+              <div className="px-6 pb-6">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Registros recientes</p>
+                <div className="max-h-44 overflow-auto space-y-2">
+                  {attendanceItems.length === 0 ? (
+                    <p className="text-xs text-slate-500">No hay registros de asistencia.</p>
+                  ) : (
+                    attendanceItems.slice(0, 8).map((item) => (
+                      <div key={item.id} className="p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{item.employeeName || 'Empleado'}</p>
+                          <p className="text-[10px] text-slate-500">{item.type} · {new Date(item.timestamp).toLocaleString()}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            title="Editar asistencia"
+                            aria-label="Editar asistencia"
+                            onClick={() => handleEditAttendance(item)}
+                            className="p-1.5 text-slate-500 hover:text-primary"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Eliminar asistencia"
+                            aria-label="Eliminar asistencia"
+                            onClick={() => void handleDeleteAttendance(item)}
+                            className="p-1.5 text-slate-500 hover:text-rose-600"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </motion.div>
           </div>
         )}
@@ -1454,6 +1610,15 @@ export default function HR() {
                         Ver PDF
                       </button>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteContract(contract)}
+                      className="px-2.5 py-1.5 rounded-lg border border-rose-300 text-[11px] font-bold text-rose-700 flex items-center gap-1"
+                    >
+                      <Trash2 size={12} />
+                      Eliminar
+                    </button>
                   </div>
                 </div>
               ))

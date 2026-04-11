@@ -28,6 +28,15 @@ export interface AttendancePayload {
   timestamp: string;
 }
 
+export interface AttendanceRecord {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  type: string;
+  timestamp: string;
+  createdAt: string;
+}
+
 export interface VacancyRecord {
   id: string;
   title: string;
@@ -115,6 +124,30 @@ export async function createAttendance(payload: AttendancePayload): Promise<any>
   });
 }
 
+export async function listAttendance(params: { employeeId?: string; limit?: number; offset?: number } = {}) {
+  const search = new URLSearchParams();
+  if (params.employeeId) search.set('employeeId', params.employeeId);
+  if (params.limit !== undefined) search.set('limit', String(params.limit));
+  if (params.offset !== undefined) search.set('offset', String(params.offset));
+
+  const qs = search.toString();
+  const path = qs ? `/api/attendance?${qs}` : '/api/attendance';
+  return requestJson<{ items: AttendanceRecord[]; hasMore: boolean }>(path);
+}
+
+export async function updateAttendance(id: string, payload: Partial<AttendancePayload>) {
+  return requestJson<AttendanceRecord>(`/api/attendance/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteAttendance(id: string): Promise<void> {
+  await requestJson<void>(`/api/attendance/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function listVacancies(): Promise<VacancyRecord[]> {
   const response = await requestJson<{ items: VacancyRecord[] }>('/api/vacancies');
   return response.items;
@@ -159,6 +192,12 @@ export async function updateEmploymentContract(
   return requestJson<EmploymentContractRecord>(`/api/contracts/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteEmploymentContract(id: string): Promise<void> {
+  await requestJson<void>(`/api/contracts/${id}`, {
+    method: 'DELETE',
   });
 }
 

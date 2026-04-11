@@ -1382,7 +1382,9 @@ export default function AIChat() {
                       {isListening ? <MicOff size={18} /> : <Mic size={18} />}
                     </button>
                     <button
-                      onClick={handleSend}
+                      onClick={() => {
+                        void handleSend();
+                      }}
                       disabled={!input.trim() || isLoading}
                       className="px-4 h-10 bg-primary text-white rounded-xl flex items-center justify-center gap-2 hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary-shadow font-bold text-sm"
                     >

@@ -30,7 +30,8 @@ import {
   BarChart3,
   CheckSquare,
   History,
-  Download
+  Download,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -149,7 +150,7 @@ export const Sidebar = ({
   onInstall: () => void
 }) => {
   const { isDarkMode, toggleDarkMode } = useTheme();
-  const { notifications, unreadCount, markAllAsRead, markAsRead, setPanelOpen } = useNotifications();
+  const { notifications, unreadCount, markAllAsRead, markAsRead, removeNotification, setPanelOpen } = useNotifications();
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(initialNotificationsOpen);
   const location = useLocation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -314,9 +315,25 @@ export const Sidebar = ({
                                   <div className="flex-1">
                                     <p className="text-xs font-black text-slate-900 dark:text-white leading-tight mb-1">{n.title}</p>
                                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-2 break-words">{n.body}</p>
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
-                                      {n.createdAt ? new Date(n.createdAt).toLocaleString() : 'Reciente'}
-                                    </p>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
+                                        {n.createdAt ? new Date(n.createdAt).toLocaleString() : 'Reciente'}
+                                      </p>
+                                      {n.id && (
+                                        <button
+                                          type="button"
+                                          title="Eliminar notificacion"
+                                          aria-label="Eliminar notificacion"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            void removeNotification(n.id!);
+                                          }}
+                                          className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               </div>

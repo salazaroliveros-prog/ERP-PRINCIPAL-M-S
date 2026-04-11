@@ -1385,7 +1385,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   };
 
   const publishNotificationEvent = (
-    eventType: 'created' | 'read',
+    eventType: 'created' | 'read' | 'deleted',
     notification: ReturnType<typeof mapNotification>
   ) => {
     if (notificationStreams.size === 0) return;
@@ -4043,6 +4043,34 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
     }
   });
 
+  app.delete('/api/notifications/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) {
+        return res.status(400).json({ error: 'id requerido' });
+      }
+
+      const deleted = await db.query<NotificationRow>(
+        `
+          delete from notifications
+          where id = $1
+          returning id, title, body, type, read, created_at
+        `,
+        [id]
+      );
+
+      if (!deleted.rows[0]) {
+        return res.status(404).json({ error: 'Notificacion no encontrada' });
+      }
+
+      publishNotificationEvent('deleted', mapNotification(deleted.rows[0]));
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar la notificacion' });
+    }
+  });
+
   app.get("/api/budget-items", async (req, res) => {
     try {
       const db = requireDatabase();
@@ -6394,6 +6422,104 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
     }
   });
 
+  app.get('/api/attendance', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const employeeId = String(req.query.employeeId || '').trim();
+      const limit = Math.min(Math.max(Number(req.query.limit || 100), 1), 300);
+      const offset = Math.max(Number(req.query.offset || 0), 0);
+
+      const values: any[] = [limit, offset];
+      let whereClause = '';
+      if (employeeId) {
+        values.push(employeeId);
+        whereClause = `where employee_id = $${values.length}`;
+      }
+
+      const rows = await db.query<AttendanceRow>(
+        `
+          select
+            id,
+            employee_id,
+            employee_name,
+            type,
+            timestamp::text,
+            created_at
+          from attendance
+          ${whereClause}
+          order by timestamp desc
+          limit $1 offset $2
+        `,
+        values
+      );
+
+      return res.json({ items: rows.rows.map(mapAttendance), hasMore: rows.rows.length === limit });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo obtener asistencia' });
+    }
+  });
+
+  app.patch('/api/attendance/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (name: string, value: any) => {
+        values.push(value);
+        sets.push(`${name} = $${values.length}`);
+      };
+
+      if (req.body?.employeeId !== undefined) addSet('employee_id', String(req.body.employeeId || '').trim());
+      if (req.body?.employeeName !== undefined) addSet('employee_name', String(req.body.employeeName || '').trim() || null);
+      if (req.body?.type !== undefined) addSet('type', String(req.body.type || '').trim());
+      if (req.body?.timestamp !== undefined) {
+        values.push(req.body.timestamp ? String(req.body.timestamp) : null);
+        sets.push(`timestamp = $${values.length}::timestamptz`);
+      }
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+
+      values.push(id);
+      const updated = await db.query<AttendanceRow>(
+        `
+          update attendance
+          set ${sets.join(', ')}
+          where id = $${values.length}
+          returning
+            id,
+            employee_id,
+            employee_name,
+            type,
+            timestamp::text,
+            created_at
+        `,
+        values
+      );
+
+      if (!updated.rows[0]) return res.status(404).json({ error: 'Asistencia no encontrada' });
+      return res.json(mapAttendance(updated.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar asistencia' });
+    }
+  });
+
+  app.delete('/api/attendance/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from attendance where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Asistencia no encontrada' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar asistencia' });
+    }
+  });
+
   app.get('/api/vacancies', async (req, res) => {
     try {
       const db = requireDatabase();
@@ -6764,6 +6890,20 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       return res.json(mapEmploymentContract(updated.rows[0]));
     } catch (error: any) {
       return res.status(500).json({ error: error?.message || 'No se pudo actualizar contrato' });
+    }
+  });
+
+  app.delete('/api/contracts/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from employment_contracts where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Contrato no encontrado' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar contrato' });
     }
   });
 

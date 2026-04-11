@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { listenForNotifications, listNotifications, markNotificationAsRead, Notification } from '../lib/notifications';
+import { deleteNotification, listenForNotifications, listNotifications, markNotificationAsRead, Notification } from '../lib/notifications';
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -8,6 +8,7 @@ interface NotificationContextType {
   setPanelOpen: (open: boolean) => void;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  removeNotification: (id: string) => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -48,6 +49,25 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; user: a
       } catch (error) {
         console.error('Error refreshing notifications after mark-all:', error);
       }
+    }
+  };
+
+  const removeNotification = async (id: string) => {
+    const previousItems = notifications;
+    const target = previousItems.find((item) => item.id === id);
+    if (!target) return;
+
+    setNotifications((prev) => prev.filter((item) => item.id !== id));
+    if (!target.read) {
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    }
+
+    try {
+      await deleteNotification(id);
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      setNotifications(previousItems);
+      setUnreadCount(previousItems.filter((item) => !item.read).length);
     }
   };
 
@@ -112,7 +132,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode; user: a
   }, [user, isPanelOpen]);
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, isPanelOpen, setPanelOpen, markAsRead, markAllAsRead }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, isPanelOpen, setPanelOpen, markAsRead, markAllAsRead, removeNotification }}>
       {children}
     </NotificationContext.Provider>
   );
