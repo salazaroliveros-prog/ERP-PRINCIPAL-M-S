@@ -8,6 +8,7 @@ import { listTransactions } from '../lib/financialsApi';
 import { listInventory } from '../lib/operationsApi';
 import { listRisks } from '../lib/risksApi';
 import { generateExecutiveReport } from '../lib/pdfUtils';
+import { sendNotification } from '../lib/notifications';
 import { toast } from 'sonner';
 
 interface Message {
@@ -15,6 +16,65 @@ interface Message {
   text: string;
   timestamp: Date;
 }
+
+interface PortfolioAlert {
+  severity: 'low' | 'medium' | 'high';
+  type: 'cost' | 'schedule' | 'inventory' | 'budget-health';
+  projectId?: string;
+  projectName?: string;
+  message: string;
+  suggestion: string;
+}
+
+interface PortfolioControlSnapshot {
+  createdAt: string;
+  score: number;
+  status: 'verde' | 'amarillo' | 'rojo';
+  high: number;
+  medium: number;
+  low: number;
+}
+
+const MARKET_RATE_BY_TYPOLOGY: Record<string, number> = {
+  RESIDENCIAL: 4500,
+  COMERCIAL: 6500,
+  INDUSTRIAL: 5500,
+  CIVIL: 3500,
+  PUBLICA: 4000,
+  SALUD: 8500,
+  EDUCACION: 5000,
+  DEPORTIVA: 4800,
+  INFRAESTRUCTURA: 7500,
+  TURISMO: 7000,
+};
+
+const CONTROL_MONITOR_INTERVAL_MS = 20 * 60 * 1000;
+const CONTROL_HISTORY_STORAGE_KEY = 'wm_ai_control_history_v1';
+const CONTROL_HISTORY_MAX_ITEMS = 24;
+
+const loadControlHistory = () => {
+  if (typeof window === 'undefined') return [] as PortfolioControlSnapshot[];
+  try {
+    const raw = window.localStorage.getItem(CONTROL_HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as PortfolioControlSnapshot[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && item.createdAt)
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+  } catch {
+    return [];
+  }
+};
+
+const persistControlHistory = (items: PortfolioControlSnapshot[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(CONTROL_HISTORY_STORAGE_KEY, JSON.stringify(items.slice(0, CONTROL_HISTORY_MAX_ITEMS)));
+  } catch {
+    // Ignore storage quota errors.
+  }
+};
 
 const GEMINI_DIAGNOSTIC_PREFIX = '[GEMINI_DIAGNOSTIC]';
 
@@ -47,6 +107,9 @@ export default function AIChat() {
   const [isListening, setIsListening] = useState(false);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const [isAutoHideEnabled, setIsAutoHideEnabled] = useState(true);
+  const [isMonitoring, setIsMonitoring] = useState(false);
+  const [controlHistory, setControlHistory] = useState<PortfolioControlSnapshot[]>([]);
+  const monitorInFlightRef = useRef(false);
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -75,6 +138,20 @@ export default function AIChat() {
     if (typeof window === 'undefined') return;
     localStorage.setItem(CHAT_AUTO_HIDE_STORAGE_KEY, String(isAutoHideEnabled));
   }, [isAutoHideEnabled]);
+
+  useEffect(() => {
+    setControlHistory(loadControlHistory());
+  }, []);
+
+  const saveControlSnapshot = (snapshot: PortfolioControlSnapshot) => {
+    setControlHistory((prev) => {
+      const next = [snapshot, ...prev]
+        .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+        .slice(0, CONTROL_HISTORY_MAX_ITEMS);
+      persistControlHistory(next);
+      return next;
+    });
+  };
 
   const autoHideAssistant = () => {
     if (!isAutoHideEnabled) return;
@@ -164,11 +241,123 @@ export default function AIChat() {
       const inventoryAlerts = inventoryResponse.items
         .filter((item: any) => item.stock <= (item.minStock || 0));
 
+      const activeProjects = projects.filter((project: any) => {
+        const status = String(project?.status || '').toLowerCase();
+        return status !== 'completed' && status !== 'cancelled';
+      });
+
+      const alerts: PortfolioAlert[] = [];
+      const pros: string[] = [];
+      const cons: string[] = [];
+
+      activeProjects.forEach((project: any) => {
+        const budget = Number(project?.budget || 0);
+        const spent = Number(project?.spent || 0);
+        const physicalProgress = Number(project?.physicalProgress || 0);
+        const financialProgress = budget > 0 ? (spent / budget) * 100 : 0;
+        const progressGap = financialProgress - physicalProgress;
+
+        if (budget > 0 && progressGap > 12) {
+          alerts.push({
+            severity: 'high',
+            type: 'cost',
+            projectId: project.id,
+            projectName: project.name,
+            message: `${project.name}: el avance financiero supera al físico por ${progressGap.toFixed(1)}%.`,
+            suggestion: 'Revisar rendimientos, compras y gastos indirectos; ejecutar ajuste presupuestario inmediato.',
+          });
+          cons.push(`${project.name}: posible sobrecosto por desalineación físico-financiera.`);
+        } else if (progressGap > 6) {
+          alerts.push({
+            severity: 'medium',
+            type: 'cost',
+            projectId: project.id,
+            projectName: project.name,
+            message: `${project.name}: desviación moderada físico-financiera (${progressGap.toFixed(1)}%).`,
+            suggestion: 'Aplicar control semanal de costos por renglón y validar compras pendientes.',
+          });
+        }
+
+        const area = Number(project?.area || 0);
+        const typologyKey = String(project?.typology || '').toUpperCase();
+        const expectedRate = MARKET_RATE_BY_TYPOLOGY[typologyKey];
+        if (area > 0 && budget > 0 && expectedRate) {
+          const expectedBudget = area * expectedRate;
+          if (budget < expectedBudget * 0.8) {
+            alerts.push({
+              severity: 'high',
+              type: 'budget-health',
+              projectId: project.id,
+              projectName: project.name,
+              message: `${project.name}: presupuesto base por debajo del mercado estimado para ${typologyKey}.`,
+              suggestion: 'Ajustar baseline o recortar alcance para evitar ampliaciones tardías.',
+            });
+            cons.push(`${project.name}: baseline bajo respecto a costo estimado por m2.`);
+          } else if (budget >= expectedBudget * 0.9 && budget <= expectedBudget * 1.1) {
+            pros.push(`${project.name}: presupuesto base saludable frente al benchmark de ${typologyKey}.`);
+          }
+        }
+
+        const startDate = project?.startDate ? new Date(project.startDate) : null;
+        const endDate = project?.endDate ? new Date(project.endDate) : null;
+        if (startDate && endDate && !Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
+          const now = Date.now();
+          const totalDuration = endDate.getTime() - startDate.getTime();
+          const elapsed = now - startDate.getTime();
+          if (totalDuration > 0 && elapsed > 0) {
+            const expectedPhysical = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+            const delayGap = expectedPhysical - physicalProgress;
+            if (delayGap > 15) {
+              alerts.push({
+                severity: 'high',
+                type: 'schedule',
+                projectId: project.id,
+                projectName: project.name,
+                message: `${project.name}: atraso crítico de ${delayGap.toFixed(1)}% frente al cronograma esperado.`,
+                suggestion: 'Reprogramar ruta crítica y reforzar cuadrillas en frentes de mayor impacto.',
+              });
+              cons.push(`${project.name}: riesgo alto de incumplimiento de plazo contractual.`);
+            }
+          }
+        }
+
+        const hasHealthyProgress = physicalProgress >= 60 && progressGap <= 5;
+        if (hasHealthyProgress) {
+          pros.push(`${project.name}: avance físico estable con control financiero aceptable.`);
+        }
+      });
+
+      if (inventoryAlerts.length > 0) {
+        alerts.push({
+          severity: inventoryAlerts.length >= 5 ? 'high' : 'medium',
+          type: 'inventory',
+          message: `Se detectaron ${inventoryAlerts.length} materiales en nivel crítico de inventario.`,
+          suggestion: 'Emitir órdenes de compra y priorizar materiales de ruta crítica.',
+        });
+      } else {
+        pros.push('Inventario general sin alertas críticas de stock mínimo.');
+      }
+
       return {
         projects,
+        activeProjects,
+        transactions,
+        inventory: inventoryResponse.items,
         financials: { totalIncome, totalExpense },
         inventoryAlerts,
-        risks
+        risks,
+        portfolioControl: {
+          alerts,
+          pros,
+          cons,
+          status: high > 0 ? 'rojo' : medium > 0 ? 'amarillo' : 'verde',
+          score: Math.max(0, Math.min(100, 100 - (high * 18) - (medium * 8))),
+          alertSummary: {
+            high: alerts.filter((item) => item.severity === 'high').length,
+            medium: alerts.filter((item) => item.severity === 'medium').length,
+            low: alerts.filter((item) => item.severity === 'low').length,
+          },
+        },
       };
     } catch (error) {
       handleApiError(error, OperationType.GET, 'multiple_collections');
@@ -258,12 +447,109 @@ export default function AIChat() {
         }
         setIsLoading(false);
         autoHideAssistant();
+      } else if (command === 'CONTROL_TOTAL_PORTFOLIO') {
+        const prompt = 'Ejecuta control total del ERP: analiza pros y contras de proyectos en ejecución, sobrecostos, presupuesto corto, inventario y tiempos de obra.';
+        const userMsg: Message = { role: 'user', text: prompt, timestamp: new Date() };
+        setMessages(prev => [...prev, userMsg]);
+        setIsLoading(true);
+
+        const data = await fetchReportData();
+        if (!data) {
+          setError('No se pudieron obtener datos para el control total.');
+          setIsLoading(false);
+          return;
+        }
+
+        const summary = data.portfolioControl?.alertSummary || { high: 0, medium: 0, low: 0 };
+        saveControlSnapshot({
+          createdAt: new Date().toISOString(),
+          score: Number(data.portfolioControl?.score || 0),
+          status: (data.portfolioControl?.status || 'verde') as 'verde' | 'amarillo' | 'rojo',
+          high: Number(summary.high || 0),
+          medium: Number(summary.medium || 0),
+          low: Number(summary.low || 0),
+        });
+
+        const controlPrompt = `
+        Eres director de PMO y costos de una constructora.
+        Analiza este snapshot y responde en español con:
+        1) Semáforo ejecutivo (verde/amarillo/rojo)
+        2) Top 5 alertas críticas
+        3) Pros y contras por proyectos en ejecución
+        4) Acciones de 7 días y 30 días
+        5) Riesgos de sobrecostos por presupuesto corto y desviación de cronograma
+        6) Recomendaciones para bodega y finanzas
+
+        Snapshot:
+        ${JSON.stringify(data.portfolioControl)}
+        `;
+
+        const response = await getAIResponse(controlPrompt, messages.map(m => ({ role: m.role, text: m.text })));
+        const diagnostic = response ? parseGeminiDiagnostic(response) : null;
+        if (diagnostic) {
+          setError(diagnostic);
+        } else {
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            text: response || 'No fue posible generar el análisis integral en este momento.',
+            timestamp: new Date()
+          }]);
+        }
+
+        const highAlerts = data.portfolioControl.alerts.filter((item: PortfolioAlert) => item.severity === 'high');
+        for (const alert of highAlerts.slice(0, 2)) {
+          await sendNotification(
+            `Control Total IA: ${alert.projectName || 'Riesgo crítico'}`,
+            `${alert.message} ${alert.suggestion}`,
+            alert.type === 'inventory' ? 'inventory' : 'project'
+          );
+        }
+
+        setIsLoading(false);
+        autoHideAssistant();
       }
     };
 
     window.addEventListener('AI_COMMAND', handleAICommand);
     return () => window.removeEventListener('AI_COMMAND', handleAICommand);
   }, [messages]);
+
+  const runAutomatedMonitoring = async () => {
+    if (monitorInFlightRef.current || !navigator.onLine) {
+      return;
+    }
+
+    monitorInFlightRef.current = true;
+    setIsMonitoring(true);
+    try {
+      const data = await fetchReportData();
+      const highAlerts = data?.portfolioControl?.alerts?.filter((item: PortfolioAlert) => item.severity === 'high') || [];
+
+      for (const alert of highAlerts.slice(0, 3)) {
+        await sendNotification(
+          `Alerta IA: ${alert.projectName || 'Portafolio'}`,
+          `${alert.message} ${alert.suggestion}`,
+          alert.type === 'inventory' ? 'inventory' : 'project'
+        );
+      }
+    } catch {
+      // Silent background monitoring failure.
+    } finally {
+      monitorInFlightRef.current = false;
+      setIsMonitoring(false);
+    }
+  };
+
+  useEffect(() => {
+    void runAutomatedMonitoring();
+    const intervalId = window.setInterval(() => {
+      void runAutomatedMonitoring();
+    }, CONTROL_MONITOR_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     const handleOpenAIChat = () => {
@@ -404,6 +690,77 @@ export default function AIChat() {
       return;
     }
 
+    // Command: Control Total de Portafolio
+    if (
+      lowerInput.includes('control total') ||
+      lowerInput.includes('copiloto integral') ||
+      lowerInput.includes('analiza pro y contra') ||
+      lowerInput.includes('alertas de sobrecostos')
+    ) {
+      const assistantMessage: Message = {
+        role: 'assistant',
+        text: 'Activando control total del ERP: analizando presupuesto, bodega, finanzas y duración de obra para generar alertas y recomendaciones ejecutivas.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+
+      const data = await fetchReportData();
+      if (!data) {
+        setError('No pude obtener datos para el control total.');
+        setIsLoading(false);
+        return;
+      }
+
+      const summary = data.portfolioControl?.alertSummary || { high: 0, medium: 0, low: 0 };
+      saveControlSnapshot({
+        createdAt: new Date().toISOString(),
+        score: Number(data.portfolioControl?.score || 0),
+        status: (data.portfolioControl?.status || 'verde') as 'verde' | 'amarillo' | 'rojo',
+        high: Number(summary.high || 0),
+        medium: Number(summary.medium || 0),
+        low: Number(summary.low || 0),
+      });
+
+      const controlPrompt = `
+      Eres director de PMO y costos de una constructora.
+      Analiza este snapshot y responde en español con:
+      1) Semáforo ejecutivo (verde/amarillo/rojo)
+      2) Top 5 alertas críticas
+      3) Pros y contras por proyectos en ejecución
+      4) Acciones de 7 días y 30 días
+      5) Riesgos de sobrecostos por presupuesto corto y desviación de cronograma
+      6) Recomendaciones para bodega y finanzas
+
+      Snapshot:
+      ${JSON.stringify(data.portfolioControl)}
+      `;
+
+      const response = await getAIResponse(controlPrompt, messages.map(m => ({ role: m.role, text: m.text })));
+      const diagnostic = response ? parseGeminiDiagnostic(response) : null;
+      if (diagnostic) {
+        setError(diagnostic);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          text: response || 'No fue posible generar el análisis integral en este momento.',
+          timestamp: new Date()
+        }]);
+      }
+
+      const highAlerts = data.portfolioControl.alerts.filter((item: PortfolioAlert) => item.severity === 'high');
+      for (const alert of highAlerts.slice(0, 2)) {
+        await sendNotification(
+          `Control Total IA: ${alert.projectName || 'Riesgo crítico'}`,
+          `${alert.message} ${alert.suggestion}`,
+          alert.type === 'inventory' ? 'inventory' : 'project'
+        );
+      }
+
+      setIsLoading(false);
+      autoHideAssistant();
+      return;
+    }
+
     if (lowerInput.includes('informe ejecutivo') || lowerInput.includes('generar reporte') || lowerInput.includes('enviar pdf')) {
       const assistantMessage: Message = {
         role: 'assistant',
@@ -467,6 +824,7 @@ export default function AIChat() {
   };
 
   const quickActions = [
+    { icon: Bot, label: "Control Total ERP", prompt: "Ejecuta control total del ERP: analiza pros y contras de proyectos en ejecución, sobrecostos, presupuesto corto, inventario y tiempos de obra." },
     { icon: TrendingUp, label: "Salud Global M2", prompt: "Realiza un análisis de salud presupuestaria de todos los proyectos activos basado en sus M2 y tipología. Envía sugerencias si detectas riesgos." },
     { icon: AlertTriangle, label: "Análisis de Riesgos", prompt: "Realiza un análisis de riesgos proactivo y predictivo para mis proyectos actuales. Identifica desviaciones críticas, predice sobrecostos futuros y sugiere acciones correctivas inmediatas para mitigar situaciones críticas." },
     { icon: Construction, label: "Estado de Obra", prompt: "Explícame el estado actual de la obra [Nombre]" },
@@ -475,6 +833,36 @@ export default function AIChat() {
     { icon: Sparkles, label: "Sugerir Mejoras", prompt: "¿Qué mejoras sugieres para optimizar el inventario actual?" },
     { icon: Wrench, label: "Ajustes Plataforma", prompt: "¿Cómo puedo configurar alertas automáticas para stock bajo?" }
   ];
+
+  const latestControlSnapshot = controlHistory[0] || null;
+  const previousControlSnapshot = controlHistory[1] || null;
+  const scoreDelta = latestControlSnapshot && previousControlSnapshot
+    ? Number((latestControlSnapshot.score - previousControlSnapshot.score).toFixed(1))
+    : null;
+
+  const weeklyBaselineSnapshot = useMemo(() => {
+    if (!latestControlSnapshot || controlHistory.length < 2) return null;
+
+    const latestTime = new Date(latestControlSnapshot.createdAt).getTime();
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    const targetTime = latestTime - sevenDaysMs;
+
+    const candidates = controlHistory
+      .slice(1)
+      .map((snapshot) => ({
+        snapshot,
+        distance: Math.abs(new Date(snapshot.createdAt).getTime() - targetTime),
+      }))
+      // Only consider snapshots close to one week window (+/- 3 days) to keep trend meaningful.
+      .filter((item) => item.distance <= (3 * 24 * 60 * 60 * 1000))
+      .sort((left, right) => left.distance - right.distance);
+
+    return candidates[0]?.snapshot || null;
+  }, [controlHistory, latestControlSnapshot]);
+
+  const weeklyScoreDelta = latestControlSnapshot && weeklyBaselineSnapshot
+    ? Number((latestControlSnapshot.score - weeklyBaselineSnapshot.score).toFixed(1))
+    : null;
 
   return (
     <>
@@ -502,7 +890,9 @@ export default function AIChat() {
                   <h3 className="font-bold text-sm">Asistente WM_IA</h3>
                   <div className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">En línea</span>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                      {isMonitoring ? 'Monitoreando' : 'En línea'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -533,7 +923,11 @@ export default function AIChat() {
                         <button
                           onClick={() => {
                             setShowHistoryMenu(false);
-                            toast.info('Historial guardado localmente');
+                            if (!controlHistory.length) {
+                              toast.info('Aún no hay análisis de control total guardados.');
+                              return;
+                            }
+                            toast.info(`Último análisis: score ${controlHistory[0].score}% (${controlHistory[0].status.toUpperCase()})`);
                           }}
                           className="w-full flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left"
                         >
@@ -577,6 +971,61 @@ export default function AIChat() {
                           <X size={14} />
                           Ocultar ahora
                         </button>
+
+                        <div className="mt-1 px-3 py-2 border-t border-slate-100 dark:border-slate-700">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Últimos análisis</p>
+                          {controlHistory.length === 0 ? (
+                            <p className="text-[10px] text-slate-500">Sin análisis guardados aún.</p>
+                          ) : (
+                            <div className="space-y-1.5 max-h-44 overflow-y-auto custom-scrollbar pr-1">
+                              {latestControlSnapshot && weeklyScoreDelta !== null && (
+                                <div className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1.5 bg-white dark:bg-slate-700/20">
+                                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Tendencia semanal</p>
+                                  <p className={cn(
+                                    "text-[10px] font-black mt-0.5",
+                                    weeklyScoreDelta >= 0 ? "text-emerald-600" : "text-rose-600"
+                                  )}>
+                                    {weeklyScoreDelta >= 0 ? '+' : ''}{weeklyScoreDelta}% vs hace 7 días
+                                  </p>
+                                  <p className="text-[9px] text-slate-500">
+                                    Base: {new Date(weeklyBaselineSnapshot!.createdAt).toLocaleDateString('es-GT', { day: '2-digit', month: 'short' })}
+                                  </p>
+                                </div>
+                              )}
+
+                              {controlHistory.slice(0, 4).map((item, index) => {
+                                const isCurrent = index === 0;
+                                return (
+                                  <div key={`${item.createdAt}_${index}`} className="rounded-lg border border-slate-100 dark:border-slate-700 px-2 py-1.5 bg-slate-50 dark:bg-slate-700/30">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className={cn(
+                                        "text-[9px] font-black uppercase",
+                                        item.status === 'verde' && "text-emerald-600",
+                                        item.status === 'amarillo' && "text-amber-600",
+                                        item.status === 'rojo' && "text-rose-600"
+                                      )}>
+                                        {item.status}
+                                      </span>
+                                      <span className="text-[9px] font-bold text-slate-500">{item.score}%</span>
+                                    </div>
+                                    <p className="text-[9px] text-slate-500 mt-0.5">
+                                      {new Date(item.createdAt).toLocaleString('es-GT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                    <p className="text-[9px] text-slate-500">H:{item.high} M:{item.medium} L:{item.low}</p>
+                                    {isCurrent && scoreDelta !== null && (
+                                      <p className={cn(
+                                        "text-[9px] font-bold mt-0.5",
+                                        scoreDelta >= 0 ? "text-emerald-600" : "text-rose-600"
+                                      )}>
+                                        Tendencia vs anterior: {scoreDelta >= 0 ? '+' : ''}{scoreDelta}%
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>

@@ -81,6 +81,19 @@ const COLORS = [
   '#14b8a6', // Teal
 ];
 
+const MARKET_RATE_BY_TYPOLOGY: Record<string, number> = {
+  RESIDENCIAL: 4500,
+  COMERCIAL: 6500,
+  INDUSTRIAL: 5500,
+  CIVIL: 3500,
+  PUBLICA: 4000,
+  SALUD: 8500,
+  EDUCACION: 5000,
+  DEPORTIVA: 4800,
+  INFRAESTRUCTURA: 7500,
+  TURISMO: 7000,
+};
+
 type DashboardChartKey =
   | 'profitTrend'
   | 'projectHealth'
@@ -757,6 +770,90 @@ export default function Dashboard() {
     totalExpense: totalSpent,
   };
 
+  const portfolioSemaforo = useMemo(() => {
+    const active = projects.filter((project: any) => {
+      const status = String(project?.status || '').toLowerCase();
+      return status !== 'completed' && status !== 'cancelled';
+    });
+
+    let high = 0;
+    let medium = 0;
+    const risks: string[] = [];
+    const strengths: string[] = [];
+
+    active.forEach((project: any) => {
+      const name = String(project?.name || 'Proyecto');
+      const budget = Number(project?.budget || 0);
+      const spent = Number(project?.spent || 0);
+      const physical = clampPercent(project?.physicalProgress || 0);
+      const financial = budget > 0 ? clampPercent((spent / budget) * 100) : clampPercent(project?.financialProgress || 0);
+      const gap = financial - physical;
+
+      if (gap > 12) {
+        high += 1;
+        risks.push(`${name}: sobreconsumo financiero (${gap.toFixed(1)}% sobre avance físico).`);
+      } else if (gap > 6) {
+        medium += 1;
+      } else if (physical > 30) {
+        strengths.push(`${name}: balance físico-financiero saludable.`);
+      }
+
+      const area = Number(project?.area || 0);
+      const typology = String(project?.typology || '').toUpperCase();
+      const rate = MARKET_RATE_BY_TYPOLOGY[typology];
+      if (area > 0 && budget > 0 && rate) {
+        const expected = area * rate;
+        if (budget < expected * 0.8) {
+          high += 1;
+          risks.push(`${name}: presupuesto base bajo para ${typology}.`);
+        } else if (budget < expected * 0.9) {
+          medium += 1;
+        } else if (budget <= expected * 1.1) {
+          strengths.push(`${name}: baseline consistente con benchmark de ${typology}.`);
+        }
+      }
+
+      const startDate = project?.startDate ? new Date(project.startDate) : null;
+      const endDate = project?.endDate ? new Date(project.endDate) : null;
+      if (startDate && endDate && !Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
+        const totalDuration = endDate.getTime() - startDate.getTime();
+        const elapsed = Date.now() - startDate.getTime();
+        if (totalDuration > 0 && elapsed > 0) {
+          const expectedPhysical = clampPercent((elapsed / totalDuration) * 100);
+          const delayGap = expectedPhysical - physical;
+          if (delayGap > 15) {
+            high += 1;
+            risks.push(`${name}: atraso crítico (${delayGap.toFixed(1)}% bajo cronograma esperado).`);
+          } else if (delayGap > 8) {
+            medium += 1;
+          }
+        }
+      }
+    });
+
+    if (lowStockItems.length >= 5) {
+      high += 1;
+      risks.push(`Inventario: ${lowStockItems.length} materiales en nivel crítico.`);
+    } else if (lowStockItems.length > 0) {
+      medium += 1;
+      risks.push(`Inventario: ${lowStockItems.length} materiales cerca de stock mínimo.`);
+    } else {
+      strengths.push('Inventario: sin alertas críticas de abastecimiento.');
+    }
+
+    const score = Math.max(0, Math.min(100, 100 - (high * 18) - (medium * 8)));
+    const status = high > 0 ? 'rojo' : medium > 0 ? 'amarillo' : 'verde';
+
+    return {
+      status,
+      score,
+      high,
+      medium,
+      risks: risks.slice(0, 4),
+      strengths: strengths.slice(0, 4),
+    };
+  }, [projects, lowStockItems]);
+
   const financialSplitData = [
     { name: 'Ingresos', value: financialSummary.totalIncome, color: '#10b981' },
     { name: 'Gastos', value: financialSummary.totalExpense, color: '#ef4444' },
@@ -808,6 +905,83 @@ export default function Dashboard() {
           icon={Construction} 
           color="bg-purple-600 shadow-purple-600/20"
         />
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Semáforo Ejecutivo IA</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Control integral de costos, cronograma e inventario</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('OPEN_AI_CHAT'));
+                window.dispatchEvent(new CustomEvent('AI_COMMAND', {
+                  detail: {
+                    command: 'CONTROL_TOTAL_PORTFOLIO',
+                    params: {},
+                  },
+                }));
+              }}
+              className="px-3 py-1.5 rounded-full bg-primary text-white text-[10px] font-black uppercase tracking-widest hover:bg-primary-hover transition-all"
+            >
+              Abrir Copiloto
+            </button>
+            <span className={cn(
+              "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
+              portfolioSemaforo.status === 'verde' && "bg-emerald-50 text-emerald-700 border-emerald-200",
+              portfolioSemaforo.status === 'amarillo' && "bg-amber-50 text-amber-700 border-amber-200",
+              portfolioSemaforo.status === 'rojo' && "bg-rose-50 text-rose-700 border-rose-200"
+            )}>
+              {portfolioSemaforo.status}
+            </span>
+            <span className="text-sm font-black text-slate-900 dark:text-white">{portfolioSemaforo.score}%</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <div className="p-3 rounded-2xl bg-rose-50 border border-rose-100">
+            <p className="text-[10px] font-black uppercase tracking-widest text-rose-700">Alertas críticas</p>
+            <p className="text-2xl font-black text-rose-700">{portfolioSemaforo.high}</p>
+          </div>
+          <div className="p-3 rounded-2xl bg-amber-50 border border-amber-100">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Alertas moderadas</p>
+            <p className="text-2xl font-black text-amber-700">{portfolioSemaforo.medium}</p>
+          </div>
+          <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Fortalezas detectadas</p>
+            <p className="text-2xl font-black text-emerald-700">{portfolioSemaforo.strengths.length}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Riesgos principales</p>
+            {portfolioSemaforo.risks.length === 0 ? (
+              <p className="text-xs font-semibold text-slate-500">Sin riesgos relevantes en este corte.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {portfolioSemaforo.risks.map((risk, idx) => (
+                  <li key={idx} className="text-xs text-slate-700 dark:text-slate-200">• {risk}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Pros detectados</p>
+            {portfolioSemaforo.strengths.length === 0 ? (
+              <p className="text-xs font-semibold text-slate-500">Sin fortalezas destacadas todavía.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {portfolioSemaforo.strengths.map((strength, idx) => (
+                  <li key={idx} className="text-xs text-slate-700 dark:text-slate-200">• {strength}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:gap-5 min-w-0">

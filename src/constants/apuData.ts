@@ -95,7 +95,18 @@ export const AREA_FACTORS: Record<string, Record<string, number>> = {
   }
 };
 
-const AUTO_AREA_ENABLED_TYPOLOGIES = ['RESIDENCIAL', 'COMERCIAL', 'INDUSTRIAL', 'CIVIL', 'PUBLICA'] as const;
+const AUTO_AREA_ENABLED_TYPOLOGIES = [
+  'RESIDENCIAL',
+  'COMERCIAL',
+  'INDUSTRIAL',
+  'CIVIL',
+  'PUBLICA',
+  'SALUD',
+  'EDUCACION',
+  'DEPORTIVA',
+  'INFRAESTRUCTURA',
+  'TURISMO',
+] as const;
 
 const DEFAULT_UNIT_AREA_FACTORS: Record<string, number> = {
   m2: 1.0,
@@ -318,6 +329,74 @@ export const APU_TEMPLATES: Record<string, APUTemplate[]> = {
   ]
 };
 
+const SPECIALIZED_TEMPLATE_PACKS: Record<string, APUTemplate[]> = {
+  SALUD: [
+    { description: "Sala de operaciones: recubrimiento sanitario", unit: "m2", materials: [{ name: "Panel sanitario", unit: "m2", quantity: 1.05, unitPrice: 650 }], labor: [{ role: "Instalador", yield: 8, dailyRate: 230 }], indirectFactor: 0.32 },
+    { description: "Sala de operaciones: piso conductivo", unit: "m2", materials: [{ name: "Piso vinílico conductivo", unit: "m2", quantity: 1.05, unitPrice: 420 }], labor: [{ role: "Instalador", yield: 10, dailyRate: 230 }], indirectFactor: 0.3 },
+    { description: "Central de esterilización: acero inoxidable", unit: "m", materials: [{ name: "Mueble inox clínico", unit: "m", quantity: 1, unitPrice: 2200 }], labor: [{ role: "Técnico", yield: 3, dailyRate: 280 }], indirectFactor: 0.3 },
+    { description: "Cuarto de aislamiento con presión negativa", unit: "unidad", materials: [{ name: "Sistema presión negativa", unit: "unidad", quantity: 1, unitPrice: 68000 }], labor: [{ role: "Especialista", yield: 0.15, dailyRate: 620 }], indirectFactor: 0.38 },
+    { description: "Planta de oxígeno medicinal", unit: "unidad", materials: [{ name: "Planta PSA", unit: "unidad", quantity: 1, unitPrice: 450000 }], labor: [{ role: "Especialista", yield: 0.05, dailyRate: 700 }], indirectFactor: 0.4 },
+    { description: "Área de laboratorio clínico", unit: "m2", materials: [{ name: "Top fenólico", unit: "m2", quantity: 1, unitPrice: 980 }], labor: [{ role: "Instalador", yield: 6, dailyRate: 250 }], indirectFactor: 0.32 },
+    { description: "Sistema de llamada enfermera", unit: "punto", materials: [{ name: "Módulo llamada", unit: "unidad", quantity: 1, unitPrice: 420 }], labor: [{ role: "Técnico", yield: 10, dailyRate: 260 }], indirectFactor: 0.3 },
+    { description: "Blindaje básico para rayos X", unit: "m2", materials: [{ name: "Lámina de plomo", unit: "m2", quantity: 1.1, unitPrice: 1850 }], labor: [{ role: "Especialista", yield: 5, dailyRate: 350 }], indirectFactor: 0.36 },
+  ],
+  EDUCACION: [
+    { description: "Aula modular con ventilación cruzada", unit: "m2", materials: [{ name: "Bloque y concreto", unit: "m2", quantity: 1, unitPrice: 460 }], labor: [{ role: "Albañil", yield: 9, dailyRate: 180 }], indirectFactor: 0.24 },
+    { description: "Laboratorio de ciencias: mobiliario fijo", unit: "m", materials: [{ name: "Mesón laboratorio", unit: "m", quantity: 1, unitPrice: 2100 }], labor: [{ role: "Carpintero", yield: 3, dailyRate: 220 }], indirectFactor: 0.24 },
+    { description: "Biblioteca: estantería metálica", unit: "m", materials: [{ name: "Estante metálico", unit: "m", quantity: 1, unitPrice: 720 }], labor: [{ role: "Instalador", yield: 8, dailyRate: 190 }], indirectFactor: 0.2 },
+    { description: "Comedor escolar: piso antideslizante", unit: "m2", materials: [{ name: "Porcelanato antideslizante", unit: "m2", quantity: 1.05, unitPrice: 195 }], labor: [{ role: "Albañil", yield: 11, dailyRate: 180 }], indirectFactor: 0.24 },
+    { description: "Cubierta ligera para patio cívico", unit: "m2", materials: [{ name: "Estructura metálica liviana", unit: "m2", quantity: 1, unitPrice: 340 }], labor: [{ role: "Soldador", yield: 12, dailyRate: 210 }], indirectFactor: 0.24 },
+    { description: "Módulo sanitario estudiantil", unit: "set", materials: [{ name: "Lote sanitario", unit: "global", quantity: 1, unitPrice: 24000 }], labor: [{ role: "Plomero", yield: 0.25, dailyRate: 200 }], indirectFactor: 0.26 },
+    { description: "Red wifi institucional (puntos)", unit: "punto", materials: [{ name: "Access point", unit: "unidad", quantity: 1, unitPrice: 1600 }], labor: [{ role: "Técnico", yield: 7, dailyRate: 250 }], indirectFactor: 0.25 },
+    { description: "Cancha multiusos de concreto", unit: "m2", materials: [{ name: "Concreto 3500 psi", unit: "m3", quantity: 0.12, unitPrice: 1200 }], labor: [{ role: "Albañil", yield: 20, dailyRate: 180 }], indirectFactor: 0.22 },
+  ],
+  DEPORTIVA: [
+    { description: "Subdrenaje para cancha", unit: "m", materials: [{ name: "Tubería perforada", unit: "m", quantity: 1, unitPrice: 95 }], labor: [{ role: "Ayudante", yield: 20, dailyRate: 130 }], indirectFactor: 0.22 },
+    { description: "Base elástica para pista atlética", unit: "m2", materials: [{ name: "Capa elástica SBR", unit: "m2", quantity: 1, unitPrice: 210 }], labor: [{ role: "Instalador", yield: 18, dailyRate: 220 }], indirectFactor: 0.24 },
+    { description: "Acabado PU para pista atlética", unit: "m2", materials: [{ name: "Resina PU", unit: "kg", quantity: 2.2, unitPrice: 68 }], labor: [{ role: "Aplicador", yield: 22, dailyRate: 220 }], indirectFactor: 0.25 },
+    { description: "Butacas para graderío", unit: "unidad", materials: [{ name: "Butaca inyectada", unit: "unidad", quantity: 1, unitPrice: 380 }], labor: [{ role: "Instalador", yield: 25, dailyRate: 190 }], indirectFactor: 0.2 },
+    { description: "Malla parabalones", unit: "m", materials: [{ name: "Red HDPE", unit: "m", quantity: 1, unitPrice: 180 }], labor: [{ role: "Instalador", yield: 14, dailyRate: 190 }], indirectFactor: 0.22 },
+    { description: "Marcaje reglamentario de cancha", unit: "m2", materials: [{ name: "Pintura deportiva", unit: "galón", quantity: 0.07, unitPrice: 260 }], labor: [{ role: "Pintor", yield: 40, dailyRate: 180 }], indirectFactor: 0.18 },
+    { description: "Sistema de riego para campo", unit: "m2", materials: [{ name: "Aspersor emergente", unit: "unidad", quantity: 0.04, unitPrice: 240 }], labor: [{ role: "Plomero", yield: 18, dailyRate: 210 }], indirectFactor: 0.24 },
+    { description: "Gimnasio al aire libre (set)", unit: "set", materials: [{ name: "Set máquinas exteriores", unit: "set", quantity: 1, unitPrice: 55000 }], labor: [{ role: "Instalador", yield: 0.3, dailyRate: 220 }], indirectFactor: 0.22 },
+  ],
+  INFRAESTRUCTURA: [
+    { description: "Estabilización de taludes", unit: "m2", materials: [{ name: "Geotextil de control", unit: "m2", quantity: 1.1, unitPrice: 42 }], labor: [{ role: "Cuadrilla", yield: 120, dailyRate: 1800 }], indirectFactor: 0.28 },
+    { description: "Concreto ciclópeo en fundaciones", unit: "m3", materials: [{ name: "Concreto ciclópeo", unit: "m3", quantity: 1.05, unitPrice: 980 }], labor: [{ role: "Albañil", yield: 4, dailyRate: 190 }], indirectFactor: 0.24 },
+    { description: "Muro de contención de concreto", unit: "m3", materials: [{ name: "Concreto 4000 psi", unit: "m3", quantity: 1.05, unitPrice: 1350 }], labor: [{ role: "Albañil", yield: 2.5, dailyRate: 190 }], indirectFactor: 0.28 },
+    { description: "Protección de cauce con enrocado", unit: "m3", materials: [{ name: "Roca bola", unit: "m3", quantity: 1.2, unitPrice: 240 }], labor: [{ role: "Peón", yield: 6, dailyRate: 130 }], indirectFactor: 0.22 },
+    { description: "Dren longitudinal carretera", unit: "m", materials: [{ name: "Tubo PVC corrugado", unit: "m", quantity: 1, unitPrice: 165 }], labor: [{ role: "Cuadrilla", yield: 18, dailyRate: 1800 }], indirectFactor: 0.25 },
+    { description: "Señalización inteligente solar", unit: "unidad", materials: [{ name: "Señal solar LED", unit: "unidad", quantity: 1, unitPrice: 7800 }], labor: [{ role: "Técnico", yield: 2, dailyRate: 260 }], indirectFactor: 0.28 },
+    { description: "Paso peatonal elevado", unit: "unidad", materials: [{ name: "Estructura metálica peatonal", unit: "global", quantity: 1, unitPrice: 320000 }], labor: [{ role: "Especialista", yield: 0.05, dailyRate: 650 }], indirectFactor: 0.4 },
+    { description: "Monitoreo geotécnico de obra", unit: "global", materials: [{ name: "Instrumentación geotécnica", unit: "global", quantity: 1, unitPrice: 95000 }], labor: [{ role: "Ingeniero", yield: 0.2, dailyRate: 620 }], indirectFactor: 0.35 },
+  ],
+  TURISMO: [
+    { description: "Lobby hotelero de alto tránsito", unit: "m2", materials: [{ name: "Mármol importado", unit: "m2", quantity: 1.05, unitPrice: 980 }], labor: [{ role: "Albañil", yield: 7, dailyRate: 220 }], indirectFactor: 0.3 },
+    { description: "Spa: cabinas húmedas", unit: "unidad", materials: [{ name: "Lote cabina húmeda", unit: "global", quantity: 1, unitPrice: 65000 }], labor: [{ role: "Especialista", yield: 0.2, dailyRate: 320 }], indirectFactor: 0.32 },
+    { description: "Deck de piscina en madera tecnológica", unit: "m2", materials: [{ name: "Deck WPC", unit: "m2", quantity: 1.05, unitPrice: 540 }], labor: [{ role: "Instalador", yield: 9, dailyRate: 230 }], indirectFactor: 0.28 },
+    { description: "Iluminación arquitectónica fachada", unit: "m", materials: [{ name: "Línea LED IP67", unit: "m", quantity: 1, unitPrice: 220 }], labor: [{ role: "Electricista", yield: 16, dailyRate: 230 }], indirectFactor: 0.28 },
+    { description: "Paisajismo premium", unit: "m2", materials: [{ name: "Especies ornamentales", unit: "m2", quantity: 1, unitPrice: 320 }], labor: [{ role: "Jardinero", yield: 12, dailyRate: 170 }], indirectFactor: 0.24 },
+    { description: "Mobiliario de terraza", unit: "set", materials: [{ name: "Set exterior premium", unit: "set", quantity: 1, unitPrice: 18000 }], labor: [{ role: "Instalador", yield: 1.5, dailyRate: 220 }], indirectFactor: 0.24 },
+    { description: "Cocina industrial para restaurante", unit: "global", materials: [{ name: "Equipos inox cocina", unit: "global", quantity: 1, unitPrice: 220000 }], labor: [{ role: "Técnico", yield: 0.12, dailyRate: 320 }], indirectFactor: 0.3 },
+    { description: "Sistema de domótica hotelera", unit: "habitación", materials: [{ name: "Controlador habitación", unit: "unidad", quantity: 1, unitPrice: 2800 }], labor: [{ role: "Técnico", yield: 4, dailyRate: 280 }], indirectFactor: 0.3 },
+  ],
+};
+
+function normalizeTemplateKey(description: string) {
+  return String(description || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+Object.entries(SPECIALIZED_TEMPLATE_PACKS).forEach(([typology, pack]) => {
+  const current = APU_TEMPLATES[typology] || [];
+  const existing = new Set(current.map((template) => normalizeTemplateKey(template.description)));
+  const uniqueToAppend = pack.filter((template) => !existing.has(normalizeTemplateKey(template.description)));
+  APU_TEMPLATES[typology] = [...current, ...uniqueToAppend];
+});
+
 const LOCATION_COST_ADJUSTMENTS: Record<string, LocationCostAdjustment> = {
   'GUATEMALA': { materialMultiplier: 1.0, laborMultiplier: 1.0, indirectDelta: 0 },
   'MIXCO': { materialMultiplier: 1.01, laborMultiplier: 1.0, indirectDelta: 0 },
@@ -334,19 +413,163 @@ const LOCATION_COST_ADJUSTMENTS: Record<string, LocationCostAdjustment> = {
   'ZACAPA': { materialMultiplier: 1.07, laborMultiplier: 1.06, indirectDelta: 0.02 },
 };
 
-// Helper to ensure each typology has at least 30 items by padding with variations if needed
-Object.keys(APU_TEMPLATES).forEach(typology => {
-  const currentItems = APU_TEMPLATES[typology];
-  if (currentItems.length < 30) {
-    const baseResidencial = APU_TEMPLATES.RESIDENCIAL;
-    for (let i = currentItems.length; i < 30; i++) {
-      const base = baseResidencial[i % baseResidencial.length];
-      currentItems.push({
-        ...base,
-        description: `${base.description} - Fase ${Math.floor(i / baseResidencial.length) + 1}`
-      });
+const CHRONOLOGY_STAGE_PREFIXES = [
+  '01 Preliminares',
+  '02 Movimiento de tierras',
+  '03 Cimentacion',
+  '04 Estructura',
+  '05 Mamposteria y cerramientos',
+  '06 Instalaciones',
+  '07 Acabados',
+  '08 Equipamiento',
+  '09 Urbanizacion exterior',
+  '10 Cierre y entrega',
+] as const;
+
+const CHRONOLOGY_KEYWORDS: Array<{ stageIndex: number; words: string[] }> = [
+  { stageIndex: 0, words: ['estudios', 'limpieza', 'trazo', 'nivelacion', 'descapote', 'planificacion'] },
+  { stageIndex: 1, words: ['excavacion', 'corte', 'terraplen', 'relleno', 'sub-base', 'base granular'] },
+  { stageIndex: 2, words: ['zapata', 'cimiento', 'pilote', 'cabezal', 'fosa', 'pozo', 'cisterna'] },
+  { stageIndex: 3, words: ['columna', 'viga', 'losa', 'estructura', 'steel deck', 'concreto reforzado', 'postensada'] },
+  { stageIndex: 4, words: ['muro', 'cerramiento', 'block', 'ladrillo', 'gaviones', 'porton', 'malla'] },
+  { stageIndex: 5, words: ['instalacion', 'tuberia', 'drenaje', 'electrica', 'tablero', 'transformador', 'red', 'conduit', 'hidrante'] },
+  { stageIndex: 6, words: ['repello', 'cernido', 'piso', 'azulejo', 'pintura', 'cielo', 'impermeabilizacion', 'porcelanato', 'vinilico'] },
+  { stageIndex: 7, words: ['puerta', 'ventana', 'mobiliario', 'gabinete', 'elevador', 'planta electrica', 'equipamiento', 'cctv'] },
+  { stageIndex: 8, words: ['jardinizacion', 'cuneta', 'bordillo', 'parqueo', 'senalizacion', 'andenes', 'pasarela', 'cancha'] },
+  { stageIndex: 9, words: ['limpieza final', 'entrega', 'post-construccion'] },
+];
+
+const COST_VARIANTS = [
+  { label: 'Frente Base', materialMultiplier: 1, laborMultiplier: 1, indirectDelta: 0 },
+  { label: 'Frente Productivo', materialMultiplier: 1.015, laborMultiplier: 1.06, indirectDelta: 0.01 },
+  { label: 'Frente Rendimiento Alto', materialMultiplier: 1.02, laborMultiplier: 1.08, indirectDelta: 0.015 },
+  { label: 'Frente Logistico Complejo', materialMultiplier: 1.03, laborMultiplier: 1.1, indirectDelta: 0.02 },
+] as const;
+
+function normalizeChronologyText(value: string) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function cleanGeneratedSuffix(description: string) {
+  return String(description || '')
+    .replace(/\s*\[[A-Z_]+\]\s*$/g, '')
+    .replace(/\s*\|\s*Paquete\s+\d+\s*$/i, '')
+    .trim();
+}
+
+export function extractBudgetClassification(description: string) {
+  const raw = String(description || '').trim();
+  const pipeIndex = raw.indexOf('|');
+
+  if (pipeIndex > -1) {
+    const possibleChapter = raw.slice(0, pipeIndex).trim();
+    const possibleSubchapter = cleanGeneratedSuffix(raw.slice(pipeIndex + 1));
+    if (/^\d{2}\s+/.test(possibleChapter)) {
+      return {
+        chapter: possibleChapter.toUpperCase(),
+        subchapter: possibleSubchapter,
+      };
     }
   }
+
+  return {
+    chapter: CHRONOLOGY_STAGE_PREFIXES[resolveStageIndex(raw)].toUpperCase(),
+    subchapter: cleanGeneratedSuffix(raw),
+  };
+}
+
+export function getBudgetCategoryFromDescription(description: string) {
+  return extractBudgetClassification(description).chapter;
+}
+
+function resolveStageIndex(description: string) {
+  const normalized = normalizeChronologyText(description);
+
+  for (const rule of CHRONOLOGY_KEYWORDS) {
+    if (rule.words.some((word) => normalized.includes(word))) {
+      return rule.stageIndex;
+    }
+  }
+
+  return CHRONOLOGY_STAGE_PREFIXES.length - 1;
+}
+
+function clampIndirect(value: number) {
+  return Math.max(0.1, Math.min(0.6, Number(value.toFixed(4))));
+}
+
+function sortTemplatesChronologically(templates: APUTemplate[]) {
+  return [...templates].sort((left, right) => {
+    const stageDiff = resolveStageIndex(left.description) - resolveStageIndex(right.description);
+    if (stageDiff !== 0) return stageDiff;
+    return left.description.localeCompare(right.description, 'es', { sensitivity: 'base' });
+  });
+}
+
+function expandTemplatesChronologically(typology: string, templates: APUTemplate[], targetCount: number) {
+  const orderedBase = sortTemplatesChronologically(templates);
+  const expanded = [...orderedBase];
+
+  if (expanded.length === 0 || expanded.length >= targetCount) {
+    return expanded;
+  }
+
+  let cycle = 0;
+  while (expanded.length < targetCount) {
+    const baseTemplate = orderedBase[cycle % orderedBase.length];
+    const variant = COST_VARIANTS[Math.floor(cycle / orderedBase.length) % COST_VARIANTS.length];
+    const stageIndex = resolveStageIndex(baseTemplate.description);
+    const stagePrefix = CHRONOLOGY_STAGE_PREFIXES[stageIndex] || CHRONOLOGY_STAGE_PREFIXES[CHRONOLOGY_STAGE_PREFIXES.length - 1];
+    const packageNumber = Math.floor(cycle / (orderedBase.length * COST_VARIANTS.length)) + 1;
+    const packageSuffix = packageNumber > 1 ? ` | Paquete ${packageNumber}` : '';
+
+    const generatedDescription = `${stagePrefix} | ${baseTemplate.description} (${variant.label})${packageSuffix} [${typology}]`;
+    const duplicate = expanded.some(
+      (template) => normalizeChronologyText(template.description) === normalizeChronologyText(generatedDescription)
+    );
+
+    if (!duplicate) {
+      expanded.push({
+        ...baseTemplate,
+        description: generatedDescription,
+        materials: baseTemplate.materials.map((material) => ({
+          ...material,
+          unitPrice: Number((material.unitPrice * variant.materialMultiplier).toFixed(4)),
+        })),
+        labor: baseTemplate.labor.map((laborRole) => ({
+          ...laborRole,
+          dailyRate: Number((laborRole.dailyRate * variant.laborMultiplier).toFixed(4)),
+        })),
+        indirectFactor: clampIndirect(baseTemplate.indirectFactor + variant.indirectDelta),
+      });
+    }
+
+    cycle += 1;
+    if (cycle > targetCount * 20) {
+      break;
+    }
+  }
+
+  return expanded;
+}
+
+Object.keys(APU_TEMPLATES).forEach((typology) => {
+  const currentItems = APU_TEMPLATES[typology];
+
+  const targetCount = (
+    typology === 'SALUD' ||
+    typology === 'EDUCACION' ||
+    typology === 'DEPORTIVA' ||
+    typology === 'INFRAESTRUCTURA' ||
+    typology === 'TURISMO'
+  )
+    ? 60
+    : 45;
+
+  APU_TEMPLATES[typology] = expandTemplatesChronologically(typology, currentItems, targetCount);
 });
 
 // Ensure all core typologies have automatic quantity factors for every default row.

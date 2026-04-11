@@ -42,6 +42,7 @@ import {
   AREA_FACTORS,
   buildBudgetSeedFromTemplate,
   findTemplateByDescription,
+  getBudgetCategoryFromDescription,
   getAreaFactorByDescription,
 } from '../constants/apuData';
 import { toast } from 'sonner';
@@ -498,9 +499,11 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
   }, [isAPUImportModalOpen]);
 
   const importFromApuTemplate = useCallback((template: any) => {
+    const autoCategory = getBudgetCategoryFromDescription(template.description);
     setNewItem((prev) => ({
       ...prev,
       description: template.description,
+      category: autoCategory,
       unit: template.unit,
       materials: template.materials,
       labor: template.labor,
@@ -1022,7 +1025,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
 
         await createProjectBudgetItem(project.id, {
           description: template.description,
-          category: 'General',
+          category: getBudgetCategoryFromDescription(template.description),
           unit: template.unit,
           quantity: 0, // User will input this
           materialCost: seed.materialCost,
@@ -1178,7 +1181,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
         const item = items[index];
         await createProjectBudgetItem(project.id, {
           description: item.description,
-          category: item.category || 'General',
+          category: item.category || getBudgetCategoryFromDescription(item.description),
           unit: item.unit,
           quantity: item.quantity,
           materialCost: item.materialCost,
@@ -1596,6 +1599,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
 
       const createdItem = await createProjectBudgetItem(project.id, {
         ...newItem,
+        category: newItem.category || getBudgetCategoryFromDescription(newItem.description),
         materialCost: matCost,
         laborCost: labCost,
         indirectCost,
@@ -1694,9 +1698,9 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
   };
 
   const exportToCSV = () => {
-    const rowHeaders = ['#', 'Descripción', 'Unidad', 'Cantidad', 'Precio Unitario', 'Total', 'Días Estimados'];
+    const rowHeaders = ['Código', 'Descripción', 'Unidad', 'Cantidad', 'Precio Unitario', 'Total', 'Días Estimados'];
     const rowData = budgetItems.map((item) => [
-      item.order,
+      getItemTechnicalCode(item),
       item.description,
       item.unit,
       Number(item.quantity || 0).toFixed(2),
@@ -1714,7 +1718,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
         const totalQty = qtyPerUnit * itemQty;
         const unitPrice = Number(m.unitPrice || 0);
         return [
-          `${item.order}. ${item.description}`,
+          `${getItemTechnicalCode(item)} ${item.description}`,
           m.name || '',
           m.unit || '',
           qtyPerUnit.toFixed(4),
@@ -1811,7 +1815,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
     currentY += 8;
 
     const budgetSummaryData = budgetItems.map(item => [
-      item.order,
+      getItemTechnicalCode(item),
       item.description,
       item.unit,
       item.quantity.toFixed(2),
@@ -1821,7 +1825,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
 
     autoTable(docPdf, {
       startY: currentY,
-      head: [['#', 'Descripción', 'Unid', 'Cant', 'P. Unit', 'Total']],
+      head: [['Código', 'Descripción', 'Unid', 'Cant', 'P. Unit', 'Total']],
       body: budgetSummaryData,
       theme: 'grid',
       headStyles: { fillColor: [15, 23, 42], fontSize: 9 },
@@ -1853,7 +1857,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
       docPdf.setFontSize(11);
       docPdf.setTextColor(15, 23, 42);
       docPdf.setFont('helvetica', 'bold');
-      docPdf.text(`${item.order}. ${item.description}`, 14, currentY);
+      docPdf.text(`${getItemTechnicalCode(item)} ${item.description}`, 14, currentY);
       currentY += 5;
 
       docPdf.setFontSize(9);
@@ -2017,7 +2021,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
 
     docPdf.save(`Presupuesto_Detallado_${project.name.replace(/\s+/g, '_')}.pdf`);
     toast.success('Presupuesto detallado exportado a PDF');
-  }, [project, budgetItems, totalBudget]);
+  }, [project, budgetItems, totalBudget, getItemTechnicalCode]);
 
   const handleOpenCalculator = useCallback(() => {
     if (guardBudgetLocked()) return;
@@ -2113,8 +2117,90 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(item);
     });
-    return groups;
+
+    const getCategoryOrder = (category: string) => {
+      const match = String(category).match(/^(\d{2})\b/);
+      if (!match) return Number.MAX_SAFE_INTEGER;
+      return Number(match[1]);
+    };
+
+    return Object.fromEntries(
+      Object.entries(groups).sort((left, right) => {
+        const chapterOrderDiff = getCategoryOrder(left[0]) - getCategoryOrder(right[0]);
+        if (chapterOrderDiff !== 0) return chapterOrderDiff;
+        return left[0].localeCompare(right[0], 'es', { sensitivity: 'base' });
+      })
+    );
   }, [filteredBudgetItems]);
+
+  const itemTechnicalCodeById = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+
+    budgetItems.forEach((item) => {
+      const category = String(item.category || 'General');
+      if (!groups[category]) groups[category] = [];
+      groups[category].push(item);
+    });
+
+    const getCategoryOrder = (category: string) => {
+      const match = String(category).match(/^(\d{2})\b/);
+      if (match) return Number(match[1]);
+      return Number.MAX_SAFE_INTEGER;
+    };
+
+    const orderedCategories = Object.keys(groups).sort((left, right) => {
+      const orderDiff = getCategoryOrder(left) - getCategoryOrder(right);
+      if (orderDiff !== 0) return orderDiff;
+      return left.localeCompare(right, 'es', { sensitivity: 'base' });
+    });
+
+    const normalizeSubchapter = (description: string) =>
+      String(description || '')
+        .replace(/^\d{2}\s+[^|]+\|\s*/i, '')
+        .replace(/\s*\[[A-Z_]+\]\s*$/g, '')
+        .replace(/\s*\|\s*Paquete\s+\d+\s*$/i, '')
+        .replace(/\s*\(Frente[^)]*\)\s*$/i, '')
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+    const codeMap: Record<string, string> = {};
+    orderedCategories.forEach((category, categoryIndex) => {
+      const chapterMatch = String(category).match(/^(\d{2})\b/);
+      const chapterNumber = chapterMatch ? Number(chapterMatch[1]) : categoryIndex + 1;
+      const chapterCode = String(chapterNumber).padStart(2, '0');
+
+      const orderedItems = [...groups[category]].sort(
+        (left, right) => (Number(left.order) || 0) - (Number(right.order) || 0)
+      );
+
+      const subchapterIndexByKey = new Map<string, number>();
+      const itemIndexBySubchapter = new Map<string, number>();
+
+      orderedItems.forEach((item) => {
+        const subchapterKey = normalizeSubchapter(item.description);
+
+        if (!subchapterIndexByKey.has(subchapterKey)) {
+          subchapterIndexByKey.set(subchapterKey, subchapterIndexByKey.size + 1);
+        }
+
+        const currentItemIndex = (itemIndexBySubchapter.get(subchapterKey) || 0) + 1;
+        itemIndexBySubchapter.set(subchapterKey, currentItemIndex);
+
+        const subchapterCode = String(subchapterIndexByKey.get(subchapterKey) || 1).padStart(2, '0');
+        const itemCode = String(currentItemIndex).padStart(3, '0');
+        codeMap[item.id] = `${chapterCode}.${subchapterCode}.${itemCode}`;
+      });
+    });
+
+    return codeMap;
+  }, [budgetItems]);
+
+  const getItemTechnicalCode = useCallback(
+    (item: any) => itemTechnicalCodeById[item.id] || String(item.order || ''),
+    [itemTechnicalCodeById]
+  );
 
   return (
     <>
@@ -2226,7 +2312,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
               </div>
               <h3 className="text-2xl font-black text-slate-900 mb-3">Presupuesto Vacío</h3>
               <p className="text-slate-500 mb-8 leading-relaxed">
-                Este proyecto aún no tiene renglones de presupuesto. ¿Deseas inicializarlo con los 30 renglones estándar para la tipología <strong>{project.typology}</strong>?
+                Este proyecto aún no tiene renglones de presupuesto. ¿Deseas inicializarlo con un catálogo ampliado y ordenado cronológicamente para la tipología <strong>{project.typology}</strong>?
               </p>
               <button 
                 onClick={initializeBudget}
@@ -2414,7 +2500,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
                 )}>
                   {isQuickView ? (
                     <>
-                      <div className="col-span-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">#</div>
+                      <div className="col-span-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Cod.</div>
                       <div className="col-span-6 text-[9px] font-black text-slate-400 uppercase tracking-widest">Descripción</div>
                       <div className="col-span-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Unidad</div>
                       <div className="col-span-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">Cantidad</div>
@@ -2422,7 +2508,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
                     </>
                   ) : (
                     <>
-                      <div className="col-span-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">#</div>
+                      <div className="col-span-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Cod.</div>
                       <div className="col-span-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Descripción</div>
                       <div className="col-span-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Unidad</div>
                       <div className="col-span-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Cantidad</div>
@@ -2487,7 +2573,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
                             <>
                               <div className="col-span-1 flex items-center gap-2">
                                 <GripVertical size={12} className="text-slate-300 cursor-grab active:cursor-grabbing" />
-                                <span className="text-[10px] font-bold text-slate-400">{item.order}</span>
+                                <span className="text-[10px] font-bold text-slate-400">{getItemTechnicalCode(item)}</span>
                               </div>
                               <div className="col-span-6">
                                 <p className="text-[11px] font-bold text-slate-900 truncate">{item.description}</p>
@@ -2519,7 +2605,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
                             <>
                               <div className="col-span-1 flex items-center gap-2">
                                 <GripVertical size={12} className="text-slate-300 cursor-grab active:cursor-grabbing" />
-                                <span className="text-[10px] font-bold text-slate-400">{item.order}</span>
+                                <span className="text-[10px] font-bold text-slate-400">{getItemTechnicalCode(item)}</span>
                               </div>
                               <div className="col-span-3">
                                 <p className="text-[11px] font-bold text-slate-900 truncate">{item.description}</p>
@@ -2608,7 +2694,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1 mb-0.5">
                                   <GripVertical size={10} className="text-slate-300" />
-                                  <span className="text-[7px] font-black bg-slate-100 text-slate-500 px-1 py-0.5 rounded-full">#{item.order}</span>
+                                  <span className="text-[7px] font-black bg-slate-100 text-slate-500 px-1 py-0.5 rounded-full">{getItemTechnicalCode(item)}</span>
                                   <span className="text-[7px] font-bold text-slate-400 uppercase tracking-wider">{item.unit}</span>
                                 </div>
                                 <h4 className="text-[10px] font-bold text-slate-900 leading-tight mb-1">{item.description}</h4>
