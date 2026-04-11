@@ -632,7 +632,7 @@ function AppContent({
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <div
                     className={cn(
-                      "relative rounded-full overflow-hidden border border-primary/25 bg-white/90 dark:bg-slate-900/90 shadow-md shrink-0 transition-all duration-300",
+                      "relative rounded-xl overflow-hidden border border-primary/20 bg-white/90 dark:bg-slate-900/90 shadow-sm shrink-0 transition-all duration-300",
                       isSidebarOpen
                         ? "w-11 h-11 -mb-4 sm:mb-0 sm:w-12 sm:h-12"
                         : "w-16 h-16 -mb-8 sm:mb-0 sm:w-14 sm:h-14"
