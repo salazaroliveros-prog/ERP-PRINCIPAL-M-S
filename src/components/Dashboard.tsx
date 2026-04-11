@@ -114,6 +114,46 @@ type DashboardChartKey =
 
 type DashboardChartPreferences = Record<DashboardChartKey, string>;
 
+type OcrHistoryColumnKey =
+  | 'id'
+  | 'date'
+  | 'projectId'
+  | 'purchaseOrderId'
+  | 'invoiceNumber'
+  | 'supplier'
+  | 'detectedTotal'
+  | 'score'
+  | 'resultStatus'
+  | 'decision'
+  | 'autoApply'
+  | 'autoActionSummary';
+
+const OCR_HISTORY_COLUMN_OPTIONS: Array<{ key: OcrHistoryColumnKey; label: string }> = [
+  { key: 'invoiceNumber', label: 'Factura' },
+  { key: 'supplier', label: 'Proveedor' },
+  { key: 'detectedTotal', label: 'Monto detectado' },
+  { key: 'score', label: 'Score' },
+  { key: 'resultStatus', label: 'Resultado' },
+  { key: 'decision', label: 'Decisión' },
+  { key: 'date', label: 'Fecha' },
+  { key: 'projectId', label: 'Proyecto' },
+  { key: 'purchaseOrderId', label: 'Orden de compra' },
+  { key: 'autoApply', label: 'Auto-aplicar' },
+  { key: 'autoActionSummary', label: 'Auto-acción' },
+  { key: 'id', label: 'ID' },
+];
+
+const OCR_HISTORY_DEFAULT_COLUMNS: OcrHistoryColumnKey[] = [
+  'invoiceNumber',
+  'supplier',
+  'detectedTotal',
+  'score',
+  'resultStatus',
+  'decision',
+  'date',
+  'autoActionSummary',
+];
+
 const CHART_TYPE_OPTIONS: Record<DashboardChartKey, Array<{ value: string; label: string }>> = {
   profitTrend: [
     { value: 'area', label: 'Area' },
@@ -315,6 +355,7 @@ export default function Dashboard() {
   const [ocrHistoryInvoiceFilter, setOcrHistoryInvoiceFilter] = useState('');
   const [ocrHistorySortBy, setOcrHistorySortBy] = useState<'date' | 'score' | 'amount'>('date');
   const [ocrHistorySortDirection, setOcrHistorySortDirection] = useState<'asc' | 'desc'>('desc');
+  const [ocrHistorySelectedColumns, setOcrHistorySelectedColumns] = useState<OcrHistoryColumnKey[]>(OCR_HISTORY_DEFAULT_COLUMNS);
   const [ocrHistoryOffset, setOcrHistoryOffset] = useState(0);
   const [ocrHistoryHasMore, setOcrHistoryHasMore] = useState(false);
   const [isLoadingMoreOcrHistory, setIsLoadingMoreOcrHistory] = useState(false);
@@ -387,6 +428,14 @@ export default function Dashboard() {
       if (parsed?.sortDirection === 'asc' || parsed?.sortDirection === 'desc') {
         setOcrHistorySortDirection(parsed.sortDirection);
       }
+      if (Array.isArray(parsed?.selectedColumns)) {
+        const allowed = new Set<OcrHistoryColumnKey>(OCR_HISTORY_COLUMN_OPTIONS.map((option) => option.key));
+        const normalized = parsed.selectedColumns
+          .filter((key: unknown): key is OcrHistoryColumnKey => typeof key === 'string' && allowed.has(key as OcrHistoryColumnKey));
+        if (normalized.length > 0) {
+          setOcrHistorySelectedColumns(normalized);
+        }
+      }
     } catch {
       // Ignore malformed preference payloads.
     }
@@ -401,6 +450,7 @@ export default function Dashboard() {
       invoiceFilter: ocrHistoryInvoiceFilter,
       sortBy: ocrHistorySortBy,
       sortDirection: ocrHistorySortDirection,
+      selectedColumns: ocrHistorySelectedColumns,
     };
     localStorage.setItem(ocrHistoryPreferencesStorageKey, JSON.stringify(payload));
   }, [
@@ -412,6 +462,7 @@ export default function Dashboard() {
     ocrHistoryInvoiceFilter,
     ocrHistorySortBy,
     ocrHistorySortDirection,
+    ocrHistorySelectedColumns,
   ]);
 
   const ocrHistoryProjectOptions = useMemo(() => {
@@ -475,6 +526,69 @@ export default function Dashboard() {
     });
     return sorted;
   }, [visibleOcrValidationHistory, ocrHistorySortBy, ocrHistorySortDirection]);
+
+  const ocrHistoryColumnLabelMap = useMemo(
+    () => Object.fromEntries(OCR_HISTORY_COLUMN_OPTIONS.map((option) => [option.key, option.label])) as Record<OcrHistoryColumnKey, string>,
+    []
+  );
+
+  const getOcrColumnRawValue = (row: any, key: OcrHistoryColumnKey): string | number => {
+    switch (key) {
+      case 'id':
+        return row.id || '';
+      case 'date':
+        return row.createdAt || '';
+      case 'projectId':
+        return row.projectId || '';
+      case 'purchaseOrderId':
+        return row.purchaseOrderId || '';
+      case 'invoiceNumber':
+        return row.invoiceNumber || '';
+      case 'supplier':
+        return row.supplier || '';
+      case 'detectedTotal':
+        return Number(row.detectedTotal || 0);
+      case 'score':
+        return Number(row.score || 0);
+      case 'resultStatus':
+        return row.resultStatus || '';
+      case 'decision':
+        return row.decision || '';
+      case 'autoApply':
+        return row.autoApply ? 'true' : 'false';
+      case 'autoActionSummary':
+        return row.autoActionSummary || '';
+      default:
+        return '';
+    }
+  };
+
+  const getOcrColumnDisplayValue = (row: any, key: OcrHistoryColumnKey): string => {
+    if (key === 'detectedTotal') {
+      return formatCurrency(Number(row.detectedTotal || 0));
+    }
+    if (key === 'date') {
+      return row.createdAt ? new Date(row.createdAt).toLocaleString('es-GT') : 'N/A';
+    }
+    if (key === 'autoApply') {
+      return row.autoApply ? 'Sí' : 'No';
+    }
+    const value = getOcrColumnRawValue(row, key);
+    return String(value || 'N/A');
+  };
+
+  const toggleOcrHistoryColumn = (columnKey: OcrHistoryColumnKey) => {
+    setOcrHistorySelectedColumns((prev) => {
+      if (prev.includes(columnKey)) {
+        if (prev.length === 1) {
+          toast.info('Debes mantener al menos una columna visible.');
+          return prev;
+        }
+        return prev.filter((key) => key !== columnKey);
+      }
+      return [...prev, columnKey];
+    });
+  };
 
   const ocrEffectiveness = useMemo(() => {
     const total = visibleOcrValidationHistory.length;
@@ -1753,20 +1867,8 @@ export default function Dashboard() {
       return;
     }
 
-    const headers = [
-      'id',
-      'fecha',
-      'proyecto_id',
-      'orden_compra_id',
-      'factura',
-      'proveedor',
-      'monto_detectado',
-      'score',
-      'resultado',
-      'decision',
-      'auto_apply',
-      'auto_accion',
-    ];
+    const selectedColumns = ocrHistorySelectedColumns;
+    const headers = selectedColumns.map((column) => ocrHistoryColumnLabelMap[column]);
 
     const escapeCell = (value: unknown) => {
       const text = String(value ?? '');
@@ -1779,20 +1881,8 @@ export default function Dashboard() {
     const lines = [
       headers.join(','),
       ...sortedVisibleOcrValidationHistory.map((row: any) =>
-        [
-          row.id,
-          row.createdAt,
-          row.projectId,
-          row.purchaseOrderId,
-          row.invoiceNumber,
-          row.supplier,
-          Number(row.detectedTotal || 0),
-          Number(row.score || 0),
-          row.resultStatus,
-          row.decision,
-          row.autoApply ? 'true' : 'false',
-          row.autoActionSummary || '',
-        ]
+        selectedColumns
+          .map((columnKey) => getOcrColumnRawValue(row, columnKey))
           .map(escapeCell)
           .join(',')
       ),
@@ -1816,20 +1906,14 @@ export default function Dashboard() {
       return;
     }
 
-    const rows = sortedVisibleOcrValidationHistory.map((row: any) => ({
-      id: row.id,
-      fecha: row.createdAt,
-      proyecto_id: row.projectId || '',
-      orden_compra_id: row.purchaseOrderId || '',
-      factura: row.invoiceNumber || '',
-      proveedor: row.supplier || '',
-      monto_detectado: Number(row.detectedTotal || 0),
-      score: Number(row.score || 0),
-      resultado: row.resultStatus || '',
-      decision: row.decision || '',
-      auto_apply: row.autoApply ? 'true' : 'false',
-      auto_accion: row.autoActionSummary || '',
-    }));
+    const selectedColumns = ocrHistorySelectedColumns;
+    const rows = sortedVisibleOcrValidationHistory.map((row: any) => {
+      const entry: Record<string, string | number> = {};
+      for (const columnKey of selectedColumns) {
+        entry[ocrHistoryColumnLabelMap[columnKey]] = getOcrColumnRawValue(row, columnKey);
+      }
+      return entry;
+    });
 
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.json_to_sheet(rows);
@@ -2775,6 +2859,26 @@ export default function Dashboard() {
             </button>
           </div>
 
+          <div className="mb-3 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Columnas visibles y exportables</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-1.5">
+              {OCR_HISTORY_COLUMN_OPTIONS.map((column) => {
+                const checked = ocrHistorySelectedColumns.includes(column.key);
+                return (
+                  <label key={column.key} className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-700 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleOcrHistoryColumn(column.key)}
+                      className="accent-primary"
+                    />
+                    {column.label}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Trazabilidad OCR reciente</p>
           {sortedVisibleOcrValidationHistory.length === 0 ? (
             <p className="text-xs text-slate-500">Sin validaciones registradas todavía.</p>
@@ -2783,7 +2887,11 @@ export default function Dashboard() {
               {sortedVisibleOcrValidationHistory.map((row: any) => (
                 <div key={row.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-black text-slate-900 dark:text-white">{row.invoiceNumber || 'Documento sin número'}</p>
+                    <p className="text-xs font-black text-slate-900 dark:text-white">
+                      {ocrHistorySelectedColumns.includes('invoiceNumber')
+                        ? (row.invoiceNumber || 'Documento sin número')
+                        : `Documento ${String(row.id || '').slice(0, 8) || 'N/A'}`}
+                    </p>
                     <span className={cn(
                       'px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border',
                       row.decision === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : row.decision === 'review' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'
@@ -2791,12 +2899,19 @@ export default function Dashboard() {
                       {row.decision}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
-                    Score {row.score} • {row.supplier || 'Proveedor N/A'} • {formatCurrency(Number(row.detectedTotal || 0))}
-                  </p>
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    {row.autoActionSummary || 'Sin auto-acción'} • {new Date(row.createdAt).toLocaleString('es-GT')}
-                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {ocrHistorySelectedColumns
+                      .filter((columnKey) => columnKey !== 'decision')
+                      .map((columnKey) => {
+                        const value = getOcrColumnDisplayValue(row, columnKey);
+                        if (!value || value === 'N/A') return null;
+                        return (
+                          <span key={`${row.id}_${columnKey}`} className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300">
+                            <span className="font-black">{ocrHistoryColumnLabelMap[columnKey]}:</span> {value}
+                          </span>
+                        );
+                      })}
+                  </div>
                 </div>
               ))}
             </div>
