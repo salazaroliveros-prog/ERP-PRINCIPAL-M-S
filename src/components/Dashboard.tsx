@@ -357,6 +357,7 @@ export default function Dashboard() {
   const [ocrHistorySortBy, setOcrHistorySortBy] = useState<'date' | 'score' | 'amount' | 'supplier' | 'invoiceNumber' | 'decision' | 'resultStatus'>('date');
   const [ocrHistorySortDirection, setOcrHistorySortDirection] = useState<'asc' | 'desc'>('desc');
   const [ocrHistorySelectedColumns, setOcrHistorySelectedColumns] = useState<OcrHistoryColumnKey[]>(OCR_HISTORY_DEFAULT_COLUMNS);
+  const [ocrHistoryStickyColumnsEnabled, setOcrHistoryStickyColumnsEnabled] = useState(true);
   const [ocrHistoryOffset, setOcrHistoryOffset] = useState(0);
   const [ocrHistoryHasMore, setOcrHistoryHasMore] = useState(false);
   const [isLoadingMoreOcrHistory, setIsLoadingMoreOcrHistory] = useState(false);
@@ -448,6 +449,9 @@ export default function Dashboard() {
           setOcrHistorySelectedColumns(normalized);
         }
       }
+      if (typeof parsed?.stickyColumnsEnabled === 'boolean') {
+        setOcrHistoryStickyColumnsEnabled(parsed.stickyColumnsEnabled);
+      }
     } catch {
       // Ignore malformed preference payloads.
     }
@@ -464,6 +468,7 @@ export default function Dashboard() {
       sortBy: ocrHistorySortBy,
       sortDirection: ocrHistorySortDirection,
       selectedColumns: ocrHistorySelectedColumns,
+      stickyColumnsEnabled: ocrHistoryStickyColumnsEnabled,
     };
     localStorage.setItem(ocrHistoryPreferencesStorageKey, JSON.stringify(payload));
   }, [
@@ -477,6 +482,7 @@ export default function Dashboard() {
     ocrHistorySortBy,
     ocrHistorySortDirection,
     ocrHistorySelectedColumns,
+    ocrHistoryStickyColumnsEnabled,
   ]);
 
   const ocrHistoryProjectOptions = useMemo(() => {
@@ -561,6 +567,38 @@ export default function Dashboard() {
     () => Object.fromEntries(OCR_HISTORY_COLUMN_OPTIONS.map((option) => [option.key, option.label])) as Record<OcrHistoryColumnKey, string>,
     []
   );
+
+  const ocrStickyColumnLeftMap = useMemo(() => {
+    const stickyOrder: OcrHistoryColumnKey[] = ['invoiceNumber', 'supplier', 'score'];
+    const widthByColumn: Record<OcrHistoryColumnKey, number> = {
+      id: 180,
+      date: 180,
+      projectId: 170,
+      purchaseOrderId: 170,
+      invoiceNumber: 220,
+      supplier: 200,
+      detectedTotal: 140,
+      score: 110,
+      resultStatus: 140,
+      decision: 120,
+      autoApply: 120,
+      autoActionSummary: 220,
+    };
+
+    const map: Partial<Record<OcrHistoryColumnKey, number>> = {};
+    if (!ocrHistoryStickyColumnsEnabled) {
+      return map;
+    }
+
+    let left = 0;
+    for (const columnKey of stickyOrder) {
+      if (!ocrHistorySelectedColumns.includes(columnKey)) continue;
+      map[columnKey] = left;
+      left += widthByColumn[columnKey];
+    }
+
+    return map;
+  }, [ocrHistorySelectedColumns, ocrHistoryStickyColumnsEnabled]);
 
   const handleOcrTableHeaderSort = (columnKey: OcrHistoryColumnKey) => {
     const map: Partial<Record<OcrHistoryColumnKey, 'date' | 'score' | 'amount' | 'supplier' | 'invoiceNumber' | 'decision' | 'resultStatus'>> = {
@@ -2963,6 +3001,17 @@ export default function Dashboard() {
                 );
               })}
             </div>
+            <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+              <label className="inline-flex items-center gap-2 text-[10px] font-bold text-slate-700 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={ocrHistoryStickyColumnsEnabled}
+                  onChange={(e) => setOcrHistoryStickyColumnsEnabled(e.target.checked)}
+                  className="accent-primary"
+                />
+                Fijar columnas clave (Factura, Proveedor, Score) en vista tabla
+              </label>
+            </div>
           </div>
 
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Trazabilidad OCR reciente</p>
@@ -2985,9 +3034,18 @@ export default function Dashboard() {
                       };
                       const active = sortableByColumn[columnKey] === ocrHistorySortBy;
                       const isSortable = Boolean(sortableByColumn[columnKey]);
+                      const stickyLeft = ocrStickyColumnLeftMap[columnKey];
+                      const isSticky = typeof stickyLeft === 'number';
 
                       return (
-                        <th key={columnKey} className="px-2.5 py-2 text-left text-[10px] uppercase tracking-wider font-black text-slate-600 dark:text-slate-200 whitespace-nowrap">
+                        <th
+                          key={columnKey}
+                          className={cn(
+                            'px-2.5 py-2 text-left text-[10px] uppercase tracking-wider font-black text-slate-600 dark:text-slate-200 whitespace-nowrap',
+                            isSticky && 'sticky z-20 bg-slate-100/95 dark:bg-slate-800/95'
+                          )}
+                          style={isSticky ? { left: stickyLeft } : undefined}
+                        >
                           <button
                             type="button"
                             disabled={!isSortable}
@@ -3010,11 +3068,22 @@ export default function Dashboard() {
                 <tbody>
                   {sortedVisibleOcrValidationHistory.map((row: any) => (
                     <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800">
-                      {ocrHistorySelectedColumns.map((columnKey) => (
-                        <td key={`${row.id}_${columnKey}`} className="px-2.5 py-2 text-slate-700 dark:text-slate-200 whitespace-nowrap align-top">
-                          {getOcrColumnDisplayValue(row, columnKey)}
-                        </td>
-                      ))}
+                      {ocrHistorySelectedColumns.map((columnKey) => {
+                        const stickyLeft = ocrStickyColumnLeftMap[columnKey];
+                        const isSticky = typeof stickyLeft === 'number';
+                        return (
+                          <td
+                            key={`${row.id}_${columnKey}`}
+                            className={cn(
+                              'px-2.5 py-2 text-slate-700 dark:text-slate-200 whitespace-nowrap align-top',
+                              isSticky && 'sticky z-10 bg-white/95 dark:bg-slate-900/95'
+                            )}
+                            style={isSticky ? { left: stickyLeft } : undefined}
+                          >
+                            {getOcrColumnDisplayValue(row, columnKey)}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
