@@ -15,7 +15,9 @@ import {
   Info,
   ChevronLeft,
   ChevronRight,
-  Edit3
+  Edit3,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { StepForm, FormSection, FormInput, FormSelect } from './FormLayout';
 import { formatCurrency, cn, handleApiError, OperationType } from '../lib/utils';
@@ -56,6 +58,7 @@ export default function PurchaseOrders() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [newPO, setNewPO] = useState({
     projectId: '',
     budgetItemId: '',
@@ -484,6 +487,7 @@ export default function PurchaseOrders() {
       }
 
       setPoToDelete(null);
+      setIsDeleteConfirmOpen(false);
       toast.success('Orden de compra eliminada');
       await loadPurchaseOrders();
     } catch (error) {
@@ -491,14 +495,19 @@ export default function PurchaseOrders() {
     }
   };
 
+  const purchaseOrderPendingDelete = purchaseOrders.find((po) => po.id === poToDelete);
+
   return (
     <>
       <ConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => {
+          setIsDeleteConfirmOpen(false);
+          setPoToDelete(null);
+        }}
         onConfirm={confirmDeletePO}
         title="Eliminar Orden de Compra"
-        message="¿Estás seguro de que deseas eliminar esta orden de compra? Esta acción no se puede deshacer."
+        message={`¿Seguro que deseas eliminar la orden de ${purchaseOrderPendingDelete?.materialName || 'material seleccionado'} (${purchaseOrderPendingDelete?.supplier || 'sin proveedor'})? Esta acción no se puede deshacer.`}
       />
 
       <div className="space-y-8">
@@ -507,13 +516,39 @@ export default function PurchaseOrders() {
           <h1 className="text-3xl font-bold text-slate-900">Ordenes de Compra</h1>
           <p className="text-slate-500">Gestión y seguimiento de pedidos a proveedores</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center justify-center gap-2 bg-primary text-white font-bold py-3 px-6 rounded-xl hover:bg-primary-hover transition-all shadow-lg shadow-primary-shadow"
-        >
-          <Plus size={20} />
-          Añadir Material
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={cn(
+                "p-2 rounded-lg transition-all",
+                viewMode === 'grid' ? "bg-white dark:bg-slate-700 text-primary shadow-sm border border-slate-100 dark:border-slate-600" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              )}
+              title="Vista tarjetas"
+              aria-label="Vista tarjetas"
+            >
+              <LayoutGrid size={18} />
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={cn(
+                "p-2 rounded-lg transition-all",
+                viewMode === 'table' ? "bg-white dark:bg-slate-700 text-primary shadow-sm border border-slate-100 dark:border-slate-600" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              )}
+              title="Vista tabla"
+              aria-label="Vista tabla"
+            >
+              <List size={18} />
+            </button>
+          </div>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center justify-center gap-2 bg-primary text-white font-bold py-3 px-6 rounded-xl hover:bg-primary-hover transition-all shadow-lg shadow-primary-shadow"
+          >
+            <Plus size={20} />
+            Añadir Material
+          </button>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -560,22 +595,110 @@ export default function PurchaseOrders() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {paginatedPurchaseOrders.map((po) => (
-          <motion.div 
-            key={po.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={cn(
-              "bg-white dark:bg-slate-900 glass-card overflow-hidden group",
-              projectCardEffectClass,
-              po.status === 'Pending'
-                ? "border-primary-light dark:border-primary/30 ring-1 ring-primary-light dark:ring-primary/20 shadow-primary-shadow/10 hover:border-primary/50"
-                : po.status === 'Completed' || po.status === 'Paid'
-                  ? "hover:border-emerald-300 dark:hover:border-emerald-500/40"
-                  : "hover:border-rose-300 dark:hover:border-rose-500/40"
-            )}
-          >
+      {viewMode === 'table' ? (
+        <div className="bg-white dark:bg-slate-900 glass-card rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden min-w-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse table-fixed">
+              <thead>
+                <tr className="bg-slate-50/60 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Material</th>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Proveedor</th>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Cantidad</th>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Estado</th>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Costo</th>
+                  <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {paginatedPurchaseOrders.map((po) => (
+                  <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">{po.materialName}</p>
+                      <p className="text-[10px] text-slate-500">{po.date}</p>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{po.supplier || 'No especificado'}</td>
+                    <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{po.quantity} {po.unit}</td>
+                    <td className="px-4 py-3">
+                      <span className={cn(
+                        "px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
+                        po.status === 'Pending' ? "bg-primary-light text-primary" :
+                        po.status === 'Completed' || po.status === 'Paid' ? "bg-emerald-100 text-emerald-700" :
+                        "bg-rose-100 text-rose-700"
+                      )}>
+                        {po.status === 'Pending' ? 'Pendiente' : po.status === 'Completed' ? 'Recibido' : po.status === 'Paid' ? 'Pagado' : 'Cancelado'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm font-bold text-slate-900 dark:text-white">{formatCurrency(po.estimatedCost)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        {po.status === 'Pending' && (
+                          <button
+                            onClick={() => handleEdit(po)}
+                            className="p-2 text-slate-400 hover:text-primary transition-colors"
+                            title="Editar"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                        )}
+                        {po.status === 'Pending' && (
+                          <button
+                            onClick={() => handleUpdateStatus(po.id, 'Completed')}
+                            className="p-2 text-slate-400 hover:text-emerald-600 transition-colors"
+                            title="Recibir pedido"
+                          >
+                            <CheckCircle2 size={16} />
+                          </button>
+                        )}
+                        {po.status === 'Completed' && (
+                          <button
+                            onClick={() => handleUpdateStatus(po.id, 'Paid')}
+                            className="p-2 text-slate-400 hover:text-blue-600 transition-colors"
+                            title="Marcar pagado"
+                          >
+                            <CheckCircle2 size={16} />
+                          </button>
+                        )}
+                        {po.status === 'Pending' && (
+                          <button
+                            onClick={() => handleUpdateStatus(po.id, 'Cancelled')}
+                            className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                            title="Cancelar"
+                          >
+                            <XCircle size={16} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(po.id)}
+                          className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {paginatedPurchaseOrders.map((po) => (
+            <motion.div 
+              key={po.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                "bg-white dark:bg-slate-900 glass-card overflow-hidden group",
+                projectCardEffectClass,
+                po.status === 'Pending'
+                  ? "border-primary-light dark:border-primary/30 ring-1 ring-primary-light dark:ring-primary/20 shadow-primary-shadow/10 hover:border-primary/50"
+                  : po.status === 'Completed' || po.status === 'Paid'
+                    ? "hover:border-emerald-300 dark:hover:border-emerald-500/40"
+                    : "hover:border-rose-300 dark:hover:border-rose-500/40"
+              )}
+            >
             <div className={cn(
               "p-6 border-b flex items-start justify-between",
               po.status === 'Pending' ? "bg-primary-light/30 dark:bg-primary/5 border-primary-light dark:border-primary/20" : "border-slate-50 dark:border-slate-800"
@@ -715,9 +838,10 @@ export default function PurchaseOrders() {
                 </div>
               </div>
             </div>
-          </motion.div>
-        ))}
-      </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (

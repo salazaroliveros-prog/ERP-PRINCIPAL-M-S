@@ -243,6 +243,7 @@ export default function Equipment() {
       const equip = equipment.find(e => e.id === equipToDelete);
       await deleteEquipment(equipToDelete);
       setEquipToDelete(null);
+      setIsDeleteConfirmOpen(false);
       toast.success('Equipo eliminado con éxito');
       await logAction('Eliminación de Equipo', 'Maquinaria', `Equipo ${equip?.name || equipToDelete} eliminado`, 'delete', { equipmentId: equipToDelete });
       await loadEquipmentData();
@@ -251,14 +252,19 @@ export default function Equipment() {
     }
   };
 
+  const equipmentPendingDelete = equipment.find((item) => item.id === equipToDelete);
+
   return (
     <>
       <ConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => {
+          setIsDeleteConfirmOpen(false);
+          setEquipToDelete(null);
+        }}
         onConfirm={confirmDeleteEquip}
         title="Eliminar Equipo"
-        message="¿Estás seguro de que deseas eliminar este equipo? Esta acción no se puede deshacer."
+        message={`¿Seguro que deseas eliminar el equipo ${equipmentPendingDelete?.name || 'seleccionado'}? Esta acción no se puede deshacer.`}
       />
 
       <div className="space-y-8 min-w-0 overflow-x-hidden">

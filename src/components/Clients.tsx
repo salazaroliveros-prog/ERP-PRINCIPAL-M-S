@@ -25,7 +25,9 @@ import {
   FileText,
   Clock,
   Download,
-  Upload
+  Upload,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { cn, handleApiError, OperationType, formatDate } from '../lib/utils';
 import { logAction } from '../lib/audit';
@@ -91,6 +93,7 @@ export default function Clients() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   const loadClients = React.useCallback(async () => {
     try {
@@ -279,6 +282,7 @@ export default function Clients() {
       const client = clients.find(c => c.id === clientToDelete);
       await deleteClient(clientToDelete);
       setClientToDelete(null);
+      setIsDeleteConfirmOpen(false);
       await loadClients();
       toast.success('Cliente eliminado con éxito');
       await logAction('Eliminación de Cliente', 'Clientes', `Cliente ${client?.name || clientToDelete} eliminado`, 'delete', { clientId: clientToDelete });
@@ -286,6 +290,8 @@ export default function Clients() {
       handleApiError(error, OperationType.DELETE, `clients/${clientToDelete}`);
     }
   };
+
+  const clientPendingDelete = clients.find((client) => client.id === clientToDelete);
 
   const handleOpenModal = (client?: any) => {
     if (client) {
@@ -418,10 +424,13 @@ export default function Clients() {
     <>
       <ConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => {
+          setIsDeleteConfirmOpen(false);
+          setClientToDelete(null);
+        }}
         onConfirm={confirmDeleteClient}
         title="Eliminar Cliente"
-        message="¿Estás seguro de que deseas eliminar este cliente? Esta acción no se puede deshacer."
+        message={`¿Seguro que deseas eliminar el cliente ${clientPendingDelete?.name || 'seleccionado'}? Esta acción no se puede deshacer.`}
       />
 
       <div className="flex flex-col lg:flex-row gap-8 items-start">
@@ -477,15 +486,121 @@ export default function Clients() {
               >
                 Empresa {sortBy === 'company' && (sortOrder === 'asc' ? '↑' : '↓')}
               </button>
+              <div className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
+              <button
+                onClick={() => setViewMode('grid')}
+                className={cn(
+                  "p-1.5 rounded-lg transition-all",
+                  viewMode === 'grid' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                )}
+                title="Vista tarjetas"
+                aria-label="Vista tarjetas"
+              >
+                <LayoutGrid size={14} />
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={cn(
+                  "p-1.5 rounded-lg transition-all",
+                  viewMode === 'table' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                )}
+                title="Vista tabla"
+                aria-label="Vista tabla"
+              >
+                <List size={14} />
+              </button>
             </div>
           </div>
 
-          <div className={cn(
-            "grid gap-6",
-            isDetailOpen ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
-          )}>
-            <AnimatePresence>
-              {paginatedClients.map((client) => (
+          {viewMode === 'table' ? (
+            <div className="bg-white dark:bg-slate-900 glass-card rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden min-w-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse table-fixed">
+                  <thead>
+                    <tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Cliente</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Empresa</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Correo</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Teléfono</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Estado</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {paginatedClients.map((client) => (
+                      <tr
+                        key={client.id}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                        onClick={() => {
+                          setSelectedClient(client);
+                          setIsDetailOpen(true);
+                        }}
+                      >
+                        <td className="px-4 py-3">
+                          <p className="text-sm font-bold text-slate-900 dark:text-white">{client.name}</p>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{client.company || 'Particular'}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300 truncate">{client.email || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{client.phone || 'Sin teléfono'}</td>
+                        <td className="px-4 py-3">
+                          <span className={cn(
+                            "px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
+                            client.status === 'Active' ? "bg-emerald-100 text-emerald-700" : "bg-primary-light text-primary"
+                          )}>
+                            {client.status === 'Active' ? 'Activo' : 'Lead'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedClient(client);
+                                setIsChatOpen(true);
+                              }}
+                              className="p-2 text-slate-400 hover:text-primary transition-colors"
+                              title="Chat"
+                            >
+                              <MessageSquare size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenModal(client);
+                              }}
+                              className="p-2 text-slate-400 hover:text-primary transition-colors"
+                              title="Editar"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteClient(client.id);
+                              }}
+                              className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                              title="Eliminar"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className={cn(
+              "grid gap-6",
+              isDetailOpen ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+            )}>
+              <AnimatePresence>
+                {paginatedClients.map((client) => (
                 <motion.div 
                   key={client.id}
                   data-testid={`client-card-${client.id}`}
@@ -585,9 +700,10 @@ export default function Clients() {
                     </button>
                   </div>
                 </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
 
           {/* Pagination */}
           {totalPages > 1 && (

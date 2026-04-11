@@ -221,6 +221,7 @@ export default function Subcontracts() {
       const sub = subcontracts.find(s => s.id === subToDelete);
       await deleteSubcontract(subToDelete);
       setSubToDelete(null);
+      setIsDeleteConfirmOpen(false);
       toast.success('Subcontrato eliminado exitosamente');
       await logAction('Eliminación de Subcontrato', 'Subcontratos', `Subcontrato con ${sub?.contractor || subToDelete} eliminado`, 'delete', { subcontractId: subToDelete });
       await loadSubcontracts();
@@ -228,6 +229,8 @@ export default function Subcontracts() {
       handleApiError(error, OperationType.DELETE, `subcontracts/${subToDelete}`);
     }
   };
+
+  const subcontractPendingDelete = subcontracts.find((sub) => sub.id === subToDelete);
 
   const handleAISuggestions = async () => {
     if (!newSub.service || !newSub.projectId) {
@@ -443,10 +446,13 @@ export default function Subcontracts() {
     <>
       <ConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => {
+          setIsDeleteConfirmOpen(false);
+          setSubToDelete(null);
+        }}
         onConfirm={confirmDeleteSub}
         title="Eliminar Subcontrato"
-        message="¿Estás seguro de que deseas eliminar este subcontrato? Esta acción no se puede deshacer."
+        message={`¿Seguro que deseas eliminar el subcontrato de ${subcontractPendingDelete?.contractor || 'contratista seleccionado'}? Esta acción no se puede deshacer.`}
       />
 
       <div className="space-y-4 sm:space-y-8">
