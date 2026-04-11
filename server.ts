@@ -2203,6 +2203,203 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
     }
   });
 
+  app.post('/api/documents/ocr-validate', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const rawText = String(req.body?.rawText || '').trim();
+      const imageDataUrl = String(req.body?.imageDataUrl || '').trim();
+      const purchaseOrderId = String(req.body?.purchaseOrderId || '').trim();
+      const projectId = String(req.body?.projectId || '').trim();
+
+      if (!rawText && !imageDataUrl) {
+        return res.status(400).json({ error: 'rawText o imageDataUrl es obligatorio' });
+      }
+
+      const parseAmount = (value: any) => {
+        const normalized = String(value || '').replace(/[^0-9.,-]/g, '').replace(/,/g, '');
+        const amount = Number(normalized);
+        return Number.isFinite(amount) ? amount : 0;
+      };
+
+      const parseByRegex = (text: string) => {
+        const supplierMatch = text.match(/(?:proveedor|supplier|empresa)\s*[:\-]\s*([^\n\r]+)/i);
+        const totalMatch = text.match(/(?:total|monto|importe)\s*[:\-]?\s*(?:Q|GTQ|\$)?\s*([0-9][\d.,]*)/i);
+        const dateMatch = text.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{2,4})/);
+        const invoiceMatch = text.match(/(?:factura|invoice|no\.?\s*factura)\s*[:#\-]?\s*([A-Z0-9\-]+)/i);
+
+        return {
+          supplier: supplierMatch?.[1]?.trim() || null,
+          total: totalMatch ? parseAmount(totalMatch[1]) : 0,
+          date: dateMatch?.[1] || null,
+          invoiceNumber: invoiceMatch?.[1] || null,
+        };
+      };
+
+      const extractFromImageWithGemini = async (dataUrl: string) => {
+        const geminiApiKey = String(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+        if (!geminiApiKey) return null;
+
+        const match = dataUrl.match(/^data:(.+);base64,(.+)$/);
+        if (!match) return null;
+
+        const mimeType = match[1];
+        const base64Data = match[2];
+
+        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+        const model = String(process.env.GEMINI_MODEL || process.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash').trim();
+        const prompt = [
+          'Extrae de este documento solo JSON valido con las llaves:',
+          'supplier, total, date, invoiceNumber.',
+          'Si no encuentras un valor, responde null.',
+          'total debe ser numerico sin simbolos.',
+        ].join(' ');
+
+        const result = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: prompt },
+                {
+                  inlineData: {
+                    mimeType,
+                    data: base64Data,
+                  },
+                },
+              ],
+            },
+          ],
+        });
+
+        const text = String(result.text || '').trim();
+        const jsonText = text.replace(/```json|```/gi, '').trim();
+        try {
+          const parsed = JSON.parse(jsonText);
+          return {
+            supplier: parsed?.supplier ? String(parsed.supplier).trim() : null,
+            total: parseAmount(parsed?.total),
+            date: parsed?.date ? String(parsed.date).trim() : null,
+            invoiceNumber: parsed?.invoiceNumber ? String(parsed.invoiceNumber).trim() : null,
+          };
+        } catch {
+          return null;
+        }
+      };
+
+      const extractedFromImage = imageDataUrl ? await extractFromImageWithGemini(imageDataUrl) : null;
+      const extractedFromText = rawText ? parseByRegex(rawText) : null;
+      const extracted = {
+        supplier: extractedFromImage?.supplier || extractedFromText?.supplier || null,
+        total: extractedFromImage?.total || extractedFromText?.total || 0,
+        date: extractedFromImage?.date || extractedFromText?.date || null,
+        invoiceNumber: extractedFromImage?.invoiceNumber || extractedFromText?.invoiceNumber || null,
+      };
+
+      const checks: Array<{ name: string; status: 'pass' | 'warn' | 'fail'; detail: string }> = [];
+      let score = 100;
+
+      if (extracted.total <= 0) {
+        checks.push({ name: 'Extraccion de monto', status: 'fail', detail: 'No se pudo extraer monto total del documento.' });
+        score -= 35;
+      } else {
+        checks.push({ name: 'Extraccion de monto', status: 'pass', detail: `Monto detectado: Q${extracted.total.toFixed(2)}` });
+      }
+
+      if (purchaseOrderId) {
+        const poResult = await db.query<PurchaseOrderRow>(
+          `
+            select id, project_id, budget_item_id, material_id, material_name, quantity, unit, estimated_cost,
+                   supplier, supplier_id, notes, status, order_date, date_received, date_paid,
+                   payment_method, payment_reference, stock_applied, budget_applied, created_at, updated_at
+            from purchase_orders
+            where id = $1
+            limit 1
+          `,
+          [purchaseOrderId]
+        );
+
+        const po = poResult.rows[0];
+        if (!po) {
+          checks.push({ name: 'Orden de compra', status: 'fail', detail: 'No se encontró la orden de compra seleccionada.' });
+          score -= 35;
+        } else {
+          const poEstimated = parseAmount(po.estimated_cost);
+          if (extracted.total > 0 && poEstimated > 0) {
+            const diffPct = Math.abs(((extracted.total - poEstimated) / poEstimated) * 100);
+            if (diffPct <= 8) {
+              checks.push({ name: 'Coincidencia de monto OC', status: 'pass', detail: `Variación ${diffPct.toFixed(2)}% (dentro de tolerancia).` });
+            } else if (diffPct <= 15) {
+              checks.push({ name: 'Coincidencia de monto OC', status: 'warn', detail: `Variación ${diffPct.toFixed(2)}% (revisar).` });
+              score -= 12;
+            } else {
+              checks.push({ name: 'Coincidencia de monto OC', status: 'fail', detail: `Variación ${diffPct.toFixed(2)}% (alto riesgo).` });
+              score -= 30;
+            }
+          }
+
+          if (extracted.supplier && po.supplier) {
+            const supplierMatch = String(po.supplier).toLowerCase().includes(String(extracted.supplier).toLowerCase()) ||
+              String(extracted.supplier).toLowerCase().includes(String(po.supplier).toLowerCase());
+            if (supplierMatch) {
+              checks.push({ name: 'Proveedor', status: 'pass', detail: `Proveedor coincide con OC (${po.supplier}).` });
+            } else {
+              checks.push({ name: 'Proveedor', status: 'warn', detail: `Proveedor documento (${extracted.supplier}) difiere de OC (${po.supplier}).` });
+              score -= 10;
+            }
+          }
+        }
+      }
+
+      if (projectId && extracted.total > 0) {
+        const projectResult = await db.query<ProjectRow>(
+          `
+            select id, name, location, project_manager, area, status, budget, spent, physical_progress, financial_progress,
+                   start_date, end_date, client_uid, typology, latitude, longitude, created_at
+            from projects
+            where id = $1
+            limit 1
+          `,
+          [projectId]
+        );
+
+        const project = projectResult.rows[0];
+        if (!project) {
+          checks.push({ name: 'Proyecto', status: 'warn', detail: 'No se encontró el proyecto para validar presupuesto.' });
+          score -= 8;
+        } else {
+          const budget = parseAmount(project.budget);
+          const spent = parseAmount(project.spent);
+          const remaining = budget - spent;
+          if (remaining <= 0) {
+            checks.push({ name: 'Presupuesto disponible', status: 'fail', detail: `Proyecto sin saldo disponible (${project.name}).` });
+            score -= 25;
+          } else if (extracted.total <= remaining * 1.05) {
+            checks.push({ name: 'Presupuesto disponible', status: 'pass', detail: `Documento dentro del saldo estimado (${project.name}).` });
+          } else {
+            checks.push({ name: 'Presupuesto disponible', status: 'warn', detail: `Documento supera saldo estimado en ${(((extracted.total - remaining) / Math.max(1, remaining)) * 100).toFixed(1)}%.` });
+            score -= 15;
+          }
+        }
+      }
+
+      const normalizedScore = Math.max(0, Math.min(100, score));
+      const resultStatus = normalizedScore >= 80 ? 'aprobado' : normalizedScore >= 60 ? 'revisar' : 'rechazado';
+
+      return res.json({
+        status: resultStatus,
+        score: normalizedScore,
+        extracted,
+        checks,
+        recommendations: checks
+          .filter((check) => check.status !== 'pass')
+          .map((check) => `Acción sugerida: ${check.name} - ${check.detail}`),
+      });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo validar el documento' });
+    }
+  });
+
   app.get("/api/transactions", async (req, res) => {
     try {
       const db = requireDatabase();
