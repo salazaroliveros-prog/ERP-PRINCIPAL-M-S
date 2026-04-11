@@ -49,6 +49,36 @@ Validar que el semaforo ejecutivo, copiloto y alertas automaticas funcionen corr
 - Paso: revisar Dashboard, AI Chat y Presupuesto en viewport movil.
 - Esperado: componentes legibles y operables sin desbordes criticos.
 
+## Guion rapido de ejecucion (recomendado)
+1. Preparacion de sesion
+- Definir fecha/hora de prueba y responsable QA/UAT.
+- Seleccionar proyectos A (saludable), B (sobrecosto), C (atraso).
+- Tener panel de notificaciones visible para validar alertas.
+
+2. Orden sugerido de ejecucion
+- Caso 1 -> Caso 2 -> Caso 3 -> Caso 4 -> Caso 5 -> Caso 6 -> Caso 7 -> Caso 8.
+- Registrar evidencia en cada caso inmediatamente (captura o archivo).
+
+3. Criterio de registro por caso
+- PASS: cumple el esperado sin bloqueo.
+- FAIL: no cumple esperado o hay comportamiento incorrecto.
+- BLOQUEADO: no se pudo ejecutar por dependencia externa.
+
+4. Evidencia minima por caso
+- Caso 1: captura de tarjeta semaforo en Dashboard.
+- Caso 2: captura de AI Chat abierto desde boton Abrir Copiloto.
+- Caso 3: captura de respuesta completa del control total.
+- Caso 4: captura de notificacion critica en panel.
+- Caso 5: captura de lista de ultimos analisis con score.
+- Caso 6: captura de bloque "Tendencia semanal".
+- Caso 7: adjuntar CSV/PDF exportado.
+- Caso 8: capturas en viewport movil (dashboard, chat, presupuesto).
+
+5. Cierre de UAT
+- Completar Resumen de resultados.
+- Documentar hallazgos en Plan de correccion.
+- Obtener aprobacion negocio/tecnico.
+
 ## Criterios de aceptacion
 - 100% de casos criticos (1,2,3,4,5) en estado PASS.
 - Sin errores bloqueantes en consola para flujos IA.
@@ -58,3 +88,35 @@ Validar que el semaforo ejecutivo, copiloto y alertas automaticas funcionen corr
 - Capturas: Dashboard semaforo, AI Chat control total, panel notificaciones.
 - Archivo exportado: CSV/PDF con codigos tecnicos.
 - Registro de fecha/hora de ejecucion por caso.
+
+## Matriz de ejecucion UAT (llenar)
+
+| Caso | Nombre | Proyecto de prueba | Resultado (PASS/FAIL) | Evidencia | Observaciones |
+|---|---|---|---|---|---|
+| 1 | Render Semaforo Ejecutivo IA | A / B / C | PENDIENTE |  |  |
+| 2 | Apertura de Copiloto desde Dashboard | A / B / C | PENDIENTE |  |  |
+| 3 | Comando manual de Control Total | A / B / C | PENDIENTE |  |  |
+| 4 | Alertas criticas automaticas | B / C | PENDIENTE |  |  |
+| 5 | Historial de analisis | A / B / C | PENDIENTE |  |  |
+| 6 | Tendencia semanal | A / B / C | PENDIENTE |  |  |
+| 7 | Exportaciones con codificacion tecnica | A / B / C | PENDIENTE |  |  |
+| 8 | No regresiones visuales en movil | A / B / C | PASS | Playwright: tests/e2e/mobile-dashboard-kpi-responsive.spec.ts (mobile-chromium) - 2026-04-11 | Se valida legibilidad KPI/charts y resumen top 6 en perfil movil. |
+
+## Resumen de resultados
+- Fecha de ejecucion: 2026-04-11 (parcial)
+- Responsable QA/UAT: QA automatizado + Copilot
+- Casos PASS: 1 (Caso 8)
+- Casos FAIL: 0
+- Casos bloqueados: 0
+- Riesgo residual: Pendiente validar casos funcionales 1-7 con datos reales de portafolio y exportaciones.
+
+## Plan de correccion (si aplica)
+| Hallazgo | Severidad | Caso relacionado | Responsable | Fecha objetivo | Estado |
+|---|---|---|---|---|---|
+|  |  |  |  |  | PENDIENTE |
+
+## Aprobacion
+- Aprobado por (Negocio):
+- Aprobado por (Tecnico):
+- Fecha de aprobacion:
+- Observacion final:

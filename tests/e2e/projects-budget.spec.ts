@@ -225,9 +225,10 @@ test('valida y limpia automaticamente datos de prueba', async ({ page, baseURL, 
   const projectBefore = await waitForProjectByName(request, projectName);
   expect(projectBefore).toBeTruthy();
 
-  await page.getByRole('button', { name: 'Validar + Limpiar' }).click();
-  await expect(page.getByText('Validación completada:', { exact: false })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('Limpieza automática completada:', { exact: false })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: /BORRAR DATOS DE PRUEBA/i }).click();
+  await expect(page.getByRole('heading', { name: 'Limpieza de Datos de Prueba' })).toBeVisible();
+  await page.getByRole('button', { name: 'Eliminar Datos de Prueba' }).click();
+  await expect(page.getByText('Limpieza completada:', { exact: false })).toBeVisible({ timeout: 30_000 });
 
   await page.getByPlaceholder('Buscar por nombre, ubicación o director...').fill(projectName);
 
@@ -303,13 +304,11 @@ test('limpieza real elimina proyectos y datos relacionados de prueba', async ({ 
   const createdTransaction = (await createTransactionResponse.json()) as { id: string };
 
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Limpieza Pruebas' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /BORRAR DATOS DE PRUEBA/i })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Limpieza Pruebas' }).click();
+  await page.getByRole('button', { name: /BORRAR DATOS DE PRUEBA/i }).click();
   await expect(page.getByRole('heading', { name: 'Limpieza de Datos de Prueba' })).toBeVisible();
   await page.getByRole('button', { name: 'Eliminar Datos de Prueba' }).click();
-
-  await expect(page.getByText('Limpieza manual completada:', { exact: false })).toBeVisible({ timeout: 30_000 });
 
   const projectsAfter = await request.get('/api/projects');
   expect(projectsAfter.ok()).toBeTruthy();

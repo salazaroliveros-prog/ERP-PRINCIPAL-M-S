@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Bot, Send, X, MessageSquare, Sparkles, AlertTriangle, TrendingUp, Wrench, Loader2, MoreVertical, History, Construction, DollarSign, Mic, MicOff, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, handleApiError, OperationType } from '../lib/utils';
@@ -338,6 +338,10 @@ export default function AIChat() {
         pros.push('Inventario general sin alertas críticas de stock mínimo.');
       }
 
+      const high = alerts.filter((item) => item.severity === 'high').length;
+      const medium = alerts.filter((item) => item.severity === 'medium').length;
+      const low = alerts.filter((item) => item.severity === 'low').length;
+
       return {
         projects,
         activeProjects,
@@ -353,9 +357,9 @@ export default function AIChat() {
           status: high > 0 ? 'rojo' : medium > 0 ? 'amarillo' : 'verde',
           score: Math.max(0, Math.min(100, 100 - (high * 18) - (medium * 8))),
           alertSummary: {
-            high: alerts.filter((item) => item.severity === 'high').length,
-            medium: alerts.filter((item) => item.severity === 'medium').length,
-            low: alerts.filter((item) => item.severity === 'low').length,
+            high,
+            medium,
+            low,
           },
         },
       };

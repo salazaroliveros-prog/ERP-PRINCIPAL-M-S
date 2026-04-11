@@ -1697,6 +1697,75 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
     await addMaterialToItem(itemId, material);
   };
 
+  const itemTechnicalCodeById = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+
+    budgetItems.forEach((item) => {
+      const category = String(item.category || 'General');
+      if (!groups[category]) groups[category] = [];
+      groups[category].push(item);
+    });
+
+    const getCategoryOrder = (category: string) => {
+      const match = String(category).match(/^(\d{2})\b/);
+      if (match) return Number(match[1]);
+      return Number.MAX_SAFE_INTEGER;
+    };
+
+    const orderedCategories = Object.keys(groups).sort((left, right) => {
+      const orderDiff = getCategoryOrder(left) - getCategoryOrder(right);
+      if (orderDiff !== 0) return orderDiff;
+      return left.localeCompare(right, 'es', { sensitivity: 'base' });
+    });
+
+    const normalizeSubchapter = (description: string) =>
+      String(description || '')
+        .replace(/^\d{2}\s+[^|]+\|\s*/i, '')
+        .replace(/\s*\[[A-Z_]+\]\s*$/g, '')
+        .replace(/\s*\|\s*Paquete\s+\d+\s*$/i, '')
+        .replace(/\s*\(Frente[^)]*\)\s*$/i, '')
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+    const codeMap: Record<string, string> = {};
+    orderedCategories.forEach((category, categoryIndex) => {
+      const chapterMatch = String(category).match(/^(\d{2})\b/);
+      const chapterNumber = chapterMatch ? Number(chapterMatch[1]) : categoryIndex + 1;
+      const chapterCode = String(chapterNumber).padStart(2, '0');
+
+      const orderedItems = [...groups[category]].sort(
+        (left, right) => (Number(left.order) || 0) - (Number(right.order) || 0)
+      );
+
+      const subchapterIndexByKey = new Map<string, number>();
+      const itemIndexBySubchapter = new Map<string, number>();
+
+      orderedItems.forEach((item) => {
+        const subchapterKey = normalizeSubchapter(item.description);
+
+        if (!subchapterIndexByKey.has(subchapterKey)) {
+          subchapterIndexByKey.set(subchapterKey, subchapterIndexByKey.size + 1);
+        }
+
+        const currentItemIndex = (itemIndexBySubchapter.get(subchapterKey) || 0) + 1;
+        itemIndexBySubchapter.set(subchapterKey, currentItemIndex);
+
+        const subchapterCode = String(subchapterIndexByKey.get(subchapterKey) || 1).padStart(2, '0');
+        const itemCode = String(currentItemIndex).padStart(3, '0');
+        codeMap[item.id] = `${chapterCode}.${subchapterCode}.${itemCode}`;
+      });
+    });
+
+    return codeMap;
+  }, [budgetItems]);
+
+  const getItemTechnicalCode = useCallback(
+    (item: any) => itemTechnicalCodeById[item.id] || String(item.order || ''),
+    [itemTechnicalCodeById]
+  );
+
   const exportToCSV = () => {
     const rowHeaders = ['Código', 'Descripción', 'Unidad', 'Cantidad', 'Precio Unitario', 'Total', 'Días Estimados'];
     const rowData = budgetItems.map((item) => [
@@ -2132,75 +2201,6 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
       })
     );
   }, [filteredBudgetItems]);
-
-  const itemTechnicalCodeById = useMemo(() => {
-    const groups: Record<string, any[]> = {};
-
-    budgetItems.forEach((item) => {
-      const category = String(item.category || 'General');
-      if (!groups[category]) groups[category] = [];
-      groups[category].push(item);
-    });
-
-    const getCategoryOrder = (category: string) => {
-      const match = String(category).match(/^(\d{2})\b/);
-      if (match) return Number(match[1]);
-      return Number.MAX_SAFE_INTEGER;
-    };
-
-    const orderedCategories = Object.keys(groups).sort((left, right) => {
-      const orderDiff = getCategoryOrder(left) - getCategoryOrder(right);
-      if (orderDiff !== 0) return orderDiff;
-      return left.localeCompare(right, 'es', { sensitivity: 'base' });
-    });
-
-    const normalizeSubchapter = (description: string) =>
-      String(description || '')
-        .replace(/^\d{2}\s+[^|]+\|\s*/i, '')
-        .replace(/\s*\[[A-Z_]+\]\s*$/g, '')
-        .replace(/\s*\|\s*Paquete\s+\d+\s*$/i, '')
-        .replace(/\s*\(Frente[^)]*\)\s*$/i, '')
-        .trim()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase();
-
-    const codeMap: Record<string, string> = {};
-    orderedCategories.forEach((category, categoryIndex) => {
-      const chapterMatch = String(category).match(/^(\d{2})\b/);
-      const chapterNumber = chapterMatch ? Number(chapterMatch[1]) : categoryIndex + 1;
-      const chapterCode = String(chapterNumber).padStart(2, '0');
-
-      const orderedItems = [...groups[category]].sort(
-        (left, right) => (Number(left.order) || 0) - (Number(right.order) || 0)
-      );
-
-      const subchapterIndexByKey = new Map<string, number>();
-      const itemIndexBySubchapter = new Map<string, number>();
-
-      orderedItems.forEach((item) => {
-        const subchapterKey = normalizeSubchapter(item.description);
-
-        if (!subchapterIndexByKey.has(subchapterKey)) {
-          subchapterIndexByKey.set(subchapterKey, subchapterIndexByKey.size + 1);
-        }
-
-        const currentItemIndex = (itemIndexBySubchapter.get(subchapterKey) || 0) + 1;
-        itemIndexBySubchapter.set(subchapterKey, currentItemIndex);
-
-        const subchapterCode = String(subchapterIndexByKey.get(subchapterKey) || 1).padStart(2, '0');
-        const itemCode = String(currentItemIndex).padStart(3, '0');
-        codeMap[item.id] = `${chapterCode}.${subchapterCode}.${itemCode}`;
-      });
-    });
-
-    return codeMap;
-  }, [budgetItems]);
-
-  const getItemTechnicalCode = useCallback(
-    (item: any) => itemTechnicalCodeById[item.id] || String(item.order || ''),
-    [itemTechnicalCodeById]
-  );
 
   return (
     <>
