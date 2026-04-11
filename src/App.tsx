@@ -596,8 +596,20 @@ function AppContent({
       <div className="h-screen h-[100dvh] min-h-0 bg-slate-50 dark:bg-slate-950 flex flex-col lg:flex-row overflow-hidden transition-colors duration-300">
         <Toaster position="top-right" richColors closeButton />
 
-        <header className="fixed top-0 inset-x-0 z-50 px-3 sm:px-5 lg:px-8 pt-2 sm:pt-3 pointer-events-none">
-          <div className="mx-auto max-w-[1600px] bg-white/50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-700/50 backdrop-blur-xl shadow-lg rounded-2xl px-3 sm:px-4 py-2 sm:py-3 pointer-events-auto">
+        <header
+          className={cn(
+            "fixed top-0 inset-x-0 pt-2 sm:pt-3 pointer-events-none transition-all duration-300",
+            isSidebarOpen
+              ? "z-20 pl-3 pr-3 sm:pl-4 sm:pr-4 lg:pl-[300px] lg:pr-6"
+              : "z-50 px-3 sm:px-5 lg:px-8"
+          )}
+        >
+          <div
+            className={cn(
+              "mx-auto max-w-[1600px] bg-white/50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-700/50 backdrop-blur-xl shadow-lg rounded-2xl px-3 sm:px-4 pointer-events-auto transition-all duration-300",
+              isSidebarOpen ? "py-1.5 sm:py-2" : "py-2 sm:py-3"
+            )}
+          >
             <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-4">
               <div className="flex items-center">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary/10 border border-primary/20 overflow-hidden">
@@ -618,7 +630,14 @@ function AppContent({
 
               <div className="flex items-center justify-center min-w-0">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                  <div className="relative w-16 h-16 -mb-8 sm:mb-0 sm:w-14 sm:h-14 rounded-full overflow-hidden border border-primary/25 bg-white/90 dark:bg-slate-900/90 shadow-md shrink-0">
+                  <div
+                    className={cn(
+                      "relative rounded-full overflow-hidden border border-primary/25 bg-white/90 dark:bg-slate-900/90 shadow-md shrink-0 transition-all duration-300",
+                      isSidebarOpen
+                        ? "w-11 h-11 -mb-4 sm:mb-0 sm:w-12 sm:h-12"
+                        : "w-16 h-16 -mb-8 sm:mb-0 sm:w-14 sm:h-14"
+                    )}
+                  >
                     <img
                       src="/logo.svg"
                       alt="Constructora WM/M&S"
@@ -628,10 +647,10 @@ function AppContent({
                     />
                   </div>
                   <div className="leading-tight min-w-0">
-                    <p className="text-[10px] sm:text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white truncate">
+                    <p className={cn("font-black uppercase tracking-widest text-slate-900 dark:text-white truncate transition-all duration-300", isSidebarOpen ? "text-[9px] sm:text-xs" : "text-[10px] sm:text-sm")}>
                       CONSTRUCTORA WM/M&S
                     </p>
-                    <p className="text-[8px] sm:text-xs font-semibold text-slate-600 dark:text-slate-300 truncate">
+                    <p className={cn("font-semibold text-slate-600 dark:text-slate-300 truncate transition-all duration-300", isSidebarOpen ? "text-[7px] sm:text-[10px]" : "text-[8px] sm:text-xs")}>
                       Edificando El Futuro
                     </p>
                   </div>

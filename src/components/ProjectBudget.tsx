@@ -129,6 +129,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem('project-budget-side-panel-collapsed') === '1';
   });
+  const [isMobileProjectPanelOpen, setIsMobileProjectPanelOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -923,6 +924,10 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
     if (typeof window === 'undefined') return;
     window.localStorage.setItem('project-budget-side-panel-collapsed', isProjectPanelCollapsed ? '1' : '0');
   }, [isProjectPanelCollapsed]);
+
+  useEffect(() => {
+    setIsMobileProjectPanelOpen(false);
+  }, [project?.id]);
 
   const filteredProjectSelectorItems = useMemo(() => {
     const query = projectSelectorSearch.trim().toLowerCase();
@@ -2280,10 +2285,25 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
                 </motion.div>
               )}
 
+              <div className="lg:hidden">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileProjectPanelOpen((prev) => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-2xl border border-slate-200 bg-white shadow-sm text-slate-700"
+                >
+                  <span className="text-[10px] font-black uppercase tracking-widest">
+                    {isMobileProjectPanelOpen ? 'Ocultar selector de proyecto' : 'Cambiar proyecto'}
+                  </span>
+                  {isMobileProjectPanelOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-4 lg:items-start">
               <div className={cn(
                 "bg-white rounded-2xl border border-slate-100 shadow-sm p-3 sm:p-4 space-y-3 lg:sticky lg:top-4 transition-all",
-                isProjectPanelCollapsed ? "lg:w-[88px]" : "lg:w-[300px]"
+                isProjectPanelCollapsed ? "lg:w-[88px]" : "lg:w-[300px]",
+                "hidden lg:block",
+                isMobileProjectPanelOpen && "block"
               )}>
                 <div className="flex items-center justify-between gap-2">
                   {!isProjectPanelCollapsed && (
