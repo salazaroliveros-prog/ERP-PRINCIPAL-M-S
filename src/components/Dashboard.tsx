@@ -411,6 +411,7 @@ export default function Dashboard() {
   const [ocrHistorySelectedPresetId, setOcrHistorySelectedPresetId] = useState<string>('operaciones');
   const [ocrHistoryCustomPresets, setOcrHistoryCustomPresets] = useState<OcrCustomNamedPreset[]>([]);
   const [ocrHistoryPresetNameInput, setOcrHistoryPresetNameInput] = useState('Mi preset OCR');
+  const [ocrHistoryPresetSearchTerm, setOcrHistoryPresetSearchTerm] = useState('');
   const [ocrHistoryOffset, setOcrHistoryOffset] = useState(0);
   const [ocrHistoryHasMore, setOcrHistoryHasMore] = useState(false);
   const [isLoadingMoreOcrHistory, setIsLoadingMoreOcrHistory] = useState(false);
@@ -1035,6 +1036,12 @@ export default function Dashboard() {
     () => ocrHistoryCustomPresets.findIndex((preset) => preset.id === ocrHistorySelectedPresetId),
     [ocrHistoryCustomPresets, ocrHistorySelectedPresetId]
   );
+
+  const filteredCustomOcrPresets = useMemo(() => {
+    const term = ocrHistoryPresetSearchTerm.trim().toLowerCase();
+    if (!term) return ocrHistoryCustomPresets;
+    return ocrHistoryCustomPresets.filter((preset) => preset.name.toLowerCase().includes(term));
+  }, [ocrHistoryCustomPresets, ocrHistoryPresetSearchTerm]);
 
   const hasSelectedCustomPreset = selectedCustomPresetIndex >= 0;
 
@@ -3262,6 +3269,13 @@ export default function Dashboard() {
               >
                 Gerencia
               </button>
+              <input
+                type="text"
+                value={ocrHistoryPresetSearchTerm}
+                onChange={(e) => setOcrHistoryPresetSearchTerm(e.target.value)}
+                placeholder="Buscar preset..."
+                className="px-2 py-1 rounded-md text-[10px] font-bold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+              />
               <select
                 value={ocrHistorySelectedPresetId.startsWith('custom_') ? ocrHistorySelectedPresetId : ''}
                 onChange={(e) => {
@@ -3271,7 +3285,7 @@ export default function Dashboard() {
                 className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
               >
                 <option value="">Personalizados...</option>
-                {ocrHistoryCustomPresets.map((preset) => (
+                {filteredCustomOcrPresets.map((preset) => (
                   <option key={preset.id} value={preset.id}>{preset.name}</option>
                 ))}
               </select>
