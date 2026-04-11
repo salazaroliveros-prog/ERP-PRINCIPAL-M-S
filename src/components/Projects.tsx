@@ -2944,6 +2944,7 @@ export default function Projects() {
       {isBudgetModalOpen && budgetProject && (
         <ProjectBudget 
           project={budgetProject} 
+          onProjectChange={(nextProject) => setBudgetProject(nextProject)}
           onClose={() => setIsBudgetModalOpen(false)} 
         />
       )}

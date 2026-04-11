@@ -53,6 +53,7 @@ import { CostCalculatorModal } from './CostCalculatorModal';
 import {
   createProjectBudgetItem,
   deleteProjectBudgetItem,
+  listProjects,
   listProjectBudgetItemsDetailed,
   reorderProjectBudgetItems,
   updateProjectBudgetItem,
@@ -65,9 +66,10 @@ import { getBrandedCsvPreamble, escapeCsvCell } from '../lib/reportBranding';
 interface ProjectBudgetProps {
   project: any;
   onClose: () => void;
+  onProjectChange?: (nextProject: any) => void;
 }
 
-export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) {
+export default function ProjectBudget({ project, onClose, onProjectChange }: ProjectBudgetProps) {
   const [budgetItems, setBudgetItems] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
@@ -118,7 +120,9 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
   });
   const [viewingTransactionsForItem, setViewingTransactionsForItem] = useState<any | null>(null);
   const [viewingTransactionsForMaterial, setViewingTransactionsForMaterial] = useState<{item: any, material: any} | null>(null);
-  const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(true);
+  const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
+  const [projectSelectorItems, setProjectSelectorItems] = useState<any[]>([]);
+  const [projectSelectorSearch, setProjectSelectorSearch] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -887,6 +891,36 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
 
     void repairIncompleteDefaultRows();
   }, [budgetItems, isInitializing, isLoading, repairIncompleteDefaultRows]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const items = await listProjects();
+        if (!cancelled) {
+          setProjectSelectorItems(items);
+        }
+      } catch {
+        if (!cancelled) {
+          setProjectSelectorItems([]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filteredProjectSelectorItems = useMemo(() => {
+    const query = projectSelectorSearch.trim().toLowerCase();
+    if (!query) return projectSelectorItems;
+    return projectSelectorItems.filter((item) =>
+      String(item.name || '').toLowerCase().includes(query) ||
+      String(item.location || '').toLowerCase().includes(query)
+    );
+  }, [projectSelectorItems, projectSelectorSearch]);
 
   const handleExportMaterialSummary = () => {
     if (budgetItems.length === 0) {
@@ -2327,6 +2361,47 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                 </motion.div>
               )}
 
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3 sm:p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <h3 className="text-[10px] sm:text-xs font-black text-slate-500 uppercase tracking-widest">Lista de Proyectos</h3>
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                    <input
+                      type="text"
+                      placeholder="Buscar proyecto..."
+                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+                      value={projectSelectorSearch}
+                      onChange={(e) => setProjectSelectorSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-2 pr-1">
+                  {filteredProjectSelectorItems.map((item) => {
+                    const isActive = String(item.id) === String(project.id);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          if (isActive) return;
+                          onProjectChange?.(item);
+                        }}
+                        className={cn(
+                          "w-full text-left px-3 py-2 rounded-xl border transition-all",
+                          isActive
+                            ? "bg-primary-light border-primary/30 text-primary"
+                            : "bg-slate-50 border-slate-200 text-slate-700 hover:border-primary/30 hover:bg-primary-light/40"
+                        )}
+                      >
+                        <p className="text-xs font-black truncate">{item.name}</p>
+                        <p className="text-[10px] font-medium opacity-70 truncate">{item.location || 'Sin ubicación'}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Summary Cards */}
               {isBudgetLocked && (
                 <motion.div 
@@ -2358,47 +2433,6 @@ export default function ProjectBudget({ project, onClose }: ProjectBudgetProps) 
                   </div>
                 </motion.div>
               )}
-
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 flex-shrink-0">
-                <div className="bg-white p-2 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex items-center gap-2 sm:gap-4">
-                  <div className="p-2 sm:p-3 bg-primary-light text-primary rounded-xl sm:rounded-2xl">
-                    <span className="text-sm sm:text-xl font-black">Q</span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[7px] sm:text-[8px] font-bold text-slate-400 uppercase tracking-widest truncate">Presupuesto</p>
-                    <p className="text-xs sm:text-base font-black text-slate-900 truncate">{formatCurrency(totalBudget)}</p>
-                  </div>
-                </div>
-                <div className="bg-white p-2 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex items-center gap-2 sm:gap-4">
-                  <div className="p-2 sm:p-3 bg-emerald-50 text-emerald-600 rounded-xl sm:rounded-2xl">
-                    <span className="text-sm sm:text-xl font-black">Q</span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[7px] sm:text-[8px] font-bold text-slate-400 uppercase tracking-widest truncate">Ejecución</p>
-                    <p className="text-xs sm:text-base font-black text-slate-900 truncate">
-                      {formatCurrency(transactions.reduce((sum, t) => sum + (t.amount || 0), 0))}
-                    </p>
-                  </div>
-                </div>
-                <div className="bg-white p-2 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex items-center gap-2 sm:gap-4">
-                  <div className="p-2 sm:p-3 bg-blue-50 text-blue-600 rounded-xl sm:rounded-2xl">
-                    <Clock size={16} className="sm:w-5 sm:h-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[7px] sm:text-[8px] font-bold text-slate-400 uppercase tracking-widest truncate">Duración</p>
-                    <p className="text-xs sm:text-base font-black text-slate-900 truncate">{Math.ceil(totalEstimatedDays)} Días</p>
-                  </div>
-                </div>
-                <div className="bg-white p-2 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex items-center gap-2 sm:gap-4">
-                  <div className="p-2 sm:p-3 bg-purple-50 text-purple-600 rounded-xl sm:rounded-2xl">
-                    <AlertCircle size={16} className="sm:w-5 sm:h-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[7px] sm:text-[8px] font-bold text-slate-400 uppercase tracking-widest truncate">Renglones</p>
-                    <p className="text-xs sm:text-base font-black text-slate-900 truncate">{budgetItems.filter(i => i.quantity > 0).length} / {budgetItems.length}</p>
-                  </div>
-                </div>
-              </div>
 
               {/* Items List Container */}
               <div className="flex-shrink-0 min-h-[300px] md:flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
