@@ -125,7 +125,22 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-const isEvaluationStatus = (status: string) => status === 'Evaluation' || status === 'Planning';
+const normalizeProjectStatus = (status: string) =>
+  String(status || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const isEvaluationStatus = (status: string) => {
+  const normalized = normalizeProjectStatus(status);
+  return normalized === 'evaluation' || normalized === 'planning' || normalized === 'en evaluacion' || normalized === 'en planeacion';
+};
+
+const isExecutionStatus = (status: string) => {
+  const normalized = normalizeProjectStatus(status);
+  return normalized === 'in progress' || normalized === 'inprogress' || normalized === 'active' || normalized === 'en ejecucion' || normalized === 'execution';
+};
 
 const getTypologyColor = (typology: string) => {
   switch (typology?.toUpperCase()) {
@@ -1349,7 +1364,7 @@ export default function Projects() {
   }, [searchTerm, filters, sortBy, sortOrder, itemsPerPage]);
 
   const projectCostSummary = useMemo(() => {
-    const executionProjects = filteredProjects.filter((project) => project.status === 'In Progress');
+    const executionProjects = filteredProjects.filter((project) => isExecutionStatus(project.status));
     const evaluationProjects = filteredProjects.filter((project) => isEvaluationStatus(project.status));
 
     const executionBudget = executionProjects.reduce((sum, project) => sum + (Number(project.budget) || 0), 0);

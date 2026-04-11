@@ -339,7 +339,42 @@ const StatCard = ({ title, value, icon: Icon, trend, trendValue, color }: any) =
   </motion.div>
 );
 
-const isEvaluationStatus = (status: string) => status === 'Evaluation' || status === 'Planning';
+const normalizeProjectStatus = (status: string) =>
+  String(status || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const isEvaluationStatus = (status: string) => {
+  const normalized = normalizeProjectStatus(status);
+  return normalized === 'evaluation' || normalized === 'planning' || normalized === 'en evaluacion' || normalized === 'en planeacion';
+};
+
+const isExecutionStatus = (status: string) => {
+  const normalized = normalizeProjectStatus(status);
+  return normalized === 'in progress' || normalized === 'inprogress' || normalized === 'active' || normalized === 'en ejecucion' || normalized === 'execution';
+};
+
+const isCompletedStatus = (status: string) => {
+  const normalized = normalizeProjectStatus(status);
+  return normalized === 'completed' || normalized === 'completado' || normalized === 'finished' || normalized === 'finalizado';
+};
+
+const isOnHoldStatus = (status: string) => {
+  const normalized = normalizeProjectStatus(status);
+  return normalized === 'on hold' || normalized === 'onhold' || normalized === 'en pausa' || normalized === 'pausa' || normalized === 'paused';
+};
+
+const isPlanningStatus = (status: string) => {
+  const normalized = normalizeProjectStatus(status);
+  return normalized === 'planning' || normalized === 'en planeacion';
+};
+
+const isEvaluationOnlyStatus = (status: string) => {
+  const normalized = normalizeProjectStatus(status);
+  return normalized === 'evaluation' || normalized === 'en evaluacion';
+};
 
 const QuickActionButton = ({ icon: Icon, label, onClick, color }: any) => (
   <button
@@ -1434,7 +1469,7 @@ export default function Dashboard() {
     }
   }, [projects, subcontracts, loading, physicalFinancialDeviationThreshold]);
 
-  const executionProjects = projects.filter(p => p.status === 'In Progress' || p.status === 'Active');
+  const executionProjects = projects.filter((p) => isExecutionStatus(p.status));
   const evaluationProjects = projects.filter(p => isEvaluationStatus(p.status));
   const totalBudget = executionProjects.reduce((acc, p) => acc + (Number(p.budget) || 0), 0);
   const evaluationBudget = evaluationProjects.reduce((acc, p) => acc + (Number(p.budget) || 0), 0);
@@ -1475,11 +1510,11 @@ export default function Dashboard() {
   })).sort((a, b) => b.value - a.value);
 
   const statusData = [
-    { name: 'En Evaluación', value: projects.filter(p => p.status === 'Evaluation').length },
-    { name: 'En Planeación', value: projects.filter(p => p.status === 'Planning').length },
-    { name: 'En Ejecución', value: projects.filter(p => p.status === 'In Progress').length },
-    { name: 'Completadas', value: projects.filter(p => p.status === 'Completed').length },
-    { name: 'En Pausa', value: projects.filter(p => p.status === 'On Hold').length },
+    { name: 'En Evaluación', value: projects.filter((p) => isEvaluationOnlyStatus(p.status)).length },
+    { name: 'En Planeación', value: projects.filter((p) => isPlanningStatus(p.status)).length },
+    { name: 'En Ejecución', value: projects.filter((p) => isExecutionStatus(p.status)).length },
+    { name: 'Completadas', value: projects.filter((p) => isCompletedStatus(p.status)).length },
+    { name: 'En Pausa', value: projects.filter((p) => isOnHoldStatus(p.status)).length },
   ].filter(d => d.value > 0);
 
   const statusRadarData = statusData.map((item) => ({

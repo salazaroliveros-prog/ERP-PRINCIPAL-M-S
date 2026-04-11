@@ -69,7 +69,22 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Calculator, FileBarChart, Info, DollarSign, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const isEvaluationStatus = (status: string) => status === 'Evaluation' || status === 'Planning';
+const normalizeProjectStatus = (status: string) =>
+  String(status || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const isEvaluationStatus = (status: string) => {
+  const normalized = normalizeProjectStatus(status);
+  return normalized === 'evaluation' || normalized === 'planning' || normalized === 'en evaluacion' || normalized === 'en planeacion';
+};
+
+const isExecutionStatus = (status: string) => {
+  const normalized = normalizeProjectStatus(status);
+  return normalized === 'in progress' || normalized === 'inprogress' || normalized === 'active' || normalized === 'en ejecucion' || normalized === 'execution';
+};
 import { getBrandedCsvPreamble, escapeCsvCell } from '../lib/reportBranding';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -997,7 +1012,7 @@ export default function Financials() {
   }, [ownerIncomeTransactions]);
 
   const projectCostSummary = useMemo(() => {
-    const executionProjects = projects.filter((project) => project.status === 'In Progress' || project.status === 'Active');
+    const executionProjects = projects.filter((project) => isExecutionStatus(project.status));
     const evaluationProjects = projects.filter((project) => isEvaluationStatus(project.status));
 
     const executionBudget = executionProjects.reduce((sum, project) => sum + (Number(project.budget) || 0), 0);
@@ -1036,7 +1051,7 @@ export default function Financials() {
 
   const activeProjectIds = useMemo(() => new Set(
     projects
-      .filter((p: any) => p.status === 'Active' || p.status === 'In Progress')
+      .filter((p: any) => isExecutionStatus(p.status))
       .map((p: any) => p.id)
   ), [projects]);
 

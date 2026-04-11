@@ -3048,8 +3048,8 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Physical vs Financial Progress */}
-                <div className="p-6 bg-white rounded-3xl border border-slate-100 shadow-sm space-y-6">
-                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Avance Físico vs Financiero</h4>
+                <div className="p-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
+                  <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Avance Físico vs Financiero</h4>
                   {(() => {
                     const physical = project.physicalProgress || 0;
                     const financial = project.budget > 0 ? (project.spent / project.budget) * 100 : 0;
@@ -3059,13 +3059,13 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
                     return (
                       <div className="space-y-6">
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Físico</p>
-                            <p className="text-2xl font-black text-slate-900">{physical.toFixed(1)}%</p>
+                          <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-300 dark:border-slate-600">
+                            <p className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest mb-1">Físico</p>
+                            <p className="text-2xl font-black text-slate-900 dark:text-white">{physical.toFixed(1)}%</p>
                           </div>
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Financiero</p>
-                            <p className="text-2xl font-black text-slate-900">{financial.toFixed(1)}%</p>
+                          <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-300 dark:border-slate-600">
+                            <p className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest mb-1">Financiero</p>
+                            <p className="text-2xl font-black text-slate-900 dark:text-white">{financial.toFixed(1)}%</p>
                           </div>
                         </div>
 
@@ -3094,7 +3094,7 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
                             <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Acciones de Mitigación Sugeridas</p>
                             <ul className="space-y-2">
                               {getMitigationSuggestions(deviation).map((action, idx) => (
-                                <li key={idx} className="flex items-start gap-2 text-xs text-slate-600">
+                                <li key={idx} className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-200">
                                   <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
                                   {action}
                                 </li>
@@ -3108,8 +3108,8 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
                 </div>
 
                 {/* Typology Budget Comparison */}
-                <div className="p-6 bg-white rounded-3xl border border-slate-100 shadow-sm space-y-6">
-                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Estimación por Tipología (M2)</h4>
+                <div className="p-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
+                  <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Estimación por Tipología (M2)</h4>
                   {(() => {
                     const TYPOLOGY_COSTS: Record<string, number> = {
                       'RESIDENCIAL': 4500,
@@ -3134,24 +3134,24 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
                     return (
                       <div className="space-y-6">
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Área (M2)</p>
-                            <p className="text-2xl font-black text-slate-900">{area.toLocaleString()} m²</p>
+                          <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-300 dark:border-slate-600">
+                            <p className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest mb-1">Área (M2)</p>
+                            <p className="text-2xl font-black text-slate-900 dark:text-white">{area.toLocaleString()} m²</p>
                           </div>
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Costo Est. / M2</p>
-                            <p className="text-2xl font-black text-slate-900">{formatCurrency(estimatedCostPerM2)}</p>
+                          <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-300 dark:border-slate-600">
+                            <p className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest mb-1">Costo Est. / M2</p>
+                            <p className="text-2xl font-black text-slate-900 dark:text-white">{formatCurrency(estimatedCostPerM2)}</p>
                           </div>
                         </div>
 
                         <div className="space-y-4">
                           <div className="flex justify-between items-end">
                             <div>
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Presupuesto Estimado</p>
-                              <p className="text-lg font-black text-slate-700">{formatCurrency(estimatedTotal)}</p>
+                              <p className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest">Presupuesto Estimado</p>
+                              <p className="text-lg font-black text-slate-800 dark:text-slate-100">{formatCurrency(estimatedTotal)}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Presupuesto Actual</p>
+                              <p className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest">Presupuesto Actual</p>
                               <p className="text-lg font-black text-primary">{formatCurrency(actualTotal)}</p>
                             </div>
                           </div>
@@ -3187,7 +3187,7 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
                                 "Comparar con proyectos similares de la misma tipología.",
                                 "Ajustar el factor de costos indirectos si es necesario."
                               ].map((action, idx) => (
-                                <li key={idx} className="flex items-start gap-2 text-xs text-slate-600">
+                                <li key={idx} className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-200">
                                   <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
                                   {action}
                                 </li>

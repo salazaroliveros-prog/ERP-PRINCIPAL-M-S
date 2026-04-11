@@ -74,14 +74,14 @@ export const StepForm = ({
           "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-500 bg-white dark:bg-slate-900 relative z-10",
           isActive ? "border-primary text-primary shadow-xl shadow-primary/30 scale-125 ring-4 ring-primary/10" : 
           isCompleted ? "border-primary bg-primary text-white shadow-md shadow-primary/20" : 
-          "border-slate-200 dark:border-slate-700 text-slate-400"
+          "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300"
         )}>
           {isCompleted ? <Check size={18} strokeWidth={3} /> : <span className="text-sm font-black">{idx + 1}</span>}
         </div>
                 <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap">
                   <span className={cn(
                     "text-[10px] font-black uppercase tracking-widest transition-colors",
-                    isActive ? "text-primary" : "text-slate-400"
+                    isActive ? "text-primary" : "text-slate-600 dark:text-slate-300"
                   )}>
                     {step.title}
                   </span>
@@ -135,17 +135,17 @@ export const FormSection = ({ title, icon: Icon, children, description }: { titl
 
 export const FormInput = ({ label, error, ...props }: { label: string, error?: string } & React.InputHTMLAttributes<HTMLInputElement>) => (
   <div className="space-y-1.5 sm:space-y-2 group">
-    <label className="text-[8px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1 group-focus-within:text-primary transition-colors">
+    <label className="text-[8px] sm:text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-[0.2em] ml-1 group-focus-within:text-primary transition-colors">
       {label}
     </label>
     <div className="relative group/input">
       <input
         {...props}
         className={cn(
-          "w-full px-4 sm:px-5 py-2.5 sm:py-4 bg-white dark:bg-slate-900 border-2 rounded-xl sm:rounded-2xl focus:outline-none transition-all duration-300 font-medium text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-600 shadow-sm",
+          "w-full px-4 sm:px-5 py-2.5 sm:py-4 bg-white dark:bg-slate-900 border-2 rounded-xl sm:rounded-2xl focus:outline-none transition-all duration-300 font-semibold text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400 shadow-sm",
           error 
             ? "border-rose-100 dark:border-rose-900/30 bg-rose-50/30 dark:bg-rose-900/10 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/5" 
-            : "border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 focus:border-primary focus:ring-4 focus:ring-primary/10 hover:shadow-md"
+            : "border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 focus:border-primary focus:ring-4 focus:ring-primary/10 hover:shadow-md"
         )}
       />
       {error && (
@@ -169,7 +169,7 @@ export const FormSelect = ({ label, error, children, ...props }: { label: string
 
   return (
     <div className="space-y-1.5 sm:space-y-2 group">
-      <label className="text-[8px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1 group-focus-within:text-primary transition-colors">
+      <label className="text-[8px] sm:text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-[0.2em] ml-1 group-focus-within:text-primary transition-colors">
         {label}
       </label>
       <div className="relative">
@@ -178,10 +178,10 @@ export const FormSelect = ({ label, error, children, ...props }: { label: string
           title={title}
           aria-label={ariaLabel}
           className={cn(
-            "w-full px-4 sm:px-5 py-2.5 sm:py-4 bg-white dark:bg-slate-900 border-2 rounded-xl sm:rounded-2xl focus:outline-none appearance-none transition-all duration-300 font-medium text-xs sm:text-sm text-slate-900 dark:text-white",
+            "w-full px-4 sm:px-5 py-2.5 sm:py-4 bg-white dark:bg-slate-900 border-2 rounded-xl sm:rounded-2xl focus:outline-none appearance-none transition-all duration-300 font-semibold text-xs sm:text-sm text-slate-900 dark:text-white",
             error
               ? "border-rose-100 dark:border-rose-900/30 bg-rose-50/30 dark:bg-rose-900/10 focus:border-rose-500"
-              : "border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 focus:border-primary focus:ring-4 focus:ring-primary/5 shadow-sm hover:shadow-md"
+              : "border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 focus:border-primary focus:ring-4 focus:ring-primary/5 shadow-sm hover:shadow-md"
           )}
         >
           {children}
