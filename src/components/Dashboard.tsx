@@ -128,9 +128,32 @@ const CHART_TYPE_OPTIONS: Record<DashboardChartKey, Array<{ value: string; label
   ],
   scheduleProgress: [
     { value: 'gantt', label: 'Cronograma' },
-    { value: 'horizontal-bars', label: 'Barras horizontales' },
-    { value: 'radar', label: 'Radar avance' },
   ],
+};
+
+const MOBILE_CHART_BREAKPOINT = 640;
+const MOBILE_MAX_CHART_ITEMS = 6;
+
+const truncateChartLabel = (value: string, maxLength: number) => {
+  if (!value) return 'N/A';
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}...` : value;
+};
+
+const sanitizeChartPreferences = (
+  preferences: Partial<DashboardChartPreferences> | undefined,
+  fallback: DashboardChartPreferences,
+): DashboardChartPreferences => {
+  const sanitized = { ...fallback };
+
+  (Object.keys(CHART_TYPE_OPTIONS) as DashboardChartKey[]).forEach((chartKey) => {
+    const allowedValues = CHART_TYPE_OPTIONS[chartKey].map((option) => option.value);
+    const preferred = preferences?.[chartKey];
+    sanitized[chartKey] = preferred && allowedValues.includes(preferred)
+      ? preferred
+      : fallback[chartKey];
+  });
+
+  return sanitized;
 };
 
 const THEME_DEFAULT_CHARTS: Record<string, DashboardChartPreferences> = {
@@ -237,6 +260,10 @@ export default function Dashboard() {
   const [chartPreferences, setChartPreferences] = useState<DashboardChartPreferences>(
     THEME_DEFAULT_CHARTS.sunset
   );
+  const [isMobileChartView, setIsMobileChartView] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < MOBILE_CHART_BREAKPOINT;
+  });
   const navigate = useNavigate();
 
   const updateChartPreference = (chartKey: DashboardChartKey, value: string) => {
@@ -254,11 +281,24 @@ export default function Dashboard() {
       const raw = localStorage.getItem(storageKey);
       const parsed = raw ? JSON.parse(raw) : {};
       const persistedForTheme = parsed?.[currentTheme.id];
-      setChartPreferences(persistedForTheme ? { ...fallback, ...persistedForTheme } : fallback);
+      setChartPreferences(sanitizeChartPreferences(
+        persistedForTheme ? { ...fallback, ...persistedForTheme } : fallback,
+        fallback,
+      ));
     } catch {
       setChartPreferences(fallback);
     }
   }, [currentTheme.id]);
+
+  useEffect(() => {
+    const onResize = () => {
+      setIsMobileChartView(window.innerWidth < MOBILE_CHART_BREAKPOINT);
+    };
+
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     const storageKey = 'dashboard-chart-preferences-by-theme';
@@ -590,6 +630,24 @@ export default function Dashboard() {
   const progressComparisonChartData = progressChartScope === 'selected' && selectedQuickProjectId
     ? progressComparisonData.filter((p) => p.id === selectedQuickProjectId)
     : progressComparisonData;
+
+  const projectHealthChartData = (isMobileChartView
+    ? [...projectHealthData]
+      .sort((a, b) => Math.max(b.presupuesto, b.gastado) - Math.max(a.presupuesto, a.gastado))
+      .slice(0, MOBILE_MAX_CHART_ITEMS)
+    : projectHealthData
+  ).map((item) => ({
+    ...item,
+    chartName: isMobileChartView ? truncateChartLabel(item.name, 13) : item.name,
+  }));
+
+  const progressComparisonDisplayData = (isMobileChartView
+    ? progressComparisonChartData.slice(0, MOBILE_MAX_CHART_ITEMS)
+    : progressComparisonChartData
+  ).map((item) => ({
+    ...item,
+    chartName: isMobileChartView ? truncateChartLabel(item.name, 12) : item.name,
+  }));
   
   const allProjectDates = activeProjectsList.flatMap(p => [
     p.startDate ? parseISO(p.startDate) : null,
@@ -830,44 +888,49 @@ export default function Dashboard() {
                   ))}
                 </select>
               </div>
+              {isMobileChartView && projectHealthData.length > MOBILE_MAX_CHART_ITEMS && (
+                <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Mostrando top {MOBILE_MAX_CHART_ITEMS} obras por monto para evitar solapamiento.
+                </p>
+              )}
               <div className="h-64 min-w-0">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   {chartPreferences.projectHealth === 'line' ? (
-                    <LineChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
+                    <LineChart data={projectHealthChartData} margin={{ top: 10, right: 10, left: 0, bottom: isMobileChartView ? 48 : 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
+                      <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 9, fontWeight: 700 }} interval={0} minTickGap={isMobileChartView ? 24 : 10} angle={isMobileChartView ? -32 : -45} textAnchor="end" height={isMobileChartView ? 66 : 80} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
-                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [formatCurrency(value), '']} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                       <Line type="monotone" dataKey="presupuesto" stroke="#3b82f6" strokeWidth={2.5} name="Presupuesto" />
                       <Line type="monotone" dataKey="gastado" stroke="#ef4444" strokeWidth={2.5} name="Gastado" />
                     </LineChart>
                   ) : chartPreferences.projectHealth === 'area' ? (
-                    <AreaChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
+                    <AreaChart data={projectHealthChartData} margin={{ top: 10, right: 10, left: 0, bottom: isMobileChartView ? 48 : 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
+                      <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 9, fontWeight: 700 }} interval={0} minTickGap={isMobileChartView ? 24 : 10} angle={isMobileChartView ? -32 : -45} textAnchor="end" height={isMobileChartView ? 66 : 80} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
-                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [formatCurrency(value), '']} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                       <Area type="monotone" dataKey="presupuesto" stroke="#3b82f6" fill="#93c5fd" fillOpacity={0.3} name="Presupuesto" />
                       <Area type="monotone" dataKey="gastado" stroke="#ef4444" fill="#fda4af" fillOpacity={0.3} name="Gastado" />
                     </AreaChart>
                   ) : chartPreferences.projectHealth === 'composed' ? (
-                    <ComposedChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
+                    <ComposedChart data={projectHealthChartData} margin={{ top: 10, right: 10, left: 0, bottom: isMobileChartView ? 48 : 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
+                      <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 9, fontWeight: 700 }} interval={0} minTickGap={isMobileChartView ? 24 : 10} angle={isMobileChartView ? -32 : -45} textAnchor="end" height={isMobileChartView ? 66 : 80} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
-                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [formatCurrency(value), '']} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                       <Bar dataKey="gastado" fill="#ef4444" radius={[4, 4, 0, 0]} name="Gastado" barSize={16} />
                       <Line type="monotone" dataKey="presupuesto" stroke="#2563eb" strokeWidth={3} name="Presupuesto" />
                     </ComposedChart>
                   ) : (
-                    <BarChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
+                    <BarChart data={projectHealthChartData} margin={{ top: 10, right: 10, left: 0, bottom: isMobileChartView ? 48 : 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
+                      <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 9, fontWeight: 700 }} interval={0} minTickGap={isMobileChartView ? 24 : 10} angle={isMobileChartView ? -32 : -45} textAnchor="end" height={isMobileChartView ? 66 : 80} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
-                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [formatCurrency(value), '']} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                       <Bar dataKey="presupuesto" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Presupuesto" barSize={chartPreferences.projectHealth === 'stacked-bar' ? 22 : 20} stackId={chartPreferences.projectHealth === 'stacked-bar' ? 'health' : undefined} />
                       <Bar dataKey="gastado" fill="#ef4444" radius={[4, 4, 0, 0]} name="Gastado" barSize={chartPreferences.projectHealth === 'stacked-bar' ? 22 : 20} stackId={chartPreferences.projectHealth === 'stacked-bar' ? 'health' : undefined} />
@@ -1033,44 +1096,49 @@ export default function Dashboard() {
                 Seleccione un proyecto en "Actualización rápida de avance" para ver su comparativa individual.
               </p>
             )}
+            {isMobileChartView && progressChartScope !== 'selected' && progressComparisonChartData.length > MOBILE_MAX_CHART_ITEMS && (
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Vista móvil resumida: top {MOBILE_MAX_CHART_ITEMS} obras con mayor avance.
+              </p>
+            )}
             <div className="h-80 min-w-0">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 {chartPreferences.progressComparison === 'line' ? (
-                  <LineChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                  <LineChart data={progressComparisonDisplayData} margin={{ top: 20, right: 30, left: 20, bottom: isMobileChartView ? 52 : 60 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} angle={-45} textAnchor="end" interval={0} />
+                    <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 10, fontWeight: 700 }} angle={isMobileChartView ? -32 : -45} textAnchor="end" interval={0} minTickGap={isMobileChartView ? 24 : 10} height={isMobileChartView ? 56 : 62} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `${value.toFixed(1)}%`} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
                     <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                     <Line type="monotone" dataKey="fisico" stroke="#3b82f6" name="Avance Físico" strokeWidth={3} />
                     <Line type="monotone" dataKey="financiero" stroke="#ef4444" name="Avance Financiero" strokeWidth={3} />
                   </LineChart>
                 ) : chartPreferences.progressComparison === 'area' ? (
-                  <AreaChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                  <AreaChart data={progressComparisonDisplayData} margin={{ top: 20, right: 30, left: 20, bottom: isMobileChartView ? 52 : 60 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} angle={-45} textAnchor="end" interval={0} />
+                    <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 10, fontWeight: 700 }} angle={isMobileChartView ? -32 : -45} textAnchor="end" interval={0} minTickGap={isMobileChartView ? 24 : 10} height={isMobileChartView ? 56 : 62} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `${value.toFixed(1)}%`} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
                     <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                     <Area type="monotone" dataKey="fisico" stroke="#3b82f6" fill="#93c5fd" fillOpacity={0.3} name="Avance Físico" />
                     <Area type="monotone" dataKey="financiero" stroke="#ef4444" fill="#fda4af" fillOpacity={0.3} name="Avance Financiero" />
                   </AreaChart>
                 ) : chartPreferences.progressComparison === 'radar' ? (
-                  <RadarChart data={progressComparisonChartData.slice(0, 8)} outerRadius={95}>
+                  <RadarChart data={progressComparisonDisplayData.slice(0, 8)} outerRadius={95}>
                     <PolarGrid stroke="#334155" strokeOpacity={0.3} />
-                    <PolarAngleAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
+                    <PolarAngleAxis dataKey="chartName" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
                     <PolarRadiusAxis domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 9 }} />
-                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
                     <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                     <Radar dataKey="fisico" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.25} name="Avance Físico" />
                     <Radar dataKey="financiero" stroke="#ef4444" fill="#ef4444" fillOpacity={0.2} name="Avance Financiero" />
                   </RadarChart>
                 ) : (
-                  <BarChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                  <BarChart data={progressComparisonDisplayData} margin={{ top: 20, right: 30, left: 20, bottom: isMobileChartView ? 52 : 60 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} angle={-45} textAnchor="end" interval={0} />
+                    <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 10, fontWeight: 700 }} angle={isMobileChartView ? -32 : -45} textAnchor="end" interval={0} minTickGap={isMobileChartView ? 24 : 10} height={isMobileChartView ? 56 : 62} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `${value.toFixed(1)}%`} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number, name: string) => {
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number, name: string) => {
                       if (name.includes('Restante') || name.includes('Pendiente')) return null;
                       return [`${value.toFixed(1)}%`, name];
                     }} />
