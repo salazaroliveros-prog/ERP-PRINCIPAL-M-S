@@ -2123,7 +2123,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
         title="Eliminar Renglón"
         message="¿Estás seguro de que deseas eliminar este renglón del presupuesto? Esta acción no se puede deshacer."
       />
-      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-md overflow-hidden">
+      <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-100 dark:bg-slate-950 overflow-hidden">
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -2188,6 +2188,14 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
               title="Acciones Rápidas"
             >
               <Zap size={18} className="sm:w-5 sm:h-5" />
+            </button>
+            <button
+              onClick={onClose}
+              title="Regresar a proyectos"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 hover:bg-white/20 rounded-lg sm:rounded-xl transition-all border border-white/10 text-[11px] sm:text-xs font-black uppercase tracking-widest"
+            >
+              <ChevronLeft size={14} />
+              <span className="hidden sm:inline">Regresar</span>
             </button>
             <button 
               onClick={onClose} 
