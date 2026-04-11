@@ -610,7 +610,7 @@ function AppContent({
               isSidebarOpen ? "py-1.5 sm:py-2" : "py-2 sm:py-3"
             )}
           >
-            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-4">
+            <div className="grid grid-cols-[auto_1fr] sm:grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-4">
               <div className="flex items-center">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-11 lg:h-11 rounded-lg overflow-hidden">
                   <img
@@ -634,8 +634,8 @@ function AppContent({
                     className={cn(
                       "relative rounded-lg overflow-hidden shrink-0 transition-all duration-300",
                       isSidebarOpen
-                        ? "w-8 h-8 -mb-4 sm:mb-0 sm:w-10 sm:h-10 lg:w-11 lg:h-11"
-                        : "w-11 h-11 -mb-6 sm:mb-0 sm:w-10 sm:h-10 lg:w-11 lg:h-11"
+                        ? "w-8 h-8 sm:w-10 sm:h-10 lg:w-11 lg:h-11"
+                        : "w-8 h-8 sm:w-10 sm:h-10 lg:w-11 lg:h-11"
                     )}
                   >
                     <img
@@ -657,9 +657,12 @@ function AppContent({
                 </div>
               </div>
 
-              <div className="justify-self-end">
+              <div className="justify-self-end hidden sm:block">
                 <DateTimeWidget compact />
               </div>
+            </div>
+            <div className="mt-2 flex justify-end sm:hidden">
+              <DateTimeWidget compact />
             </div>
           </div>
         </header>
