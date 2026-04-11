@@ -606,7 +606,7 @@ function AppContent({
         >
           <div
             className={cn(
-              "mx-auto max-w-[1600px] bg-white/50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-700/50 backdrop-blur-xl shadow-lg rounded-2xl px-3 sm:px-4 pointer-events-auto transition-all duration-300",
+              "mx-auto max-w-[1600px] bg-blue-500/50 dark:bg-white/50 border border-blue-200/50 dark:border-white/50 backdrop-blur-xl shadow-lg rounded-2xl px-3 sm:px-4 pointer-events-auto transition-all duration-300",
               isSidebarOpen ? "py-1.5 sm:py-2" : "py-2 sm:py-3"
             )}
           >

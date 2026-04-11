@@ -810,8 +810,8 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 lg:gap-5 min-w-0">
-        <div className="xl:col-span-3 space-y-6 lg:space-y-5 min-w-0">
+      <div className="grid grid-cols-1 gap-6 lg:gap-5 min-w-0">
+        <div className="space-y-6 lg:space-y-5 min-w-0">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-5 min-w-0">
             <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all duration-300">
               <div className="mb-6 flex items-center justify-between gap-3">
@@ -1384,7 +1384,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="space-y-6 lg:space-y-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 lg:gap-5">
           <div className="bg-white dark:bg-slate-900 p-5 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
             <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Balance General</h3>
             <div className="h-52 min-w-0">
