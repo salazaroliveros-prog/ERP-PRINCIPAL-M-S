@@ -563,7 +563,7 @@ export const Sidebar = ({
               isCollapsed ? "flex-col" : "flex-row"
             )}>
               <div className="relative group">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-primary/10 border border-primary/20 overflow-hidden shadow-inner">
+                <div className="w-10 h-10 rounded-full overflow-hidden">
                   <img 
                     src={user.photoURL || getFallbackAvatarUrl(user.displayName || 'Usuario')} 
                     alt={user.displayName || ''} 

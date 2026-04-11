@@ -19,11 +19,11 @@ export const Logo: React.FC<LogoProps> = ({ className, size = 'md', showText = t
   return (
     <div className={className}>
       <div className="flex items-center gap-2.5">
-        <div className={`${iconClass} rounded-full overflow-hidden border border-primary/20 bg-white/90 dark:bg-slate-900/90 shadow-sm shrink-0`}>
+        <div className={`${iconClass} shrink-0`}>
           <img
             src="/logo.svg"
             alt="Constructora WM_M&S"
-            className="w-full h-full object-contain p-1"
+            className="w-full h-full object-contain"
             loading="eager"
             decoding="async"
           />
