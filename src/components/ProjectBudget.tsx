@@ -2261,107 +2261,8 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
                 </motion.div>
               )}
 
-              {isQuickActionsOpen && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-primary-light p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-primary-light grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4"
-                >
-                  <button 
-                    onClick={handleAutoCalculateQuantities}
-                    disabled={isInitializing || isBudgetLocked}
-                    className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light hover:bg-primary-light transition-all text-left disabled:opacity-50"
-                  >
-                    <div className="p-1.5 sm:p-2 bg-amber-50 text-amber-600 rounded-lg">
-                      <Zap size={16} className="sm:w-5 sm:h-5" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">Auto-calcular</p>
-                      <p className="hidden sm:block text-[10px] text-slate-500">Basado en {project.area} m2</p>
-                    </div>
-                  </button>
-                  <button 
-                    onClick={isBudgetLocked ? handleUnlockBudget : handleValidateAndActivate}
-                    disabled={isValidating}
-                    className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light hover:bg-primary-light transition-all text-left disabled:opacity-50"
-                  >
-                    <div className={cn(
-                      "p-1.5 sm:p-2 rounded-lg",
-                      isBudgetLocked ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
-                    )}>
-                      {isBudgetLocked ? <Edit3 size={16} className="sm:w-5 sm:h-5" /> : <CheckCircle2 size={16} className="sm:w-5 sm:h-5" />}
-                    </div>
-                    <div>
-                      <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">
-                        {isBudgetLocked ? 'Desbloquear' : wasValidated ? 'Validar de nuevo' : 'Validar'}
-                      </p>
-                      <p className="hidden sm:block text-[10px] text-slate-500">Activar presupuesto</p>
-                    </div>
-                  </button>
-                  <button 
-                    onClick={handleExportMaterialSummary}
-                    className="flex items-center gap-2 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light hover:bg-primary-light transition-all text-left"
-                  >
-                    <div className="p-1.5 sm:p-2 bg-slate-50 text-slate-600 rounded-lg">
-                      <FileText size={16} className="sm:w-[18px] sm:h-[18px]" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">Materiales</p>
-                      <p className="hidden sm:block text-[10px] text-slate-500">Resumen PDF</p>
-                    </div>
-                  </button>
-                  <button 
-                    onClick={handleGenerateQuote}
-                    disabled={isGeneratingQuote}
-                    className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light hover:bg-primary-light transition-all text-left disabled:opacity-50"
-                  >
-                    <div className="p-1.5 sm:p-2 bg-primary-light text-primary rounded-lg">
-                      <FileText size={16} className="sm:w-5 sm:h-5" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">Cotización</p>
-                      <p className="hidden sm:block text-[10px] text-slate-500">Propuesta cliente</p>
-                    </div>
-                  </button>
-                  <button 
-                    onClick={addSanitaryInstallation}
-                    className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light hover:bg-primary-light transition-all text-left"
-                  >
-                    <div className="p-1.5 sm:p-2 bg-primary-light text-primary rounded-lg">
-                      <Droplets size={16} className="sm:w-5 sm:h-5" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">Inst. Sanitaria</p>
-                      <p className="hidden sm:block text-[10px] text-slate-500">Nuevo renglón</p>
-                    </div>
-                  </button>
-                  <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light text-left">
-                    <div className="p-1.5 sm:p-2 bg-primary-light text-primary rounded-lg">
-                      <Box size={16} className="sm:w-5 sm:h-5" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">Concreto</p>
-                      <select 
-                        title="Seleccionar renglón de concreto"
-                        className="w-full mt-0.5 sm:mt-1 text-[8px] sm:text-[10px] bg-slate-50 border border-slate-100 rounded p-0.5 sm:p-1 outline-none"
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            addConcretoMaterial(e.target.value);
-                            e.target.value = '';
-                          }
-                        }}
-                      >
-                        <option value="">Seleccionar...</option>
-                        {budgetItems.map(item => (
-                          <option key={item.id} value={item.id}>{item.description}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3 sm:p-4 space-y-3">
+              <div className="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-4 lg:items-start">
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3 sm:p-4 space-y-3 lg:sticky lg:top-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <h3 className="text-[10px] sm:text-xs font-black text-slate-500 uppercase tracking-widest">Lista de Proyectos</h3>
                   <div className="relative w-full sm:w-72">
@@ -2401,6 +2302,8 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
                   })}
                 </div>
               </div>
+
+              <div className="min-w-0 space-y-4">
 
               {/* Summary Cards */}
               {isBudgetLocked && (
@@ -3234,6 +3137,108 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
                   )}
                 </div>
               </div>
+              </div>
+              </div>
+
+              {isQuickActionsOpen && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-primary-light p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-primary-light grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4"
+                >
+                  <button 
+                    onClick={handleAutoCalculateQuantities}
+                    disabled={isInitializing || isBudgetLocked}
+                    className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light hover:bg-primary-light transition-all text-left disabled:opacity-50"
+                  >
+                    <div className="p-1.5 sm:p-2 bg-amber-50 text-amber-600 rounded-lg">
+                      <Zap size={16} className="sm:w-5 sm:h-5" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">Auto-calcular</p>
+                      <p className="hidden sm:block text-[10px] text-slate-500">Basado en {project.area} m2</p>
+                    </div>
+                  </button>
+                  <button 
+                    onClick={isBudgetLocked ? handleUnlockBudget : handleValidateAndActivate}
+                    disabled={isValidating}
+                    className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light hover:bg-primary-light transition-all text-left disabled:opacity-50"
+                  >
+                    <div className={cn(
+                      "p-1.5 sm:p-2 rounded-lg",
+                      isBudgetLocked ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
+                    )}>
+                      {isBudgetLocked ? <Edit3 size={16} className="sm:w-5 sm:h-5" /> : <CheckCircle2 size={16} className="sm:w-5 sm:h-5" />}
+                    </div>
+                    <div>
+                      <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">
+                        {isBudgetLocked ? 'Desbloquear' : wasValidated ? 'Validar de nuevo' : 'Validar'}
+                      </p>
+                      <p className="hidden sm:block text-[10px] text-slate-500">Activar presupuesto</p>
+                    </div>
+                  </button>
+                  <button 
+                    onClick={handleExportMaterialSummary}
+                    className="flex items-center gap-2 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light hover:bg-primary-light transition-all text-left"
+                  >
+                    <div className="p-1.5 sm:p-2 bg-slate-50 text-slate-600 rounded-lg">
+                      <FileText size={16} className="sm:w-[18px] sm:h-[18px]" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">Materiales</p>
+                      <p className="hidden sm:block text-[10px] text-slate-500">Resumen PDF</p>
+                    </div>
+                  </button>
+                  <button 
+                    onClick={handleGenerateQuote}
+                    disabled={isGeneratingQuote}
+                    className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light hover:bg-primary-light transition-all text-left disabled:opacity-50"
+                  >
+                    <div className="p-1.5 sm:p-2 bg-primary-light text-primary rounded-lg">
+                      <FileText size={16} className="sm:w-5 sm:h-5" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">Cotización</p>
+                      <p className="hidden sm:block text-[10px] text-slate-500">Propuesta cliente</p>
+                    </div>
+                  </button>
+                  <button 
+                    onClick={addSanitaryInstallation}
+                    className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light hover:bg-primary-light transition-all text-left"
+                  >
+                    <div className="p-1.5 sm:p-2 bg-primary-light text-primary rounded-lg">
+                      <Droplets size={16} className="sm:w-5 sm:h-5" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">Inst. Sanitaria</p>
+                      <p className="hidden sm:block text-[10px] text-slate-500">Nuevo renglón</p>
+                    </div>
+                  </button>
+                  <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg sm:rounded-xl border border-primary-light text-left">
+                    <div className="p-1.5 sm:p-2 bg-primary-light text-primary rounded-lg">
+                      <Box size={16} className="sm:w-5 sm:h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[10px] sm:text-sm font-bold text-slate-900 leading-tight">Concreto</p>
+                      <select 
+                        title="Seleccionar renglón de concreto"
+                        className="w-full mt-0.5 sm:mt-1 text-[8px] sm:text-[10px] bg-slate-50 border border-slate-100 rounded p-0.5 sm:p-1 outline-none"
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            addConcretoMaterial(e.target.value);
+                            e.target.value = '';
+                          }
+                        }}
+                      >
+                        <option value="">Seleccionar...</option>
+                        {budgetItems.map(item => (
+                          <option key={item.id} value={item.id}>{item.description}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </div>
           )}
         </div>
