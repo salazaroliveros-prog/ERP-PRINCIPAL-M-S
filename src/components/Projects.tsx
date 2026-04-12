@@ -1600,55 +1600,61 @@ export default function Projects() {
         variant="info"
       />
 
-      <div className="space-y-8 projects-module-contrast">
+      <div className="space-y-4 sm:space-y-6 projects-module-contrast">
         {/* Header Section */}
-        <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 md:p-8 rounded-[var(--radius-theme)] border border-slate-100 dark:border-slate-800 shadow-[var(--shadow-theme)] space-y-4 sm:space-y-6 hover:shadow-lg transition-all duration-300">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
+        <div className="bg-white dark:bg-slate-900 p-2.5 sm:p-4 md:p-5 rounded-[var(--radius-theme)] border border-slate-100 dark:border-slate-800 shadow-[var(--shadow-theme)] space-y-2.5 sm:space-y-4 hover:shadow-lg transition-all duration-300">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-6">
             <div>
-              <h1 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Gestión de Obras</h1>
-              <p className="text-[10px] sm:text-sm text-slate-500 dark:text-slate-400 font-medium">Control de ejecución, presupuestos y geolocalización</p>
+              <h1 className="text-lg sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Gestión de Obras</h1>
+              <p className="text-[9px] sm:text-sm text-slate-500 dark:text-slate-400 font-medium">Control de ejecución, presupuestos y geolocalización</p>
             </div>
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-1.5 sm:gap-3">
+              <div className="flex bg-slate-50 dark:bg-slate-800 p-0.5 sm:p-1 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700">
                 <button 
                   onClick={() => setViewMode('grid')}
                   className={cn(
-                    "p-1.5 sm:p-2.5 rounded-md sm:rounded-lg transition-all flex items-center gap-1.5 sm:gap-2",
-                    viewMode === 'grid' ? "bg-white dark:bg-slate-700 text-primary shadow-sm border border-slate-100 dark:border-slate-600" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    "p-1 sm:p-2 rounded-md sm:rounded-lg transition-all duration-200 flex items-center gap-1 sm:gap-1.5 min-h-8 sm:min-h-0 active:scale-105 active:shadow-sm active:ring-2 active:ring-primary/30 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:outline-none",
+                    viewMode === 'grid'
+                      ? "bg-white dark:bg-slate-700 text-primary shadow-sm border border-slate-100 dark:border-slate-600 scale-105 ring-2 ring-primary/20"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                   )}
                   title="Vista Cuadrícula"
                 >
-                  <LayoutGrid size={16} className="sm:w-5 sm:h-5" />
+                  <LayoutGrid size={13} className="sm:w-4 sm:h-4" />
                   <span className="text-[8px] sm:text-[10px] font-black uppercase hidden sm:inline">Cuadrícula</span>
                 </button>
                 <button 
                   onClick={() => setViewMode('table')}
                   className={cn(
-                    "p-1.5 sm:p-2.5 rounded-md sm:rounded-lg transition-all flex items-center gap-1.5 sm:gap-2",
-                    viewMode === 'table' ? "bg-white dark:bg-slate-700 text-primary shadow-sm border border-slate-100 dark:border-slate-600" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    "p-1 sm:p-2 rounded-md sm:rounded-lg transition-all duration-200 flex items-center gap-1 sm:gap-1.5 min-h-8 sm:min-h-0 active:scale-105 active:shadow-sm active:ring-2 active:ring-primary/30 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:outline-none",
+                    viewMode === 'table'
+                      ? "bg-white dark:bg-slate-700 text-primary shadow-sm border border-slate-100 dark:border-slate-600 scale-105 ring-2 ring-primary/20"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                   )}
                   title="Vista Tabla"
                 >
-                  <FileText size={16} className="sm:w-5 sm:h-5" />
+                  <FileText size={13} className="sm:w-4 sm:h-4" />
                   <span className="text-[8px] sm:text-[10px] font-black uppercase hidden sm:inline">Tabla</span>
                 </button>
                 <button 
                   onClick={() => setViewMode('calendar')}
                   className={cn(
-                    "p-1.5 sm:p-2.5 rounded-md sm:rounded-lg transition-all flex items-center gap-1.5 sm:gap-2",
-                    viewMode === 'calendar' ? "bg-white dark:bg-slate-700 text-primary shadow-sm border border-slate-100 dark:border-slate-600" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    "p-1 sm:p-2 rounded-md sm:rounded-lg transition-all duration-200 flex items-center gap-1 sm:gap-1.5 min-h-8 sm:min-h-0 active:scale-105 active:shadow-sm active:ring-2 active:ring-primary/30 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:outline-none",
+                    viewMode === 'calendar'
+                      ? "bg-white dark:bg-slate-700 text-primary shadow-sm border border-slate-100 dark:border-slate-600 scale-105 ring-2 ring-primary/20"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                   )}
                   title="Vista Calendario"
                 >
-                  <Calendar size={16} className="sm:w-5 sm:h-5" />
+                  <Calendar size={13} className="sm:w-4 sm:h-4" />
                   <span className="text-[8px] sm:text-[10px] font-black uppercase hidden sm:inline">Calendario</span>
                 </button>
                 <button 
                   onClick={() => setIsGlobalMapOpen(true)}
-                  className="p-1.5 sm:p-2.5 rounded-md sm:rounded-lg transition-all flex items-center gap-1.5 sm:gap-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  className="p-1 sm:p-2 rounded-md sm:rounded-lg transition-all duration-200 flex items-center gap-1 sm:gap-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 min-h-8 sm:min-h-0 active:scale-105 active:shadow-sm active:ring-2 active:ring-primary/30 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:outline-none"
                   title="Vista Mapa"
                 >
-                  <MapIcon size={16} className="sm:w-5 sm:h-5" />
+                  <MapIcon size={13} className="sm:w-4 sm:h-4" />
                   <span className="text-[8px] sm:text-[10px] font-black uppercase hidden sm:inline">Mapa</span>
                 </button>
               </div>
@@ -1656,25 +1662,25 @@ export default function Projects() {
           </div>
 
           {/* Search and Actions Toolbar */}
-          <div className="flex flex-col xl:flex-row gap-3 sm:gap-4">
+          <div className="flex flex-col xl:flex-row gap-2 sm:gap-4">
             <div className="relative flex-1 group">
               <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors sm:w-5 sm:h-5" size={16} />
               <input 
                 type="text" 
                 placeholder="Buscar por nombre, ubicación o director..." 
-                className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                className="w-full pl-10 sm:pl-11 pr-3 py-1.5 sm:py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-[11px] sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
               <button 
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                 className={cn(
-                  "flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2.5 sm:py-4 rounded-xl sm:rounded-2xl font-black transition-all border shrink-0 text-[10px] sm:text-xs uppercase tracking-widest",
+                  "flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2.5 rounded-xl font-black transition-all duration-200 border shrink-0 text-[8px] sm:text-[10px] uppercase tracking-widest min-h-8 sm:min-h-0 active:scale-105 active:shadow-sm active:ring-2 active:ring-primary/30 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:outline-none",
                   showAdvancedFilters 
-                    ? "bg-primary text-white border-primary shadow-lg shadow-primary-shadow" 
+                    ? "bg-primary text-white border-primary shadow-lg shadow-primary-shadow scale-105 ring-2 ring-primary/35" 
                     : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-sm"
                 )}
               >
@@ -1685,33 +1691,36 @@ export default function Projects() {
               <button 
                 onClick={runFinancialAudit}
                 disabled={isAuditing}
-                className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2.5 sm:py-4 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-black rounded-xl sm:rounded-2xl hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all border border-amber-100 dark:border-amber-500/20 shadow-sm whitespace-nowrap text-[10px] sm:text-xs uppercase tracking-widest"
+                className="flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2.5 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-black rounded-xl hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all duration-200 border border-amber-100 dark:border-amber-500/20 shadow-sm whitespace-nowrap text-[8px] sm:text-[10px] uppercase tracking-widest min-h-8 sm:min-h-0 active:scale-105 active:shadow-sm active:ring-2 active:ring-amber-400/35 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-amber-400/35 focus-visible:outline-none"
               >
                 {isAuditing ? <Loader2 size={14} className="animate-spin" /> : <ShieldAlert size={14} className="sm:w-5 sm:h-5" />}
-                <span className="sm:text-sm">Auditoría</span>
+                <span className="sm:hidden">Audit</span>
+                <span className="hidden sm:inline sm:text-sm">Auditoría</span>
               </button>
 
               <button
                 onClick={() => setIsAuditHistoryConfirmOpen(true)}
                 disabled={isClearingAuditHistory}
-                className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2.5 sm:py-4 bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-black rounded-xl sm:rounded-2xl hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-all border border-sky-100 dark:border-sky-500/20 shadow-sm whitespace-nowrap text-[10px] sm:text-xs uppercase tracking-widest"
+                className="flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2.5 bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-black rounded-xl hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-all duration-200 border border-sky-100 dark:border-sky-500/20 shadow-sm whitespace-nowrap text-[8px] sm:text-[10px] uppercase tracking-widest min-h-8 sm:min-h-0 active:scale-105 active:shadow-sm active:ring-2 active:ring-sky-400/35 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-sky-400/35 focus-visible:outline-none"
                 title="Borra el historial de cambios y auditoría"
               >
                 {isClearingAuditHistory ? <Loader2 size={14} className="animate-spin" /> : <Info size={14} className="sm:w-5 sm:h-5" />}
-                <span className="sm:text-sm">BORRAR HISTORIAL</span>
+                <span className="sm:hidden">Hist.</span>
+                <span className="hidden sm:inline sm:text-sm">BORRAR HISTORIAL</span>
               </button>
 
               <button
                 onClick={requestCleanupTestProjects}
                 disabled={isCleaningTestData}
-                className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2.5 sm:py-4 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-black rounded-xl sm:rounded-2xl hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-all border border-rose-100 dark:border-rose-500/20 shadow-sm whitespace-nowrap text-[10px] sm:text-xs uppercase tracking-widest"
+                className="flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2.5 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-black rounded-xl hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-all duration-200 border border-rose-100 dark:border-rose-500/20 shadow-sm whitespace-nowrap text-[8px] sm:text-[10px] uppercase tracking-widest min-h-8 sm:min-h-0 active:scale-105 active:shadow-sm active:ring-2 active:ring-rose-400/35 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-rose-400/35 focus-visible:outline-none"
                 title="Borra datos de prueba agregados por el sistema"
               >
                 <Trash2 size={14} className="sm:w-5 sm:h-5" />
-                <span className="sm:text-sm">BORRAR DATOS DE PRUEBA</span>
+                <span className="sm:hidden">Prueba</span>
+                <span className="hidden sm:inline sm:text-sm">BORRAR DATOS DE PRUEBA</span>
               </button>
 
-              <div className="h-8 sm:h-10 w-px bg-slate-200 dark:bg-slate-800 mx-0.5 sm:mx-1 hidden xl:block" />
+              <div className="h-7 sm:h-8 w-px bg-slate-200 dark:bg-slate-800 mx-0.5 sm:mx-1 hidden xl:block" />
 
               <button 
                 onClick={() => {
@@ -1735,10 +1744,12 @@ export default function Projects() {
                   setValidationErrors({});
                   setIsModalOpen(true);
                 }}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 bg-primary text-white font-black py-2.5 sm:py-4 px-4 sm:px-8 rounded-xl sm:rounded-2xl hover:bg-primary-hover transition-all shadow-lg shadow-primary-shadow group shrink-0 text-[10px] sm:text-xs uppercase tracking-widest"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 bg-primary text-white font-black py-1.5 sm:py-2.5 px-2.5 sm:px-5 rounded-xl hover:bg-primary-hover transition-all duration-200 shadow-lg shadow-primary-shadow group shrink-0 text-[8px] sm:text-[10px] uppercase tracking-widest min-h-8 sm:min-h-0 active:scale-105 focus-visible:scale-105 focus-visible:outline-none"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 bg-primary text-white font-black py-1.5 sm:py-2.5 px-2.5 sm:px-5 rounded-xl hover:bg-primary-hover transition-all duration-200 shadow-lg shadow-primary-shadow group shrink-0 text-[8px] sm:text-[10px] uppercase tracking-widest min-h-8 sm:min-h-0 active:scale-105 active:shadow-xl active:ring-2 active:ring-primary/40 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none"
               >
                 <Plus size={14} className="sm:w-5 sm:h-5 group-hover:rotate-90 transition-transform duration-300" />
-                <span className="sm:text-sm">Nueva Obra</span>
+                <span className="sm:hidden">Nueva</span>
+                <span className="hidden sm:inline sm:text-sm">Nueva Obra</span>
               </button>
             </div>
           </div>

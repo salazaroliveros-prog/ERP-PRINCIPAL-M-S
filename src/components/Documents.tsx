@@ -361,7 +361,7 @@ export default function Documents() {
   };
 
   return (
-    <div className="space-y-8 pb-20">
+    <div className="space-y-5 sm:space-y-8 pb-20">
       <ConfirmModal
         isOpen={isDeleteConfirmOpen}
         onClose={() => setIsDeleteConfirmOpen(false)}
@@ -370,15 +370,15 @@ export default function Documents() {
         message="¿Estás seguro de que deseas eliminar este documento? Esta acción no se puede deshacer."
       />
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Gestión Documental</h1>
-          <p className="text-slate-500 dark:text-slate-300 font-medium">Repositorio centralizado de archivos y planos</p>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Gestión Documental</h1>
+          <p className="text-[11px] sm:text-base text-slate-500 dark:text-slate-300 font-medium">Repositorio centralizado de archivos y planos</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button 
             onClick={() => setIsNewFolderModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-all shadow-sm"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-[11px] sm:text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-all duration-200 shadow-sm min-h-9 sm:min-h-0 active:scale-105 active:ring-2 active:ring-primary/30 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:outline-none"
           >
             <Plus size={18} />
             Nueva Carpeta
@@ -388,7 +388,7 @@ export default function Documents() {
               resetForm();
               setIsModalOpen(true);
             }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-primary text-white rounded-xl text-[11px] sm:text-sm font-bold hover:bg-primary/90 transition-all duration-200 shadow-lg shadow-primary/20 min-h-9 sm:min-h-0 active:scale-105 active:ring-2 active:ring-primary/35 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:outline-none"
           >
             <Upload size={18} />
             Subir Archivo
@@ -570,11 +570,11 @@ export default function Documents() {
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-8 min-w-0">
         {/* File List */}
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-white dark:bg-slate-900 glass-card rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden min-w-0">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
               <div className="flex items-center gap-4">
                 <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white">
                   {selectedFolder ? `Archivos en ${selectedFolder}` : 'Todos los Archivos'}
@@ -595,7 +595,7 @@ export default function Documents() {
                   placeholder="Buscar archivos..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-1.5 sm:py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] sm:text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                 />
               </div>
             </div>

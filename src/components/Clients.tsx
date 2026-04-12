@@ -433,9 +433,9 @@ export default function Clients() {
         message={`¿Seguro que deseas eliminar el cliente ${clientPendingDelete?.name || 'seleccionado'}? Esta acción no se puede deshacer.`}
       />
 
-      <div className="flex flex-col lg:flex-row gap-8 items-start">
+      <div className="flex flex-col lg:flex-row gap-6 sm:gap-8 items-start">
         <div className={cn(
-          "flex-1 space-y-8 w-full transition-all duration-300",
+          "flex-1 space-y-5 sm:space-y-8 w-full transition-all duration-300",
           isDetailOpen && "lg:max-w-md xl:max-w-xl"
         )}>
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-8">
@@ -445,7 +445,7 @@ export default function Clients() {
             </div>
             <button 
               onClick={() => handleOpenModal()}
-              className="flex items-center justify-center gap-2 bg-primary text-white font-bold py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl hover:bg-primary-hover transition-all shadow-lg shadow-primary-shadow text-xs sm:text-sm"
+              className="flex items-center justify-center gap-2 bg-primary text-white font-bold py-2 sm:py-3 px-3 sm:px-6 rounded-xl hover:bg-primary-hover transition-all duration-200 shadow-lg shadow-primary-shadow text-[11px] sm:text-sm min-h-9 sm:min-h-0 active:scale-105 active:ring-2 active:ring-primary/35 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:outline-none"
             >
               <UserPlus size={18} className="sm:w-5 sm:h-5" />
               Nuevo Prospecto
@@ -458,7 +458,7 @@ export default function Clients() {
               <input 
                 type="text" 
                 placeholder="Buscar cliente..." 
-                className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary transition-all shadow-sm text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                className="w-full pl-10 sm:pl-12 pr-4 py-2 sm:py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary transition-all shadow-sm text-[11px] sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -466,13 +466,13 @@ export default function Clients() {
                 }}
               />
             </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 bg-white dark:bg-slate-900 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-x-auto w-full md:w-auto">
+            <div className="flex items-center gap-1.5 sm:gap-2 bg-white dark:bg-slate-900 p-1 sm:p-2 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-x-auto w-full md:w-auto">
               <span className="text-[8px] sm:text-micro font-bold text-slate-400 dark:text-slate-300 uppercase tracking-wider px-1.5 sm:px-2">Ordenar:</span>
               <button 
                 onClick={() => toggleSort('name')}
                 className={cn(
-                  "px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[8px] sm:text-micro font-bold transition-all whitespace-nowrap",
-                  sortBy === 'name' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  "px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[8px] sm:text-micro font-bold transition-all duration-200 whitespace-nowrap min-h-8 sm:min-h-0 active:scale-105 active:ring-2 active:ring-primary/30 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:outline-none",
+                  sortBy === 'name' ? "bg-primary text-white scale-105 ring-2 ring-primary/25" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                 )}
               >
                 Nombre {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
@@ -480,8 +480,8 @@ export default function Clients() {
               <button 
                 onClick={() => toggleSort('company')}
                 className={cn(
-                  "px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[8px] sm:text-micro font-bold transition-all whitespace-nowrap",
-                  sortBy === 'company' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  "px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[8px] sm:text-micro font-bold transition-all duration-200 whitespace-nowrap min-h-8 sm:min-h-0 active:scale-105 active:ring-2 active:ring-primary/30 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:outline-none",
+                  sortBy === 'company' ? "bg-primary text-white scale-105 ring-2 ring-primary/25" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                 )}
               >
                 Empresa {sortBy === 'company' && (sortOrder === 'asc' ? '↑' : '↓')}
@@ -490,8 +490,8 @@ export default function Clients() {
               <button
                 onClick={() => setViewMode('grid')}
                 className={cn(
-                  "p-1.5 rounded-lg transition-all",
-                  viewMode === 'grid' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                  "p-1.5 rounded-lg transition-all duration-200 min-h-8 sm:min-h-0 active:scale-105 active:ring-2 active:ring-primary/30 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:outline-none",
+                  viewMode === 'grid' ? "bg-primary text-white scale-105 ring-2 ring-primary/25" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
                 )}
                 title="Vista tarjetas"
                 aria-label="Vista tarjetas"
@@ -501,8 +501,8 @@ export default function Clients() {
               <button
                 onClick={() => setViewMode('table')}
                 className={cn(
-                  "p-1.5 rounded-lg transition-all",
-                  viewMode === 'table' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                  "p-1.5 rounded-lg transition-all duration-200 min-h-8 sm:min-h-0 active:scale-105 active:ring-2 active:ring-primary/30 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:outline-none",
+                  viewMode === 'table' ? "bg-primary text-white scale-105 ring-2 ring-primary/25" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
                 )}
                 title="Vista tabla"
                 aria-label="Vista tabla"
