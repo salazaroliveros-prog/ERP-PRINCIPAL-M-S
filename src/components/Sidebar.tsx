@@ -24,6 +24,7 @@ import {
   Sun,
   Truck,
   ShieldAlert,
+  AlertCircle,
   Files,
   Briefcase,
   BarChart3,
