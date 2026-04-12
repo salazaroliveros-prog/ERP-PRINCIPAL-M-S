@@ -86,6 +86,21 @@ const installChunkLoadRecovery = () => {
     );
   };
 
+  const isLikelyStaleReferenceError = (message: unknown, stack?: unknown) => {
+    const msgText = String(message || '').toLowerCase();
+    const stackText = String(stack || '').toLowerCase();
+
+    const hasReferenceShape =
+      msgText.includes('referenceerror') ||
+      msgText.includes('is not defined');
+
+    const mentionsHashedAsset =
+      /\/assets\/.*-[a-z0-9]{8,}\.js/i.test(stackText) ||
+      /-[a-z0-9]{8,}\.js/i.test(msgText);
+
+    return hasReferenceShape && mentionsHashedAsset;
+  };
+
   const isStaleHashedAssetUrl = (value: string) => {
     try {
       const url = new URL(value, window.location.origin);
@@ -105,6 +120,12 @@ const installChunkLoadRecovery = () => {
   window.addEventListener('error', (event) => {
     const maybeMessage = event?.message || (event as ErrorEvent)?.error?.message;
     if (isChunkLoadFailure(maybeMessage)) {
+      void reloadOnce();
+      return;
+    }
+
+    const maybeStack = (event as ErrorEvent)?.error?.stack;
+    if (isLikelyStaleReferenceError(maybeMessage, maybeStack)) {
       void reloadOnce();
       return;
     }
@@ -131,6 +152,12 @@ const installChunkLoadRecovery = () => {
     const reason = (event as PromiseRejectionEvent).reason;
     const maybeMessage = (reason && (reason.message || reason.toString?.())) || reason;
     if (isChunkLoadFailure(maybeMessage)) {
+      void reloadOnce();
+      return;
+    }
+
+    const maybeStack = reason && reason.stack;
+    if (isLikelyStaleReferenceError(maybeMessage, maybeStack)) {
       void reloadOnce();
     }
   });
