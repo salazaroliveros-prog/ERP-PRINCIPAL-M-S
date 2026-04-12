@@ -15,6 +15,7 @@ import { useTheme, THEME_COLORS } from '../contexts/ThemeContext';
 const MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY = 'material_weekly_spike_threshold_pct';
 const MATERIAL_WEEKLY_SPIKE_THRESHOLD_AUDIT_STORAGE_KEY = 'material_weekly_spike_threshold_audit_v1';
 const PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY = 'physical_financial_deviation_threshold_pct';
+const MODULE_LAYOUT_PROFILE_STORAGE_KEY = 'module_layout_profile_v1';
 
 type MaterialThresholdAuditEntry = {
   value: number;
@@ -27,6 +28,13 @@ type RoleThemePreset = {
   label: string;
   description: string;
   themeId: string;
+};
+
+type ModuleLayoutProfile = 'compact' | 'balanced' | 'airy';
+type ModuleLayoutMap = {
+  dashboard: ModuleLayoutProfile;
+  projects: ModuleLayoutProfile;
+  financials: ModuleLayoutProfile;
 };
 
 const ROLE_THEME_PRESETS: RoleThemePreset[] = [
@@ -49,6 +57,30 @@ const ROLE_THEME_PRESETS: RoleThemePreset[] = [
     themeId: 'cobalt',
   },
 ];
+
+const DEFAULT_MODULE_LAYOUTS: ModuleLayoutMap = {
+  dashboard: 'balanced',
+  projects: 'airy',
+  financials: 'compact',
+};
+
+const loadModuleLayouts = (): ModuleLayoutMap => {
+  try {
+    const raw = localStorage.getItem(MODULE_LAYOUT_PROFILE_STORAGE_KEY);
+    if (!raw) return DEFAULT_MODULE_LAYOUTS;
+
+    const parsed = JSON.parse(raw) as Partial<ModuleLayoutMap>;
+    const allowed = new Set<ModuleLayoutProfile>(['compact', 'balanced', 'airy']);
+
+    return {
+      dashboard: allowed.has(parsed.dashboard as ModuleLayoutProfile) ? (parsed.dashboard as ModuleLayoutProfile) : DEFAULT_MODULE_LAYOUTS.dashboard,
+      projects: allowed.has(parsed.projects as ModuleLayoutProfile) ? (parsed.projects as ModuleLayoutProfile) : DEFAULT_MODULE_LAYOUTS.projects,
+      financials: allowed.has(parsed.financials as ModuleLayoutProfile) ? (parsed.financials as ModuleLayoutProfile) : DEFAULT_MODULE_LAYOUTS.financials,
+    };
+  } catch {
+    return DEFAULT_MODULE_LAYOUTS;
+  }
+};
 
 const loadThresholdAuditHistory = (): MaterialThresholdAuditEntry[] => {
   try {
@@ -93,6 +125,7 @@ export default function Settings() {
   const [schedulerSnapshot, setSchedulerSnapshot] = useState<SchedulerStatusResponse | null>(null);
   const [schedulerLoading, setSchedulerLoading] = useState(true);
   const [schedulerRefreshTick, setSchedulerRefreshTick] = useState(0);
+  const [moduleLayouts, setModuleLayouts] = useState<ModuleLayoutMap>(() => loadModuleLayouts());
 
   useEffect(() => {
     const initial = getOfflineQueueStatus();
@@ -239,6 +272,7 @@ export default function Settings() {
     localStorage.setItem(STARTUP_SOUND_STORAGE_KEY, startupSound);
     localStorage.setItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY, String(materialSpikeThreshold));
     localStorage.setItem(PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY, String(physicalFinancialDeviationThreshold));
+    localStorage.setItem(MODULE_LAYOUT_PROFILE_STORAGE_KEY, JSON.stringify(moduleLayouts));
 
     try {
       await saveThresholdSettings({
@@ -268,6 +302,7 @@ export default function Settings() {
     window.dispatchEvent(new Event('CLOCK_FORMAT_CHANGED'));
     window.dispatchEvent(new Event('MATERIAL_ALERT_THRESHOLD_CHANGED'));
     window.dispatchEvent(new Event('PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_CHANGED'));
+    window.dispatchEvent(new Event('MODULE_LAYOUT_PROFILE_CHANGED'));
     await logAction('Actualizar Configuración', 'Configuración', 'Se actualizó la configuración general del sistema', 'update');
     toast.success('Configuración guardada con éxito');
   };
@@ -370,6 +405,51 @@ export default function Settings() {
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/70 bg-white/90 dark:bg-slate-900/40 p-4 sm:p-5">
+            <p className="text-[10px] sm:text-xs uppercase tracking-[0.18em] font-black text-slate-500 dark:text-slate-400">Perfiles por Modulo</p>
+            <p className="mt-1 text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Define densidad visual por area: compacto, balanceado o aireado.</p>
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                <p className="text-[10px] font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Dashboard</p>
+                <select
+                  value={moduleLayouts.dashboard}
+                  onChange={(event) => setModuleLayouts((prev) => ({ ...prev, dashboard: event.target.value as ModuleLayoutProfile }))}
+                  className="mt-2 w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-200"
+                >
+                  <option value="compact">Compacto</option>
+                  <option value="balanced">Balanceado</option>
+                  <option value="airy">Aireado</option>
+                </select>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                <p className="text-[10px] font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Proyectos</p>
+                <select
+                  value={moduleLayouts.projects}
+                  onChange={(event) => setModuleLayouts((prev) => ({ ...prev, projects: event.target.value as ModuleLayoutProfile }))}
+                  className="mt-2 w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-200"
+                >
+                  <option value="compact">Compacto</option>
+                  <option value="balanced">Balanceado</option>
+                  <option value="airy">Aireado</option>
+                </select>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                <p className="text-[10px] font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Finanzas</p>
+                <select
+                  value={moduleLayouts.financials}
+                  onChange={(event) => setModuleLayouts((prev) => ({ ...prev, financials: event.target.value as ModuleLayoutProfile }))}
+                  className="mt-2 w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-700 dark:text-slate-200"
+                >
+                  <option value="compact">Compacto</option>
+                  <option value="balanced">Balanceado</option>
+                  <option value="airy">Aireado</option>
+                </select>
+              </div>
             </div>
           </div>
 

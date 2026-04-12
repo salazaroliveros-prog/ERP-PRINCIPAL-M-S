@@ -100,6 +100,66 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 const PREFETCH_ENABLED = (import.meta.env.VITE_PREFETCH_ENABLED ?? 'true') !== 'false';
 const NAV_METRICS_ENABLED = import.meta.env.DEV && import.meta.env.VITE_NAV_METRICS === 'true';
+const MODULE_LAYOUT_PROFILE_STORAGE_KEY = 'module_layout_profile_v1';
+
+type ModuleLayoutProfile = 'compact' | 'balanced' | 'airy';
+type ModuleLayoutMap = {
+  dashboard: ModuleLayoutProfile;
+  projects: ModuleLayoutProfile;
+  financials: ModuleLayoutProfile;
+};
+
+const DEFAULT_MODULE_LAYOUTS: ModuleLayoutMap = {
+  dashboard: 'balanced',
+  projects: 'airy',
+  financials: 'compact',
+};
+
+function loadModuleLayoutProfiles(): ModuleLayoutMap {
+  try {
+    const raw = localStorage.getItem(MODULE_LAYOUT_PROFILE_STORAGE_KEY);
+    if (!raw) return DEFAULT_MODULE_LAYOUTS;
+
+    const parsed = JSON.parse(raw) as Partial<ModuleLayoutMap>;
+    const allowed = new Set<ModuleLayoutProfile>(['compact', 'balanced', 'airy']);
+
+    return {
+      dashboard: allowed.has(parsed.dashboard as ModuleLayoutProfile) ? (parsed.dashboard as ModuleLayoutProfile) : DEFAULT_MODULE_LAYOUTS.dashboard,
+      projects: allowed.has(parsed.projects as ModuleLayoutProfile) ? (parsed.projects as ModuleLayoutProfile) : DEFAULT_MODULE_LAYOUTS.projects,
+      financials: allowed.has(parsed.financials as ModuleLayoutProfile) ? (parsed.financials as ModuleLayoutProfile) : DEFAULT_MODULE_LAYOUTS.financials,
+    };
+  } catch {
+    return DEFAULT_MODULE_LAYOUTS;
+  }
+}
+
+function getModuleScope(pathname: string): keyof ModuleLayoutMap {
+  if (
+    pathname.startsWith('/financials') ||
+    pathname.startsWith('/inventory') ||
+    pathname.startsWith('/purchase-orders') ||
+    pathname.startsWith('/quotes') ||
+    pathname.startsWith('/suppliers')
+  ) {
+    return 'financials';
+  }
+
+  if (
+    pathname.startsWith('/projects') ||
+    pathname.startsWith('/clients') ||
+    pathname.startsWith('/subcontracts') ||
+    pathname.startsWith('/equipment') ||
+    pathname.startsWith('/documents') ||
+    pathname.startsWith('/workflows') ||
+    pathname.startsWith('/safety') ||
+    pathname.startsWith('/hr') ||
+    pathname.startsWith('/risks')
+  ) {
+    return 'projects';
+  }
+
+  return 'dashboard';
+}
 
 const LoadingFallback = () => (
   <div className="flex-1 flex items-center justify-center min-h-[60vh] sm:min-h-[70vh]">
@@ -779,10 +839,36 @@ function AppContent({
   const { unreadCount } = useNotifications();
   const location = useLocation();
   const lastQuickActionTokenRef = useRef<string>('');
+  const [moduleLayoutRefreshTick, setModuleLayoutRefreshTick] = useState(0);
 
   useEffect(() => {
     setIsSidebarOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const handleModuleLayoutChanged = () => {
+      setModuleLayoutRefreshTick((prev) => prev + 1);
+    };
+
+    window.addEventListener('MODULE_LAYOUT_PROFILE_CHANGED', handleModuleLayoutChanged);
+    return () => window.removeEventListener('MODULE_LAYOUT_PROFILE_CHANGED', handleModuleLayoutChanged);
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const moduleClassNames = ['module-layout-compact', 'module-layout-balanced', 'module-layout-airy'];
+    root.classList.remove(...moduleClassNames);
+
+    const profiles = loadModuleLayoutProfiles();
+    const scope = getModuleScope(location.pathname);
+    const profile = profiles[scope] || 'balanced';
+
+    root.classList.add(`module-layout-${profile}`);
+
+    return () => {
+      root.classList.remove(`module-layout-${profile}`);
+    };
+  }, [location.pathname, moduleLayoutRefreshTick]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search || '');

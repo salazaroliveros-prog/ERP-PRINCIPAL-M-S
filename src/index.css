@@ -879,6 +879,45 @@
   .dark .bg-white .dark\:text-slate-400,
   .dark .bg-slate-50 .dark\:text-slate-400 {
     color: #64748b !important;
+
+  /* Module layout profiles: compact, balanced, airy */
+  html.module-layout-compact input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  html.module-layout-compact select,
+  html.module-layout-compact textarea {
+    min-height: 34px;
+    font-size: 12px;
+    line-height: 1.2;
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+  }
+
+  html.module-layout-compact table th,
+  html.module-layout-compact table td {
+    padding-top: 0.38rem;
+    padding-bottom: 0.38rem;
+  }
+
+  html.module-layout-balanced input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  html.module-layout-balanced select,
+  html.module-layout-balanced textarea {
+    min-height: 40px;
+  }
+
+  html.module-layout-airy input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  html.module-layout-airy select,
+  html.module-layout-airy textarea {
+    min-height: 44px;
+    font-size: 14px;
+    line-height: 1.35;
+    padding-top: 0.58rem;
+    padding-bottom: 0.58rem;
+  }
+
+  html.module-layout-airy table th,
+  html.module-layout-airy table td {
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+  }
     text-shadow: none !important;
   }
 
