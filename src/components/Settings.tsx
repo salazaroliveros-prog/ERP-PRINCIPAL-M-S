@@ -22,6 +22,34 @@ type MaterialThresholdAuditEntry = {
   changedBy: string;
 };
 
+type RoleThemePreset = {
+  id: string;
+  label: string;
+  description: string;
+  themeId: string;
+};
+
+const ROLE_THEME_PRESETS: RoleThemePreset[] = [
+  {
+    id: 'executive',
+    label: 'Direccion / Gerencia',
+    description: 'Visual sobria para juntas, reportes y lectura ejecutiva.',
+    themeId: 'graphite',
+  },
+  {
+    id: 'operations',
+    label: 'Operaciones de Obra',
+    description: 'Contraste alto para seguimiento de campo y captura rapida.',
+    themeId: 'steel',
+  },
+  {
+    id: 'finance',
+    label: 'Finanzas y Control',
+    description: 'Jerarquia clara para tablas, cifras y validacion contable.',
+    themeId: 'cobalt',
+  },
+];
+
 const loadThresholdAuditHistory = (): MaterialThresholdAuditEntry[] => {
   try {
     const raw = localStorage.getItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_AUDIT_STORAGE_KEY);
@@ -256,6 +284,13 @@ export default function Settings() {
     }
   };
 
+  const handleApplyRolePreset = (preset: RoleThemePreset) => {
+    const theme = THEME_COLORS.find((item) => item.id === preset.themeId);
+    if (!theme) return;
+    setSelectedTheme(theme);
+    toast.success(`Perfil aplicado: ${preset.label}`);
+  };
+
   return (
     <div className="space-y-4 sm:space-y-5">
       <header>
@@ -291,6 +326,50 @@ export default function Settings() {
                 <p className="text-slate-400 dark:text-slate-500 uppercase font-black tracking-wider text-[9px]">Iconografía</p>
                 <p className="text-slate-800 dark:text-slate-100 font-semibold mt-1">{selectedTheme.iconStyle}</p>
               </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/70 bg-white/90 dark:bg-slate-900/40 p-4 sm:p-5">
+            <p className="text-[10px] sm:text-xs uppercase tracking-[0.18em] font-black text-slate-500 dark:text-slate-400">Perfiles Profesionales</p>
+            <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-2.5 sm:gap-3">
+              {ROLE_THEME_PRESETS.map((preset) => {
+                const isActive = selectedTheme.id === preset.themeId;
+                const iconWrapClass = preset.id === 'finance'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
+                  : preset.id === 'operations'
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                    : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200';
+
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handleApplyRolePreset(preset)}
+                    className={cn(
+                      'text-left rounded-xl border px-3 py-3 transition-all',
+                      isActive
+                        ? 'border-primary bg-primary-light/30 dark:bg-primary/10'
+                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/70 dark:bg-slate-800/40'
+                    )}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className={cn('mt-0.5 p-1.5 rounded-lg', iconWrapClass)}>
+                        {preset.id === 'finance' ? (
+                          <DollarSign size={14} />
+                        ) : preset.id === 'operations' ? (
+                          <SettingsIcon size={14} />
+                        ) : (
+                          <Building2 size={14} />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] sm:text-xs font-black uppercase tracking-wide text-slate-900 dark:text-white">{preset.label}</p>
+                        <p className="text-[10px] sm:text-[11px] text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">{preset.description}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
