@@ -386,8 +386,7 @@
     border-color: var(--theme-card-border-strong) !important;
   }
 
-  .dark .dark\:text-white,
-  .dark .text-slate-900 {
+  .dark .dark\:text-white {
     color: var(--theme-text-strong) !important;
     text-shadow: 0 1px 0 rgba(2, 6, 23, 0.45);
   }
@@ -754,6 +753,25 @@
   .dark .budget-module-contrast textarea {
     color: #f8fafc;
     border-color: color-mix(in srgb, #94a3b8 62%, transparent);
+  }
+
+  /* Keep readable text when a light card is rendered in dark mode. */
+  .dark .bg-white .text-slate-900,
+  .dark .bg-slate-50 .text-slate-900,
+  .dark .bg-white .dark\:text-white,
+  .dark .bg-slate-50 .dark\:text-white {
+    color: #0f172a !important;
+    text-shadow: none !important;
+  }
+
+  .dark .bg-white .text-slate-400,
+  .dark .bg-white .text-slate-500,
+  .dark .bg-slate-50 .text-slate-400,
+  .dark .bg-slate-50 .text-slate-500,
+  .dark .bg-white .dark\:text-slate-400,
+  .dark .bg-slate-50 .dark\:text-slate-400 {
+    color: #64748b !important;
+    text-shadow: none !important;
   }
 
   /* Slight readability lift for micro typography inside forms only. */
