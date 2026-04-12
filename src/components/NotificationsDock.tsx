@@ -41,7 +41,7 @@ export function NotificationsDock() {
   }, [unreadCount]);
 
   return (
-    <div ref={panelRef} className="fixed z-[112] right-[106px] top-[46%] -translate-y-1/2">
+    <div ref={panelRef} className="fixed z-[112] right-4 sm:right-5 bottom-4 sm:bottom-5">
       <button
         onClick={() => {
           const next = !isOpen;
@@ -52,16 +52,13 @@ export function NotificationsDock() {
         }}
         title="Notificaciones"
         className={cn(
-          'relative px-2.5 py-3.5 rounded-l-xl rounded-r-md border border-white/30 text-white transition-all shadow-2xl',
+          'relative h-11 w-11 sm:h-12 sm:w-12 rounded-full border border-white/40 text-white transition-all shadow-2xl flex items-center justify-center backdrop-blur',
           isOpen
-            ? 'bg-rose-700/95'
+            ? 'bg-rose-700/95 ring-4 ring-rose-300/35'
             : 'bg-rose-600/92 hover:bg-rose-500/96'
         )}
       >
-        <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-black tracking-[0.18em] uppercase flex items-center gap-1">
-          <Bell size={14} />
-          Alerts
-        </span>
+        <Bell size={18} />
         <AnimatePresence>
           {unreadCount > 0 && !isOpen && (
             <motion.span
@@ -87,7 +84,7 @@ export function NotificationsDock() {
               animate={{ opacity: 0, scale: 1.5 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 1.1, ease: 'easeOut' }}
-              className="pointer-events-none absolute -inset-1 rounded-l-xl rounded-r-md border border-rose-200"
+              className="pointer-events-none absolute -inset-1 rounded-full border border-rose-200"
             />
           )}
         </AnimatePresence>
@@ -96,12 +93,12 @@ export function NotificationsDock() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, x: 10, scale: 0.98 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 10, scale: 0.98 }}
-            className="absolute right-full mr-3 top-0 w-[min(94vw,460px)] bg-white/98 dark:bg-slate-900/97 border-2 border-slate-300 dark:border-slate-600 rounded-2xl shadow-2xl overflow-hidden"
+            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            className="absolute right-0 bottom-14 sm:bottom-16 w-[min(90vw,360px)] bg-white/98 dark:bg-slate-900/97 border border-slate-300 dark:border-slate-600 rounded-2xl shadow-2xl overflow-hidden"
           >
-            <div className="p-4 border-b border-slate-300 dark:border-slate-700 flex items-center justify-between bg-slate-100/95 dark:bg-slate-800/95">
+            <div className="px-3 py-2.5 border-b border-slate-300 dark:border-slate-700 flex items-center justify-between bg-slate-100/95 dark:bg-slate-800/95">
               <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white">Notificaciones</h3>
               <button
                 onClick={() => markAllAsRead()}
@@ -111,10 +108,10 @@ export function NotificationsDock() {
               </button>
             </div>
 
-            <div className="max-h-[64vh] overflow-y-auto custom-scrollbar">
+            <div className="max-h-[48vh] overflow-y-auto custom-scrollbar">
               {notifications.length === 0 ? (
-                <div className="p-8 text-center">
-                  <p className="text-sm text-slate-700 dark:text-slate-200 font-bold">No hay notificaciones</p>
+                <div className="p-5 text-center">
+                  <p className="text-xs text-slate-700 dark:text-slate-200 font-bold">No hay notificaciones</p>
                 </div>
               ) : (
                 notifications.map((n) => (
@@ -122,7 +119,7 @@ export function NotificationsDock() {
                     key={n.id}
                     onClick={() => markAsRead(n.id!)}
                     className={cn(
-                      'p-4 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer',
+                      'px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer',
                       !n.read && 'bg-primary-light/40 dark:bg-primary/15'
                     )}
                   >
@@ -132,10 +129,10 @@ export function NotificationsDock() {
                         n.type === 'subcontract' ? 'bg-rose-500' : n.type === 'project' ? 'bg-amber-500' : 'bg-blue-500'
                       )} />
                       <div className="flex-1">
-                        <p className="text-sm font-black text-slate-900 dark:text-white mb-1 leading-tight">{n.title}</p>
-                        <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed mb-2 break-words">{n.body}</p>
+                        <p className="text-xs font-black text-slate-900 dark:text-white mb-1 leading-tight">{n.title}</p>
+                        <p className="text-[11px] text-slate-700 dark:text-slate-200 leading-relaxed mb-1.5 break-words line-clamp-2">{n.body}</p>
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
+                          <p className="text-[9px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
                             {n.createdAt ? new Date(n.createdAt).toLocaleString() : 'Reciente'}
                           </p>
                           {n.id && (

@@ -85,6 +85,62 @@ export const THEME_COLORS: ThemeColor[] = [
     tableStyle: 'Alto contraste',
     formStyle: 'Recto técnico',
     iconStyle: 'Stroke robusto'
+  },
+  {
+    id: 'graphite',
+    name: 'Grafito Ejecutivo',
+    color: '#334155',
+    hover: '#1e293b',
+    light: '#f1f5f9',
+    shadow: 'rgba(51, 65, 85, 0.22)',
+    fontFamily: 'Manrope, sans-serif',
+    headingFont: 'Sora, sans-serif',
+    cardEffect: 'Panel sobrio premium',
+    tableStyle: 'Cabecera corporativa',
+    formStyle: 'Campos ejecutivos',
+    iconStyle: 'Stroke estructural'
+  },
+  {
+    id: 'cobalt',
+    name: 'Cobalto Corporativo',
+    color: '#0f4c81',
+    hover: '#0b365a',
+    light: '#eef6ff',
+    shadow: 'rgba(15, 76, 129, 0.22)',
+    fontFamily: 'Source Sans 3, sans-serif',
+    headingFont: 'Merriweather Sans, sans-serif',
+    cardEffect: 'Laminado profesional',
+    tableStyle: 'Filas ordenadas',
+    formStyle: 'Borde técnico limpio',
+    iconStyle: 'Stroke de precisión'
+  },
+  {
+    id: 'sandstone',
+    name: 'Arena Institucional',
+    color: '#a16207',
+    hover: '#854d0e',
+    light: '#fffbeb',
+    shadow: 'rgba(161, 98, 7, 0.24)',
+    fontFamily: 'Lato, sans-serif',
+    headingFont: 'Merriweather, serif',
+    cardEffect: 'Documento premium',
+    tableStyle: 'Jerarquía editorial',
+    formStyle: 'Campos de alta legibilidad',
+    iconStyle: 'Stroke clásico'
+  },
+  {
+    id: 'steel',
+    name: 'Acero Urbano',
+    color: '#475569',
+    hover: '#334155',
+    light: '#f8fafc',
+    shadow: 'rgba(71, 85, 105, 0.24)',
+    fontFamily: 'IBM Plex Sans, sans-serif',
+    headingFont: 'Barlow Condensed, sans-serif',
+    cardEffect: 'Tablero industrial',
+    tableStyle: 'Grid robusto',
+    formStyle: 'Inputs compactos pro',
+    iconStyle: 'Stroke sólido'
   }
 ];
 
