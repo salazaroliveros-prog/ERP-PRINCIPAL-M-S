@@ -3,6 +3,7 @@ import { sendNotification } from '../lib/notifications';
 import { getMitigationSuggestions } from '../lib/utils';
 import { listProjects } from '../lib/projectsApi';
 import { listSubcontracts } from '../lib/subcontractsApi';
+import { dispatchDueReminderNotifications } from '../lib/reminders';
 
 export const NotificationManager: React.FC = () => {
   const [projects, setProjects] = useState<any[]>([]);
@@ -92,6 +93,31 @@ export const NotificationManager: React.FC = () => {
       localStorage.setItem(notifiedKey, JSON.stringify(notifiedItems));
     }
   }, [projects, subcontracts, isReady]);
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    let active = true;
+
+    const runReminderCheck = async () => {
+      if (!active) return;
+      try {
+        await dispatchDueReminderNotifications(new Date());
+      } catch (error) {
+        console.error('Error dispatching calendar reminders:', error);
+      }
+    };
+
+    void runReminderCheck();
+    const reminderTimer = window.setInterval(() => {
+      void runReminderCheck();
+    }, 30000);
+
+    return () => {
+      active = false;
+      window.clearInterval(reminderTimer);
+    };
+  }, [isReady]);
 
   return null; // This component doesn't render anything
 };

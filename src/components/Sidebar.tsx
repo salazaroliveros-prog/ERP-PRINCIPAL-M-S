@@ -22,7 +22,6 @@ import {
   Settings as SettingsIcon,
   Moon,
   Sun,
-  AlertCircle,
   Truck,
   ShieldAlert,
   Files,
@@ -30,8 +29,7 @@ import {
   BarChart3,
   CheckSquare,
   History,
-  Download,
-  Trash2
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -124,8 +122,6 @@ const NavGroup = ({ label, icon: Icon, children, active, isCollapsed }: { label:
 import { useTheme } from '../contexts/ThemeContext';
 import { Logo } from './Logo';
 
-import { useNotifications } from '../contexts/NotificationContext';
-
 export const Sidebar = ({ 
   user, 
   isOpen, 
@@ -134,7 +130,6 @@ export const Sidebar = ({
   onPrefetchRoute,
   onNavigateIntent,
   onClose,
-  initialNotificationsOpen = false,
   deferredPrompt,
   onInstall
 }: { 
@@ -145,13 +140,10 @@ export const Sidebar = ({
   onPrefetchRoute?: (path: string) => void,
   onNavigateIntent?: (path: string) => void,
   onClose: () => void,
-  initialNotificationsOpen?: boolean,
   deferredPrompt: any,
   onInstall: () => void
 }) => {
   const { isDarkMode, toggleDarkMode } = useTheme();
-  const { notifications, unreadCount, markAllAsRead, markAsRead, removeNotification, setPanelOpen } = useNotifications();
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(initialNotificationsOpen);
   const location = useLocation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showInstall, setShowInstall] = useState(!!deferredPrompt);
@@ -160,14 +152,6 @@ export const Sidebar = ({
   useEffect(() => {
     setShowInstall(!!deferredPrompt);
   }, [deferredPrompt]);
-
-  useEffect(() => {
-    setIsNotificationsOpen(initialNotificationsOpen);
-  }, [initialNotificationsOpen]);
-
-  useEffect(() => {
-    setPanelOpen(isNotificationsOpen);
-  }, [isNotificationsOpen, setPanelOpen]);
 
   const isOperacionesActive = ["/projects", "/quotes", "/clients", "/safety", "/workflows", "/risks"].some(path => location.pathname.startsWith(path));
   const isLogisticaActive = ["/inventory", "/equipment", "/purchase-orders", "/suppliers"].some(path => location.pathname.startsWith(path));
@@ -246,105 +230,6 @@ export const Sidebar = ({
               >
                 {isCollapsed ? <ChevronRight size={14} className="sm:w-4 sm:h-4" /> : <ChevronLeft size={14} className="sm:w-4 sm:h-4" />}
               </motion.button>
-              <div className="relative">
-                <button
-                  onClick={() => {
-                    const nextState = !isNotificationsOpen;
-                    setIsNotificationsOpen(nextState);
-                    if (nextState) {
-                      markAllAsRead();
-                    }
-                  }}
-                  className="p-1.5 sm:p-2 bg-transparent text-slate-600/70 dark:text-slate-300/70 rounded-lg sm:rounded-xl hover:bg-slate-900/10 dark:hover:bg-white/10 hover:text-slate-700 dark:hover:text-slate-100 transition-all relative backdrop-blur-sm"
-                  title="Notificaciones"
-                >
-                  <AlertCircle size={14} className="sm:w-4 sm:h-4" />
-                  {unreadCount > 0 && !isNotificationsOpen && (
-                    <span className="absolute top-0 right-0 w-2 h-2 sm:w-2.5 sm:h-2.5 bg-rose-500 border-2 border-white dark:border-slate-900 rounded-full" />
-                  )}
-                </button>
-
-                <AnimatePresence>
-                  {isNotificationsOpen && (
-                    <>
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setIsNotificationsOpen(false)}
-                        className="fixed inset-0 z-40"
-                      />
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="fixed left-3 right-3 top-16 w-auto max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 z-50 overflow-hidden sm:absolute sm:left-0 sm:right-auto sm:top-auto sm:mt-2 sm:w-80 sm:max-w-none"
-                      >
-                        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                          <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white">Notificaciones</h3>
-                          <div className="flex items-center gap-2">
-                            <button 
-                              onClick={() => markAllAsRead()}
-                              className="text-[9px] font-black uppercase text-primary hover:text-primary-hover transition-colors"
-                            >
-                              Marcar todas como leídas
-                            </button>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">{notifications.length} Total</span>
-                          </div>
-                        </div>
-                        <div className="max-h-[55vh] sm:max-h-[400px] overflow-y-auto custom-scrollbar">
-                          {notifications.length === 0 ? (
-                            <div className="p-8 text-center">
-                              <p className="text-xs text-slate-400 font-medium italic">No hay notificaciones</p>
-                            </div>
-                          ) : (
-                            notifications.map((n) => (
-                              <div 
-                                key={n.id} 
-                                onClick={() => markAsRead(n.id!)}
-                                className={cn(
-                                  "p-4 border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer",
-                                  !n.read && "bg-primary-light/30 dark:bg-primary/5"
-                                )}
-                              >
-                                <div className="flex gap-3">
-                                  <div className={cn(
-                                    "w-2 h-2 rounded-full mt-1.5 flex-shrink-0",
-                                    n.type === 'subcontract' ? "bg-rose-500" : n.type === 'project' ? "bg-amber-500" : "bg-blue-500"
-                                  )} />
-                                  <div className="flex-1">
-                                    <p className="text-xs font-black text-slate-900 dark:text-white leading-tight mb-1">{n.title}</p>
-                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-2 break-words">{n.body}</p>
-                                    <div className="flex items-center justify-between gap-2">
-                                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
-                                        {n.createdAt ? new Date(n.createdAt).toLocaleString() : 'Reciente'}
-                                      </p>
-                                      {n.id && (
-                                        <button
-                                          type="button"
-                                          title="Eliminar notificacion"
-                                          aria-label="Eliminar notificacion"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            void removeNotification(n.id!);
-                                          }}
-                                          className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
-                                        >
-                                          <Trash2 size={12} />
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
 
               <button
                 onClick={toggleDarkMode}

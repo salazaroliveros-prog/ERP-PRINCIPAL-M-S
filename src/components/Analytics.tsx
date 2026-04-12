@@ -87,11 +87,60 @@ export default function Analytics() {
     };
   }, []);
 
+  const rangeStartDate = useMemo(() => {
+    const now = new Date();
+    const monthsByRange: Record<string, number> = {
+      '1m': 1,
+      '3m': 3,
+      '6m': 6,
+      '1y': 12,
+    };
+
+    const months = monthsByRange[timeRange] || 6;
+    return new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+  }, [timeRange]);
+
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((item) => {
+      const date = new Date(item.date);
+      if (Number.isNaN(date.getTime())) return false;
+      return date >= rangeStartDate;
+    });
+  }, [transactions, rangeStartDate]);
+
+  const filteredProjects = useMemo(() => {
+    return projects.filter((project) => {
+      const candidateDate = project.startDate || project.createdAt || project.updatedAt;
+      if (!candidateDate) return true;
+      const parsed = new Date(candidateDate);
+      if (Number.isNaN(parsed.getTime())) return true;
+      return parsed >= rangeStartDate;
+    });
+  }, [projects, rangeStartDate]);
+
+  const filteredRisks = useMemo(() => {
+    return risks.filter((risk) => {
+      const candidateDate = risk.date || risk.createdAt || risk.updatedAt;
+      if (!candidateDate) return true;
+      const parsed = new Date(candidateDate);
+      if (Number.isNaN(parsed.getTime())) return true;
+      return parsed >= rangeStartDate;
+    });
+  }, [risks, rangeStartDate]);
+
   const monthlyData = useMemo(() => {
     const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const now = new Date();
-    const last6Months = Array.from({ length: 6 }).map((_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    const monthsByRange: Record<string, number> = {
+      '1m': 1,
+      '3m': 3,
+      '6m': 6,
+      '1y': 12,
+    };
+    const totalMonths = monthsByRange[timeRange] || 6;
+
+    const historicalMonths = Array.from({ length: totalMonths }).map((_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - ((totalMonths - 1) - i), 1);
       return {
         month: months[d.getMonth()],
         year: d.getFullYear(),
@@ -102,24 +151,24 @@ export default function Analytics() {
       };
     });
 
-    transactions.forEach(t => {
+    filteredTransactions.forEach(t => {
       const tDate = new Date(t.date);
-      const monthData = last6Months.find(m => m.monthIndex === tDate.getMonth() && m.year === tDate.getFullYear());
+      const monthData = historicalMonths.find(m => m.monthIndex === tDate.getMonth() && m.year === tDate.getFullYear());
       if (monthData) {
         if (t.type === 'Income') monthData.income += (t.amount || 0);
         if (t.type === 'Expense') monthData.expense += (t.amount || 0);
       }
     });
 
-    return last6Months.map(m => ({
+    return historicalMonths.map(m => ({
       ...m,
       profit: m.income - m.expense
     }));
-  }, [transactions]);
+  }, [filteredTransactions, timeRange]);
 
   const projectDistribution = useMemo(() => {
     const counts: Record<string, number> = {};
-    projects.forEach(p => {
+    filteredProjects.forEach(p => {
       const type = p.typology || 'Otros';
       counts[type] = (counts[type] || 0) + 1;
     });
@@ -141,10 +190,10 @@ export default function Analytics() {
       value: counts[name],
       color: colors[i % colors.length]
     }));
-  }, [projects]);
+  }, [filteredProjects]);
 
   const expenseByCategoryData = useMemo(() => {
-    const expenses = transactions.filter(t => t.type === 'Expense');
+    const expenses = filteredTransactions.filter(t => t.type === 'Expense');
     const counts: Record<string, number> = {};
     expenses.forEach(t => {
       const cat = t.category || 'Otros';
@@ -161,11 +210,11 @@ export default function Analytics() {
       value: counts[name],
       color: colors[i % colors.length]
     })).sort((a, b) => b.value - a.value);
-  }, [transactions]);
+  }, [filteredTransactions]);
 
   const riskDistributionData = useMemo(() => {
-    const activeProjectIds = projects.filter(p => p.status === 'In Progress').map(p => p.id);
-    const activeRisks = risks.filter(r => activeProjectIds.includes(r.projectId));
+    const activeProjectIds = filteredProjects.filter(p => p.status === 'In Progress').map(p => p.id);
+    const activeRisks = filteredRisks.filter(r => activeProjectIds.includes(r.projectId));
     
     const counts: Record<string, number> = {
       'Técnico': 0,
@@ -193,7 +242,7 @@ export default function Analytics() {
     });
 
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [risks, projects]);
+  }, [filteredRisks, filteredProjects]);
 
   const handleGenerateInsight = async () => {
     setIsGenerating(true);
@@ -201,11 +250,11 @@ export default function Analytics() {
       const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
       
       const summaryData = {
-        totalProjects: projects.length,
-        activeProjects: projects.filter(p => p.status === 'In Progress').length,
-        totalIncome: transactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0),
-        totalExpense: transactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0),
-        activeRisks: risks.length,
+        totalProjects: filteredProjects.length,
+        activeProjects: filteredProjects.filter(p => p.status === 'In Progress').length,
+        totalIncome: filteredTransactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0),
+        totalExpense: filteredTransactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0),
+        activeRisks: filteredRisks.length,
         riskTypes: riskDistributionData.map(d => `${d.name}: ${d.value}`).join(', ')
       };
 
@@ -240,20 +289,20 @@ export default function Analytics() {
   };
 
   const kpis = useMemo(() => {
-    const totalIncome = transactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0);
-    const totalExpense = transactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0);
+    const totalIncome = filteredTransactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0);
+    const totalExpense = filteredTransactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0);
     const totalProfit = totalIncome - totalExpense;
     
     const margin = totalIncome > 0 ? (totalProfit / totalIncome) * 100 : 0;
     const roi = totalExpense > 0 ? (totalProfit / totalExpense) * 100 : 0;
-    const avgCost = projects.length > 0 ? totalExpense / projects.length : 0;
+    const avgCost = filteredProjects.length > 0 ? totalExpense / filteredProjects.length : 0;
     
     // Calculate efficiency (average physical progress / average financial progress)
-    const avgPhysical = projects.length > 0 ? projects.reduce((acc, p) => acc + (p.physicalProgress || 0), 0) / projects.length : 0;
-    const avgFinancial = projects.length > 0 ? projects.reduce((acc, p) => {
-      const projectExpenses = transactions.filter(t => t.projectId === p.id && t.type === 'Expense').reduce((sum, t) => sum + (t.amount || 0), 0);
+    const avgPhysical = filteredProjects.length > 0 ? filteredProjects.reduce((acc, p) => acc + (p.physicalProgress || 0), 0) / filteredProjects.length : 0;
+    const avgFinancial = filteredProjects.length > 0 ? filteredProjects.reduce((acc, p) => {
+      const projectExpenses = filteredTransactions.filter(t => t.projectId === p.id && t.type === 'Expense').reduce((sum, t) => sum + (t.amount || 0), 0);
       return acc + (p.budget > 0 ? (projectExpenses / p.budget) * 100 : 0);
-    }, 0) / projects.length : 0;
+    }, 0) / filteredProjects.length : 0;
     
     const efficiency = avgFinancial > 0 ? (avgPhysical / avgFinancial) * 100 : 0;
 
@@ -263,7 +312,7 @@ export default function Analytics() {
       { label: 'Retorno de Inversión', value: `${roi.toFixed(1)}%`, trend: '-1.2%', up: roi > 0, icon: Target, color: 'text-amber-500' },
       { label: 'Costo Promedio', value: formatCurrency(avgCost), trend: '+8.0%', up: false, icon: Layers, color: 'text-purple-500' },
     ];
-  }, [projects, transactions]);
+  }, [filteredProjects, filteredTransactions]);
 
   if (loading) {
     return (
@@ -469,7 +518,7 @@ export default function Analytics() {
                     </svg>
                     <span className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-tighter">{item.name}</span>
                   </div>
-                  <span className="text-xs font-black text-slate-900 dark:text-white">{((item.value / projects.length) * 100).toFixed(1)}%</span>
+                  <span className="text-xs font-black text-slate-900 dark:text-white">{((item.value / Math.max(filteredProjects.length, 1)) * 100).toFixed(1)}%</span>
                 </div>
               ))}
             </div>

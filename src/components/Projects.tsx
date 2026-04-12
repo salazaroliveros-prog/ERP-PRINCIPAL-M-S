@@ -1600,7 +1600,7 @@ export default function Projects() {
         variant="info"
       />
 
-      <div className="space-y-8">
+      <div className="space-y-8 projects-module-contrast">
         {/* Header Section */}
         <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 md:p-8 rounded-[var(--radius-theme)] border border-slate-100 dark:border-slate-800 shadow-[var(--shadow-theme)] space-y-4 sm:space-y-6 hover:shadow-lg transition-all duration-300">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">

@@ -2214,7 +2214,7 @@ export default function ProjectBudget({ project, onClose, onProjectChange }: Pro
         title="Eliminar Renglón"
         message="¿Estás seguro de que deseas eliminar este renglón del presupuesto? Esta acción no se puede deshacer."
       />
-      <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-100 dark:bg-slate-950 overflow-hidden">
+      <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-100 dark:bg-slate-950 overflow-hidden budget-module-contrast">
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}

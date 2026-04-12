@@ -426,6 +426,21 @@
     outline: none;
   }
 
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):disabled,
+  select:disabled,
+  textarea:disabled {
+    opacity: 0.72;
+    cursor: not-allowed;
+    background: color-mix(in srgb, var(--theme-input-bg) 84%, #94a3b8 16%);
+  }
+
+  .dark input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  .dark select,
+  .dark textarea {
+    color: var(--theme-input-text);
+    border-color: color-mix(in srgb, var(--theme-input-border) 88%, #cbd5e1 12%);
+  }
+
   table {
     border-color: var(--theme-table-border);
   }
@@ -640,5 +655,117 @@
   .recharts-responsive-container {
     min-width: 0;
     min-height: 220px;
+  }
+
+  .recharts-cartesian-grid line {
+    stroke: color-mix(in srgb, #94a3b8 45%, transparent);
+    stroke-opacity: 0.35;
+  }
+
+  .dark .recharts-cartesian-grid line {
+    stroke: color-mix(in srgb, #64748b 48%, transparent);
+    stroke-opacity: 0.4;
+  }
+
+  .recharts-tooltip-wrapper .recharts-default-tooltip {
+    border-radius: 14px !important;
+    border: 1px solid var(--theme-card-border-strong) !important;
+    background: color-mix(in srgb, var(--theme-card-surface) 94%, transparent) !important;
+    color: var(--theme-text-strong) !important;
+    box-shadow: 0 12px 22px -16px rgba(15, 23, 42, 0.5) !important;
+  }
+
+  .wm-reminder-day {
+    position: relative;
+    font-weight: 900 !important;
+    color: var(--primary-color) !important;
+  }
+
+  .wm-reminder-day::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 2px;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--primary-color);
+  }
+
+  .projects-module-contrast label[class*='text-slate-400'],
+  .projects-module-contrast label[class*='text-slate-500'],
+  .budget-module-contrast label[class*='text-slate-400'],
+  .budget-module-contrast label[class*='text-slate-500'] {
+    color: #334155 !important;
+  }
+
+  .projects-module-contrast p[class*='text-slate-500'],
+  .projects-module-contrast p[class*='text-slate-400'],
+  .budget-module-contrast p[class*='text-slate-500'],
+  .budget-module-contrast p[class*='text-slate-400'] {
+    color: #475569;
+  }
+
+  .projects-module-contrast input::placeholder,
+  .projects-module-contrast textarea::placeholder,
+  .budget-module-contrast input::placeholder,
+  .budget-module-contrast textarea::placeholder {
+    color: #64748b;
+    opacity: 1;
+  }
+
+  .projects-module-contrast input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  .projects-module-contrast select,
+  .projects-module-contrast textarea,
+  .budget-module-contrast input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  .budget-module-contrast select,
+  .budget-module-contrast textarea {
+    color: #0f172a;
+    border-color: color-mix(in srgb, #94a3b8 54%, transparent);
+  }
+
+  .dark .projects-module-contrast label[class*='text-slate-400'],
+  .dark .projects-module-contrast label[class*='text-slate-500'],
+  .dark .budget-module-contrast label[class*='text-slate-400'],
+  .dark .budget-module-contrast label[class*='text-slate-500'] {
+    color: #e2e8f0 !important;
+  }
+
+  .dark .projects-module-contrast p[class*='text-slate-500'],
+  .dark .projects-module-contrast p[class*='text-slate-400'],
+  .dark .budget-module-contrast p[class*='text-slate-500'],
+  .dark .budget-module-contrast p[class*='text-slate-400'] {
+    color: #cbd5e1;
+  }
+
+  .dark .projects-module-contrast input::placeholder,
+  .dark .projects-module-contrast textarea::placeholder,
+  .dark .budget-module-contrast input::placeholder,
+  .dark .budget-module-contrast textarea::placeholder {
+    color: #94a3b8;
+  }
+
+  .dark .projects-module-contrast input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  .dark .projects-module-contrast select,
+  .dark .projects-module-contrast textarea,
+  .dark .budget-module-contrast input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  .dark .budget-module-contrast select,
+  .dark .budget-module-contrast textarea {
+    color: #f8fafc;
+    border-color: color-mix(in srgb, #94a3b8 62%, transparent);
+  }
+
+  /* Slight readability lift for micro typography inside forms only. */
+  .projects-module-contrast form .text-\[9px\],
+  .budget-module-contrast form .text-\[9px\] {
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .projects-module-contrast form .text-\[10px\],
+  .budget-module-contrast form .text-\[10px\] {
+    font-size: 11px;
+    line-height: 1.35;
   }
 }

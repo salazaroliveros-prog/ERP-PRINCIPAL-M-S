@@ -51,11 +51,7 @@ import {
   Search,
   Loader2,
   Save,
-  Plus,
-  X,
-  Construction as ConstructionIcon,
-  ShoppingBag,
-  Package as PackageIcon
+  X
 } from 'lucide-react';
 import { formatCurrency, cn, handleApiError, OperationType, getMitigationSuggestions } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -376,18 +372,6 @@ const isEvaluationOnlyStatus = (status: string) => {
   return normalized === 'evaluation' || normalized === 'en evaluacion';
 };
 
-const QuickActionButton = ({ icon: Icon, label, onClick, color }: any) => (
-  <button
-    onClick={onClick}
-    className="flex items-center gap-2 sm:gap-3 w-full p-3 sm:p-4 bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-all active:scale-95"
-  >
-    <div className={cn("p-1.5 sm:p-2 rounded-lg sm:rounded-xl", color)}>
-      <Icon size={16} className="text-white sm:w-5 sm:h-5" />
-    </div>
-    <span className="font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-300">{label}</span>
-  </button>
-);
-
 export default function Dashboard() {
   const { currentTheme } = useTheme();
   const executiveControlRef = useRef<HTMLDivElement>(null);
@@ -401,7 +385,6 @@ export default function Dashboard() {
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [pendingWorkflows, setPendingWorkflows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isFabOpen, setIsFabOpen] = useState(false);
   const [isQuickProgressModalOpen, setIsQuickProgressModalOpen] = useState(false);
   const [selectedQuickProjectId, setSelectedQuickProjectId] = useState<string | null>(null);
   const [quickBudgetItems, setQuickBudgetItems] = useState<any[]>([]);
@@ -4424,60 +4407,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-      {/* Floating Action Button for Mobile */}
-      <div className="lg:hidden fixed bottom-24 right-6 z-50">
-        <AnimatePresence>
-          {isFabOpen && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 20 }}
-              className="absolute bottom-16 right-0 w-64 space-y-3"
-            >
-              <QuickActionButton 
-                icon={ConstructionIcon} 
-                label="Nueva Obra" 
-                color="bg-primary"
-                onClick={() => {
-                  setIsFabOpen(false);
-                  navigate('/projects');
-                }}
-              />
-              <QuickActionButton 
-                icon={ShoppingBag} 
-                label="Nueva Compra" 
-                color="bg-amber-500"
-                onClick={() => {
-                  setIsFabOpen(false);
-                  navigate('/purchase-orders');
-                }}
-              />
-              <QuickActionButton 
-                icon={PackageIcon} 
-                label="Mover Inventario" 
-                color="bg-emerald-500"
-                onClick={() => {
-                  setIsFabOpen(false);
-                  navigate('/inventory');
-                }}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-        
-        <button
-          title={isFabOpen ? 'Cerrar acciones rapidas' : 'Abrir acciones rapidas'}
-          aria-label={isFabOpen ? 'Cerrar acciones rapidas' : 'Abrir acciones rapidas'}
-          onClick={() => setIsFabOpen(!isFabOpen)}
-          className={cn(
-            "w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300",
-            isFabOpen ? "bg-slate-800 dark:bg-white text-white dark:text-slate-900 rotate-45" : "bg-primary text-white shadow-primary-shadow"
-          )}
-        >
-          <Plus size={24} />
-        </button>
-      </div>
-
       {/* Quick Progress Update Modal */}
       <AnimatePresence>
         {isQuickProgressModalOpen && (

@@ -485,6 +485,20 @@ interface NotificationRow {
   created_at: string;
 }
 
+interface ReminderRow {
+  id: string;
+  user_id: string;
+  title: string;
+  note: string | null;
+  reminder_date: string;
+  reminder_time: string;
+  notify_minutes_before: number;
+  completed: boolean;
+  source: 'user' | 'ai';
+  created_at: string;
+  updated_at: string;
+}
+
 interface AppUserRow {
   id: string;
   email: string;
@@ -624,6 +638,22 @@ function mapNotification(row: NotificationRow) {
     type: row.type,
     read: Boolean(row.read),
     createdAt: row.created_at,
+  };
+}
+
+function mapReminder(row: ReminderRow) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    note: row.note || '',
+    date: row.reminder_date,
+    time: row.reminder_time,
+    notifyMinutesBefore: Number(row.notify_minutes_before || 0),
+    completed: Boolean(row.completed),
+    source: row.source === 'ai' ? 'ai' : 'user',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -1229,6 +1259,10 @@ function mapFallbackUser(email: string, displayName: string, photoURL: string | 
   };
 }
 
+function getRequesterUserId(req: Request) {
+  return String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+}
+
 function serveFallbackRead(req: Request, res: Response) {
   if (req.path === '/health') {
     return res.json({
@@ -1276,6 +1310,9 @@ function serveFallbackRead(req: Request, res: Response) {
   }
   if (req.path === '/notifications') {
     return res.json({ items: [], hasMore: false });
+  }
+  if (req.path === '/reminders') {
+    return res.json({ items: [] });
   }
   if (req.path === '/settings/thresholds') {
     return res.json({
@@ -3954,6 +3991,267 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       return res.json({ deleted: result.rowCount || 0 });
     } catch (error: any) {
       return res.status(500).json({ error: error?.message || 'No se pudo borrar el historial de auditoria' });
+    }
+  });
+
+  const ensureRemindersTable = async () => {
+    const db = requireDatabase();
+    await db.query(
+      `
+        create table if not exists reminders (
+          id text primary key,
+          user_id text not null,
+          title text not null,
+          note text,
+          reminder_date date not null,
+          reminder_time text not null,
+          notify_minutes_before integer not null default 30,
+          completed boolean not null default false,
+          source text not null default 'user',
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        )
+      `
+    );
+    await db.query('create index if not exists idx_reminders_user_date on reminders (user_id, reminder_date, reminder_time)');
+  };
+
+  app.get('/api/reminders', async (req, res) => {
+    try {
+      const userId = getRequesterUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: 'No autenticado' });
+      }
+
+      await ensureRemindersTable();
+      const db = requireDatabase();
+
+      const from = String(req.query.from || '').trim();
+      const to = String(req.query.to || '').trim();
+      const where: string[] = ['user_id = $1'];
+      const values: any[] = [userId];
+
+      if (from) {
+        values.push(from);
+        where.push(`reminder_date >= $${values.length}::date`);
+      }
+
+      if (to) {
+        values.push(to);
+        where.push(`reminder_date <= $${values.length}::date`);
+      }
+
+      const result = await db.query<ReminderRow>(
+        `
+          select
+            id,
+            user_id,
+            title,
+            note,
+            reminder_date::text,
+            reminder_time,
+            notify_minutes_before,
+            completed,
+            source,
+            created_at,
+            updated_at
+          from reminders
+          where ${where.join(' and ')}
+          order by reminder_date asc, reminder_time asc, created_at asc
+        `,
+        values
+      );
+
+      return res.json({ items: result.rows.map(mapReminder) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener recordatorios' });
+    }
+  });
+
+  app.post('/api/reminders', async (req, res) => {
+    try {
+      const userId = getRequesterUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: 'No autenticado' });
+      }
+
+      await ensureRemindersTable();
+      const db = requireDatabase();
+
+      const title = String(req.body?.title || '').trim();
+      const note = String(req.body?.note || '').trim();
+      const date = String(req.body?.date || '').trim();
+      const time = String(req.body?.time || '09:00').trim();
+      const notifyMinutesBefore = Math.max(0, Math.min(1440, Number(req.body?.notifyMinutesBefore || 30)));
+      const completed = Boolean(req.body?.completed);
+      const source = String(req.body?.source || 'user').trim() === 'ai' ? 'ai' : 'user';
+
+      if (!title || !date) {
+        return res.status(400).json({ error: 'title y date son obligatorios' });
+      }
+
+      const result = await db.query<ReminderRow>(
+        `
+          insert into reminders (
+            id,
+            user_id,
+            title,
+            note,
+            reminder_date,
+            reminder_time,
+            notify_minutes_before,
+            completed,
+            source
+          )
+          values ($1, $2, $3, $4, $5::date, $6, $7, $8, $9)
+          returning
+            id,
+            user_id,
+            title,
+            note,
+            reminder_date::text,
+            reminder_time,
+            notify_minutes_before,
+            completed,
+            source,
+            created_at,
+            updated_at
+        `,
+        [randomUUID(), userId, title, note || null, date, time, notifyMinutesBefore, completed, source]
+      );
+
+      return res.status(201).json(mapReminder(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear recordatorio' });
+    }
+  });
+
+  app.patch('/api/reminders/:id', async (req, res) => {
+    try {
+      const userId = getRequesterUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: 'No autenticado' });
+      }
+
+      await ensureRemindersTable();
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) {
+        return res.status(400).json({ error: 'id requerido' });
+      }
+
+      const sets: string[] = [];
+      const values: any[] = [];
+
+      const setField = (column: string, value: any, cast = '') => {
+        values.push(value);
+        sets.push(`${column} = $${values.length}${cast}`);
+      };
+
+      if (req.body?.title !== undefined) {
+        setField('title', String(req.body.title || '').trim());
+      }
+      if (req.body?.note !== undefined) {
+        const note = String(req.body.note || '').trim();
+        setField('note', note || null);
+      }
+      if (req.body?.date !== undefined) {
+        setField('reminder_date', String(req.body.date || '').trim(), '::date');
+      }
+      if (req.body?.time !== undefined) {
+        setField('reminder_time', String(req.body.time || '').trim() || '09:00');
+      }
+      if (req.body?.notifyMinutesBefore !== undefined) {
+        const minutes = Math.max(0, Math.min(1440, Number(req.body.notifyMinutesBefore || 0)));
+        setField('notify_minutes_before', minutes);
+      }
+      if (req.body?.completed !== undefined) {
+        setField('completed', Boolean(req.body.completed));
+      }
+      if (req.body?.source !== undefined) {
+        const source = String(req.body.source || 'user').trim() === 'ai' ? 'ai' : 'user';
+        setField('source', source);
+      }
+
+      if (sets.length === 0) {
+        return res.status(400).json({ error: 'No hay cambios para actualizar' });
+      }
+
+      sets.push('updated_at = now()');
+      values.push(userId, id);
+
+      const result = await db.query<ReminderRow>(
+        `
+          update reminders
+          set ${sets.join(', ')}
+          where user_id = $${values.length - 1} and id = $${values.length}
+          returning
+            id,
+            user_id,
+            title,
+            note,
+            reminder_date::text,
+            reminder_time,
+            notify_minutes_before,
+            completed,
+            source,
+            created_at,
+            updated_at
+        `,
+        values
+      );
+
+      if (!result.rows[0]) {
+        return res.status(404).json({ error: 'Recordatorio no encontrado' });
+      }
+
+      return res.json(mapReminder(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar recordatorio' });
+    }
+  });
+
+  app.delete('/api/reminders/:id', async (req, res) => {
+    try {
+      const userId = getRequesterUserId(req);
+      if (!userId) {
+        return res.status(401).json({ error: 'No autenticado' });
+      }
+
+      await ensureRemindersTable();
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) {
+        return res.status(400).json({ error: 'id requerido' });
+      }
+
+      const deleted = await db.query<ReminderRow>(
+        `
+          delete from reminders
+          where user_id = $1 and id = $2
+          returning
+            id,
+            user_id,
+            title,
+            note,
+            reminder_date::text,
+            reminder_time,
+            notify_minutes_before,
+            completed,
+            source,
+            created_at,
+            updated_at
+        `,
+        [userId, id]
+      );
+
+      if (!deleted.rows[0]) {
+        return res.status(404).json({ error: 'Recordatorio no encontrado' });
+      }
+
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar recordatorio' });
     }
   });
 

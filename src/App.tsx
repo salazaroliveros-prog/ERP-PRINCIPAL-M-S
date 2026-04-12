@@ -21,12 +21,27 @@ import {
   Sun,
   CalendarDays,
   Clock3,
-  ChevronRight
+  ChevronRight,
+  BellRing,
+  Plus,
+  Trash2,
+  CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { exportNavMetricsSnapshot, markNavigationComplete, markNavigationStart } from './lib/navMetrics';
 import { getSavedStartupSound, playStartupSound } from './lib/startupSound';
+import {
+  CalendarReminder,
+  createReminder,
+  deleteReminder,
+  getRemindersChangedEventName,
+  loadReminders,
+  requestReminderNotificationPermission,
+  syncRemindersFromServer,
+  toggleReminderCompleted,
+  updateReminder,
+} from './lib/reminders';
 
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -65,6 +80,9 @@ const QuickActionsLauncher = lazy(() =>
 );
 const SideToolsDock = lazy(() =>
   import('./components/SideToolsDock').then((module) => ({ default: module.SideToolsDock }))
+);
+const NotificationsDock = lazy(() =>
+  import('./components/NotificationsDock').then((module) => ({ default: module.NotificationsDock }))
 );
 const HRContractSignPage = lazy(() => import('./components/HRContractSignPage'));
 const NotificationManager = lazy(() =>
@@ -281,11 +299,100 @@ function DateTimeWidget({ compact = false }: { compact?: boolean }) {
   const [now, setNow] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [reminders, setReminders] = useState<CalendarReminder[]>([]);
+  const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
+  const [reminderTitle, setReminderTitle] = useState('');
+  const [reminderNote, setReminderNote] = useState('');
+  const [reminderTime, setReminderTime] = useState('09:00');
+  const [notifyMinutesBefore, setNotifyMinutesBefore] = useState(30);
+  const [notificationPermission, setNotificationPermission] = useState<string>(() => {
+    if (typeof window === 'undefined' || typeof Notification === 'undefined') return 'unsupported';
+    return Notification.permission;
+  });
   const [clockFormat, setClockFormat] = useState<'12h' | '24h'>(() => {
     const saved = localStorage.getItem('clock-format');
     return saved === '12h' ? '12h' : '24h';
   });
   const widgetRef = useRef<HTMLDivElement>(null);
+
+  const formatDateKey = useCallback((date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const selectedDateKey = useMemo(() => formatDateKey(selectedDate), [selectedDate, formatDateKey]);
+
+  const selectedDateReminders = useMemo(
+    () => reminders
+      .filter((item) => item.date === selectedDateKey)
+      .sort((a, b) => a.time.localeCompare(b.time)),
+    [reminders, selectedDateKey],
+  );
+
+  const reminderDays = useMemo(() => {
+    const bucket = new Set<string>();
+    reminders.forEach((item) => {
+      if (item.date) bucket.add(item.date);
+    });
+    return bucket;
+  }, [reminders]);
+
+  const refreshReminders = useCallback(() => {
+    setReminders(loadReminders());
+  }, []);
+
+  const parseAiReminderPrompt = useCallback((text: string) => {
+    const normalized = String(text || '').trim();
+    if (!normalized) return null;
+
+    const lower = normalized.toLowerCase();
+    if (!/(recordar|recordarme|recuerdame|recordatorio)/i.test(lower)) {
+      return null;
+    }
+
+    let candidateDate = new Date();
+    if (lower.includes('manana') || lower.includes('mañana')) {
+      candidateDate = new Date();
+      candidateDate.setDate(candidateDate.getDate() + 1);
+    }
+
+    const explicitDate = normalized.match(/(\d{4}-\d{2}-\d{2})|(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/);
+    if (explicitDate) {
+      const raw = explicitDate[0];
+      if (raw.includes('/')) {
+        const [d, m, yMaybe] = raw.split('/').map((part) => Number(part));
+        const currentYear = new Date().getFullYear();
+        const y = yMaybe ? (yMaybe < 100 ? 2000 + yMaybe : yMaybe) : currentYear;
+        const parsed = new Date(y, Math.max(0, (m || 1) - 1), Math.max(1, d || 1));
+        if (!Number.isNaN(parsed.getTime())) candidateDate = parsed;
+      } else {
+        const parsed = new Date(raw);
+        if (!Number.isNaN(parsed.getTime())) candidateDate = parsed;
+      }
+    }
+
+    const explicitTime = normalized.match(/(?:a\s+las\s+|a\s+la\s+|@\s*)?(\d{1,2}:\d{2})/i);
+    const time = explicitTime ? explicitTime[1] : '09:00';
+
+    const cleanedTitle = normalized
+      .replace(/^(por\s+favor\s+)?(recordarme|recuerdame|recordatorio|recordar)\s*/i, '')
+      .replace(/\b(hoy|manana|mañana)\b/ig, '')
+      .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '')
+      .replace(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g, '')
+      .replace(/(?:a\s+las\s+|a\s+la\s+)?\d{1,2}:\d{2}/ig, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleanedTitle) return null;
+
+    return {
+      title: cleanedTitle.charAt(0).toUpperCase() + cleanedTitle.slice(1),
+      date: formatDateKey(candidateDate),
+      time,
+    };
+  }, [formatDateKey]);
 
   useEffect(() => {
     const tickId = window.setInterval(() => {
@@ -294,6 +401,35 @@ function DateTimeWidget({ compact = false }: { compact?: boolean }) {
 
     return () => window.clearInterval(tickId);
   }, []);
+
+  useEffect(() => {
+    refreshReminders();
+    void syncRemindersFromServer().then(() => {
+      refreshReminders();
+    });
+
+    const remindersEvent = getRemindersChangedEventName();
+    const onStorage = (event: StorageEvent) => {
+      if (!event.key || event.key.includes('erp_calendar_reminders')) {
+        refreshReminders();
+      }
+    };
+
+    window.addEventListener(remindersEvent, refreshReminders as EventListener);
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      window.removeEventListener(remindersEvent, refreshReminders as EventListener);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [refreshReminders]);
+
+  useEffect(() => {
+    if (!isCalendarOpen) return;
+    void syncRemindersFromServer().then(() => {
+      refreshReminders();
+    });
+  }, [isCalendarOpen, refreshReminders]);
 
   useEffect(() => {
     if (!isCalendarOpen) return;
@@ -329,6 +465,89 @@ function DateTimeWidget({ compact = false }: { compact?: boolean }) {
     };
   }, []);
 
+  useEffect(() => {
+    const handleAiCommand = (event: Event) => {
+      const customEvent = event as CustomEvent<{ command?: string; params?: { text?: string } }>;
+      const text = customEvent?.detail?.params?.text || '';
+      if (customEvent?.detail?.command !== 'QUICK_PROMPT' || !text) return;
+
+      const parsed = parseAiReminderPrompt(text);
+      if (!parsed) return;
+
+      try {
+        createReminder({
+          title: parsed.title,
+          note: 'Recordatorio creado automaticamente desde una instruccion asistida por IA.',
+          date: parsed.date,
+          time: parsed.time,
+          notifyMinutesBefore: 30,
+          source: 'ai',
+        });
+        toast.success('Recordatorio IA creado', {
+          description: `${parsed.title} (${parsed.date} ${parsed.time})`,
+        });
+      } catch {
+        // Keep silent if parsing yields invalid reminder data.
+      }
+    };
+
+    window.addEventListener('AI_COMMAND', handleAiCommand as EventListener);
+    return () => window.removeEventListener('AI_COMMAND', handleAiCommand as EventListener);
+  }, [parseAiReminderPrompt]);
+
+  const handleReminderCreate = () => {
+    const title = reminderTitle.trim();
+    if (!title) {
+      toast.error('Agrega un titulo para la actividad');
+      return;
+    }
+
+    try {
+      const isEditing = Boolean(editingReminderId);
+      if (editingReminderId) {
+        updateReminder(editingReminderId, {
+          title,
+          note: reminderNote,
+          date: selectedDateKey,
+          time: reminderTime,
+          notifyMinutesBefore,
+          source: 'user',
+        });
+      } else {
+        createReminder({
+          title,
+          note: reminderNote,
+          date: selectedDateKey,
+          time: reminderTime,
+          notifyMinutesBefore,
+          source: 'user',
+        });
+      }
+
+      setReminderTitle('');
+      setReminderNote('');
+      setEditingReminderId(null);
+      toast.success(isEditing ? 'Actividad actualizada' : 'Actividad programada', {
+        description: `${title} - ${selectedDateKey} ${reminderTime}`,
+      });
+    } catch {
+      toast.error('No se pudo guardar la actividad');
+    }
+  };
+
+  const enableNotifications = async () => {
+    const permission = await requestReminderNotificationPermission();
+    setNotificationPermission(permission);
+
+    if (permission === 'granted') {
+      toast.success('Notificaciones activadas');
+    } else if (permission === 'denied') {
+      toast.error('Debes habilitar notificaciones en tu navegador');
+    } else {
+      toast.error('Tu navegador no soporta notificaciones push locales');
+    }
+  };
+
   const timeLabel = now.toLocaleTimeString('es-GT', {
     hour: '2-digit',
     minute: '2-digit',
@@ -362,16 +581,181 @@ function DateTimeWidget({ compact = false }: { compact?: boolean }) {
       </div>
 
       {isCalendarOpen && (
-        <div className="absolute left-0 top-[calc(100%+8px)] z-[80] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-3">
+        <div className="absolute left-0 top-[calc(100%+8px)] z-[80] w-[min(92vw,420px)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-3">
+          <div className="flex items-center justify-between gap-2 mb-2 px-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+              Agenda interactiva
+            </p>
+            <button
+              type="button"
+              onClick={enableNotifications}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-colors",
+                notificationPermission === 'granted'
+                  ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30"
+                  : "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 hover:border-primary/40 hover:text-primary"
+              )}
+              title="Activar recordatorios push"
+            >
+              <BellRing size={11} />
+              {notificationPermission === 'granted' ? 'Push ON' : 'Activar push'}
+            </button>
+          </div>
+
           <DatePicker
             inline
             selected={selectedDate}
+            dayClassName={(date) => (reminderDays.has(formatDateKey(date)) ? 'wm-reminder-day' : undefined)}
             onChange={(date) => {
               if (date) {
                 setSelectedDate(date);
               }
             }}
           />
+
+          <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3 space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 px-1">
+              Actividad para {selectedDate.toLocaleDateString('es-GT', { day: '2-digit', month: 'short' })}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_95px] gap-2">
+              <input
+                value={reminderTitle}
+                onChange={(event) => setReminderTitle(event.target.value)}
+                placeholder="Ej: Reunion de avance con proveedor"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/35"
+              />
+              <input
+                type="time"
+                value={reminderTime}
+                onChange={(event) => setReminderTime(event.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/35"
+                title="Hora del recordatorio"
+              />
+            </div>
+
+            <textarea
+              value={reminderNote}
+              onChange={(event) => setReminderNote(event.target.value)}
+              placeholder="Detalle opcional"
+              rows={2}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/35 resize-none"
+            />
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Avisar antes
+                </label>
+                <select
+                  value={notifyMinutesBefore}
+                  onChange={(event) => setNotifyMinutesBefore(Number(event.target.value) || 0)}
+                  className="px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-[10px] font-black text-slate-700 dark:text-slate-200"
+                >
+                  <option value={0}>A la hora</option>
+                  <option value={10}>10 min</option>
+                  <option value={30}>30 min</option>
+                  <option value={60}>1 hora</option>
+                  <option value={180}>3 horas</option>
+                  <option value={1440}>1 dia</option>
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleReminderCreate}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-wider hover:bg-primary-hover transition-colors"
+              >
+                <Plus size={12} />
+                {editingReminderId ? 'Actualizar' : 'Guardar'}
+              </button>
+              {editingReminderId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingReminderId(null);
+                    setReminderTitle('');
+                    setReminderNote('');
+                    setReminderTime('09:00');
+                    setNotifyMinutesBefore(30);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 text-[10px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-300"
+                >
+                  Cancelar
+                </button>
+              )}
+            </div>
+
+            <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
+              {selectedDateReminders.length === 0 ? (
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 italic px-1">Sin actividades para este dia.</p>
+              ) : (
+                selectedDateReminders.map((item) => (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      "flex items-start gap-2 rounded-xl border px-2.5 py-2 cursor-pointer",
+                      item.completed
+                        ? "bg-emerald-50/70 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30"
+                        : "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700"
+                    )}
+                    onClick={() => {
+                      setEditingReminderId(item.id);
+                      setReminderTitle(item.title);
+                      setReminderNote(item.note || '');
+                      setReminderTime(item.time || '09:00');
+                      setNotifyMinutesBefore(item.notifyMinutesBefore || 30);
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleReminderCompleted(item.id);
+                      }}
+                      className={cn(
+                        "mt-0.5 rounded-md p-1",
+                        item.completed ? "text-emerald-600" : "text-slate-400 hover:text-primary"
+                      )}
+                      title="Marcar como completada"
+                    >
+                      <CheckCircle2 size={14} />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <p className={cn(
+                        "text-[11px] font-bold text-slate-800 dark:text-slate-100",
+                        item.completed && "line-through opacity-70"
+                      )}>
+                        {item.title}
+                      </p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">{item.time} - aviso {item.notifyMinutesBefore} min antes</p>
+                      {item.note && (
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">{item.note}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        deleteReminder(item.id);
+                        if (editingReminderId === item.id) {
+                          setEditingReminderId(null);
+                          setReminderTitle('');
+                          setReminderNote('');
+                          setReminderTime('09:00');
+                          setNotifyMinutesBefore(30);
+                        }
+                      }}
+                      className="text-slate-400 hover:text-rose-500 transition-colors p-1"
+                      title="Eliminar actividad"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -389,7 +773,6 @@ function AppContent({
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [enhancementsReady, setEnhancementsReady] = useState(false);
   const prefetchedRoutesRef = useRef<Set<string>>(new Set());
   const { isDarkMode, toggleDarkMode } = useTheme();
@@ -399,7 +782,6 @@ function AppContent({
 
   useEffect(() => {
     setIsSidebarOpen(false);
-    setIsNotificationsOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -751,9 +1133,7 @@ function AppContent({
             onNavigateIntent={markRouteIntent}
             onClose={() => {
               setIsSidebarOpen(false);
-              setIsNotificationsOpen(false);
             }} 
-            initialNotificationsOpen={isNotificationsOpen}
             deferredPrompt={deferredPrompt}
             onInstall={onInstall}
           />
@@ -803,6 +1183,9 @@ function AppContent({
         </Suspense>
         <Suspense fallback={null}>
           <SideToolsDock />
+        </Suspense>
+        <Suspense fallback={null}>
+          <NotificationsDock />
         </Suspense>
 
         {NAV_METRICS_ENABLED && (

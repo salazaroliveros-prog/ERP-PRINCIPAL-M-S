@@ -1142,7 +1142,7 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
 
   return (
     <div className={cn(
-      "min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700",
+      "min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700 projects-module-contrast",
       getTypologyTheme(project.typology)
     )}>
       {/* Header */}
