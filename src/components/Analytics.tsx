@@ -328,7 +328,7 @@ export default function Analytics() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Business Intelligence</h1>
-          <p className="text-[10px] sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Análisis de Rendimiento</p>
+          <p className="text-[10px] sm:text-sm font-bold text-slate-500 dark:text-slate-300 uppercase tracking-widest">Análisis de Rendimiento</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 shadow-sm">
@@ -340,7 +340,7 @@ export default function Analytics() {
                   "px-2.5 sm:px-3 py-1 sm:py-1.5 text-[8px] sm:text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
                   timeRange === range 
                     ? "bg-primary text-white shadow-md" 
-                    : "text-slate-500 hover:text-primary"
+                    : "text-slate-500 dark:text-slate-300 hover:text-primary"
                 )}
               >
                 {range}
@@ -419,7 +419,7 @@ export default function Analytics() {
                 {kpi.trend}
               </div>
             </div>
-            <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 sm:mb-1">{kpi.label}</p>
+            <p className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-widest mb-0.5 sm:mb-1">{kpi.label}</p>
             <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{kpi.value}</p>
           </motion.div>
         ))}
@@ -434,11 +434,11 @@ export default function Analytics() {
             <div className="flex items-center gap-2 sm:gap-4">
               <div className="flex items-center gap-1 sm:gap-2">
                 <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-primary" />
-                <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase">Ingresos</span>
+                <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-300 uppercase">Ingresos</span>
               </div>
               <div className="flex items-center gap-1 sm:gap-2">
                 <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-rose-500" />
-                <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase">Egresos</span>
+                <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-300 uppercase">Egresos</span>
               </div>
             </div>
           </div>
@@ -516,7 +516,7 @@ export default function Analytics() {
                     <svg className="color-indicator" viewBox="0 0 8 8" aria-hidden="true" focusable="false">
                       <circle cx="4" cy="4" r="4" fill={item.color} />
                     </svg>
-                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-tighter">{item.name}</span>
+                    <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-tighter">{item.name}</span>
                   </div>
                   <span className="text-xs font-black text-slate-900 dark:text-white">{((item.value / Math.max(filteredProjects.length, 1)) * 100).toFixed(1)}%</span>
                 </div>

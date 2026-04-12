@@ -441,7 +441,7 @@ export default function Clients() {
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-8">
             <div>
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">Clientes</h1>
-              <p className="text-slate-500 dark:text-slate-400 text-[10px] sm:text-sm">Gestión de base de datos y leads</p>
+              <p className="text-slate-500 dark:text-slate-300 text-[10px] sm:text-sm">Gestión de base de datos y leads</p>
             </div>
             <button 
               onClick={() => handleOpenModal()}
@@ -467,12 +467,12 @@ export default function Clients() {
               />
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 bg-white dark:bg-slate-900 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-x-auto w-full md:w-auto">
-              <span className="text-[8px] sm:text-micro font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-1.5 sm:px-2">Ordenar:</span>
+              <span className="text-[8px] sm:text-micro font-bold text-slate-400 dark:text-slate-300 uppercase tracking-wider px-1.5 sm:px-2">Ordenar:</span>
               <button 
                 onClick={() => toggleSort('name')}
                 className={cn(
                   "px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[8px] sm:text-micro font-bold transition-all whitespace-nowrap",
-                  sortBy === 'name' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  sortBy === 'name' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                 )}
               >
                 Nombre {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
@@ -481,7 +481,7 @@ export default function Clients() {
                 onClick={() => toggleSort('company')}
                 className={cn(
                   "px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[8px] sm:text-micro font-bold transition-all whitespace-nowrap",
-                  sortBy === 'company' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  sortBy === 'company' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                 )}
               >
                 Empresa {sortBy === 'company' && (sortOrder === 'asc' ? '↑' : '↓')}
@@ -491,7 +491,7 @@ export default function Clients() {
                 onClick={() => setViewMode('grid')}
                 className={cn(
                   "p-1.5 rounded-lg transition-all",
-                  viewMode === 'grid' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                  viewMode === 'grid' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
                 )}
                 title="Vista tarjetas"
                 aria-label="Vista tarjetas"
@@ -502,7 +502,7 @@ export default function Clients() {
                 onClick={() => setViewMode('table')}
                 className={cn(
                   "p-1.5 rounded-lg transition-all",
-                  viewMode === 'table' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                  viewMode === 'table' ? "bg-primary text-white" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
                 )}
                 title="Vista tabla"
                 aria-label="Vista tabla"
@@ -518,12 +518,12 @@ export default function Clients() {
                 <table className="w-full text-left border-collapse table-fixed">
                   <thead>
                     <tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Cliente</th>
-                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Empresa</th>
-                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Correo</th>
-                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Teléfono</th>
-                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Estado</th>
-                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Acciones</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Cliente</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Empresa</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Correo</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Teléfono</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Estado</th>
+                      <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 text-right">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -559,7 +559,7 @@ export default function Clients() {
                                 setSelectedClient(client);
                                 setIsChatOpen(true);
                               }}
-                              className="p-2 text-slate-400 hover:text-primary transition-colors"
+                              className="p-2 text-slate-400 dark:text-slate-300 hover:text-primary transition-colors"
                               title="Chat"
                             >
                               <MessageSquare size={14} />
@@ -570,7 +570,7 @@ export default function Clients() {
                                 e.stopPropagation();
                                 handleOpenModal(client);
                               }}
-                              className="p-2 text-slate-400 hover:text-primary transition-colors"
+                              className="p-2 text-slate-400 dark:text-slate-300 hover:text-primary transition-colors"
                               title="Editar"
                             >
                               <Edit2 size={14} />
@@ -581,7 +581,7 @@ export default function Clients() {
                                 e.stopPropagation();
                                 handleDeleteClient(client.id);
                               }}
-                              className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                              className="p-2 text-slate-400 dark:text-slate-300 hover:text-rose-600 transition-colors"
                               title="Eliminar"
                             >
                               <Trash2 size={14} />
@@ -633,7 +633,7 @@ export default function Clients() {
                       </div>
                       <div>
                         <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white group-hover:text-primary transition-colors">{client.name}</h3>
-                        <div className="flex items-center gap-1 text-[8px] sm:text-micro font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        <div className="flex items-center gap-1 text-[8px] sm:text-micro font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">
                           <Building2 size={10} className="sm:w-3 sm:h-3" />
                           <span>{client.company || 'Particular'}</span>
                         </div>
@@ -648,12 +648,12 @@ export default function Clients() {
                   </div>
 
                   <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
-                    <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                      <Mail size={14} className="text-slate-400 dark:text-slate-500 sm:w-4 sm:h-4" />
+                    <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                      <Mail size={14} className="text-slate-400 dark:text-slate-300 sm:w-4 sm:h-4" />
                       <span className="truncate">{client.email}</span>
                     </div>
-                    <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                      <Phone size={14} className="text-slate-400 dark:text-slate-500 sm:w-4 sm:h-4" />
+                    <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                      <Phone size={14} className="text-slate-400 dark:text-slate-300 sm:w-4 sm:h-4" />
                       <span>{client.phone || 'Sin teléfono'}</span>
                     </div>
                   </div>
@@ -668,7 +668,7 @@ export default function Clients() {
                         setSelectedClient(client);
                         setIsChatOpen(true);
                       }}
-                      className="flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-1.5 sm:py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] sm:text-xs font-bold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+                      className="flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-1.5 sm:py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] sm:text-xs font-bold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
                     >
                       <MessageSquare size={12} className="sm:w-3.5 sm:h-3.5" />
                       Chat
@@ -694,7 +694,7 @@ export default function Clients() {
                         e.stopPropagation();
                         handleDeleteClient(client.id);
                       }}
-                      className="p-1.5 sm:p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                      className="p-1.5 sm:p-2 text-slate-400 dark:text-slate-300 hover:text-rose-600 transition-colors"
                     >
                       <Trash2 size={14} className="sm:w-4 sm:h-4" />
                     </button>
@@ -709,11 +709,11 @@ export default function Clients() {
           {totalPages > 1 && (
             <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 glass-card p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm mt-8">
               <div className="flex items-center gap-4">
-                <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                <span className="text-sm text-slate-500 dark:text-slate-300 font-medium">
                   Mostrando {paginatedClients.length} de {filteredClients.length} clientes
                 </span>
                 <div className="flex items-center gap-2">
-                  <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Por página:</label>
+                  <label className="text-xs font-bold text-slate-400 dark:text-slate-300 uppercase tracking-wider">Por página:</label>
                   <select 
                     className="px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold outline-none text-slate-900 dark:text-white"
                     value={itemsPerPage}
@@ -733,7 +733,7 @@ export default function Clients() {
                 <button 
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  className="p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-400"
+                  className="p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 dark:text-slate-300"
                 >
                   <ChevronRight size={20} className="rotate-180" />
                 </button>

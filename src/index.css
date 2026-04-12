@@ -78,7 +78,7 @@
     --theme-card-surface: rgba(15, 23, 42, 0.76);
     --theme-card-border-strong: rgba(71, 85, 105, 0.5);
     --theme-text-strong: #f8fafc;
-    --theme-text-muted: #cbd5e1;
+    --theme-text-muted: #e2e8f0;
   }
 
   .app-theme-sunset {
@@ -501,8 +501,20 @@
 
   .dark .text-slate-400,
   .dark .text-slate-500,
-  .dark .dark\:text-slate-400 {
+  .dark .dark\:text-slate-400,
+  .dark .dark\:text-slate-500,
+  .dark .text-gray-400,
+  .dark .text-gray-500,
+  .dark .dark\:text-gray-400,
+  .dark .dark\:text-gray-500 {
     color: var(--theme-text-muted) !important;
+  }
+
+  .dark .text-slate-600,
+  .dark .text-gray-600,
+  .dark .dark\:text-slate-600,
+  .dark .dark\:text-gray-600 {
+    color: color-mix(in srgb, var(--theme-text-strong) 84%, #94a3b8 16%) !important;
   }
 
   h1, h2, h3, h4 {
@@ -879,6 +891,18 @@
   .dark .bg-white .dark\:text-slate-400,
   .dark .bg-slate-50 .dark\:text-slate-400 {
     color: #64748b !important;
+    text-shadow: none !important;
+  }
+
+  .dark .bg-white .text-gray-400,
+  .dark .bg-white .text-gray-500,
+  .dark .bg-slate-50 .text-gray-400,
+  .dark .bg-slate-50 .text-gray-500,
+  .dark .bg-white .dark\:text-gray-400,
+  .dark .bg-slate-50 .dark\:text-gray-400 {
+    color: #64748b !important;
+    text-shadow: none !important;
+  }
 
   /* Module layout profiles: compact, balanced, airy */
   html.module-layout-compact input:not([type='checkbox']):not([type='radio']):not([type='range']),
@@ -917,8 +941,6 @@
   html.module-layout-airy table td {
     padding-top: 0.7rem;
     padding-bottom: 0.7rem;
-  }
-    text-shadow: none !important;
   }
 
   /* Slight readability lift for micro typography inside forms only. */

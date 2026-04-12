@@ -373,7 +373,7 @@ export default function Documents() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Gestión Documental</h1>
-          <p className="text-slate-500 dark:text-slate-400 font-medium">Repositorio centralizado de archivos y planos</p>
+          <p className="text-slate-500 dark:text-slate-300 font-medium">Repositorio centralizado de archivos y planos</p>
         </div>
         <div className="flex items-center gap-3">
           <button 
@@ -413,12 +413,12 @@ export default function Documents() {
                   title="Cerrar"
                   className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
                 >
-                  <X size={20} className="text-slate-500" />
+                  <X size={20} className="text-slate-500 dark:text-slate-300" />
                 </button>
               </div>
               <form onSubmit={handleCreateFolder} className="p-6 space-y-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre de la Carpeta</label>
+                  <label className="text-[10px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-widest">Nombre de la Carpeta</label>
                   <input
                     required
                     autoFocus
@@ -455,12 +455,12 @@ export default function Documents() {
                   title="Cerrar"
                   className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
                 >
-                  <X size={20} className="text-slate-500" />
+                  <X size={20} className="text-slate-500 dark:text-slate-300" />
                 </button>
               </div>
               <form onSubmit={handleAddDocument} className="p-6 space-y-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nombre del Archivo</label>
+                  <label className="text-[10px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-widest">Nombre del Archivo</label>
                   <input
                     required
                     type="text"
@@ -472,7 +472,7 @@ export default function Documents() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo</label>
+                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-widest">Tipo</label>
                     <select
                       aria-label="Tipo de archivo"
                       title="Tipo de archivo"
@@ -488,7 +488,7 @@ export default function Documents() {
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Carpeta</label>
+                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-widest">Carpeta</label>
                     <select
                       aria-label="Carpeta del documento"
                       title="Carpeta del documento"
@@ -503,7 +503,7 @@ export default function Documents() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tamaño (ej: 2.5 MB)</label>
+                  <label className="text-[10px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-widest">Tamaño (ej: 2.5 MB)</label>
                   <input
                     required
                     type="text"
@@ -564,7 +564,7 @@ export default function Documents() {
               <folder.icon size={24} />
             </div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">{folder.name}</h3>
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{folder.count} Archivos</p>
+            <p className="text-[10px] text-slate-400 dark:text-slate-300 font-black uppercase tracking-widest">{folder.count} Archivos</p>
           </motion.div>
         ))}
       </div>
@@ -589,7 +589,7 @@ export default function Documents() {
                 )}
               </div>
               <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-300" size={16} />
                 <input
                   type="text"
                   placeholder="Buscar archivos..."
@@ -603,11 +603,11 @@ export default function Documents() {
               <table className="w-full text-left border-collapse table-fixed">
                 <thead>
                   <tr className="bg-slate-50/50 dark:bg-slate-800/50">
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Archivo</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Carpeta</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tamaño</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest"></th>
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-widest">Archivo</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-widest">Carpeta</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-widest">Tamaño</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-widest">Fecha</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-widest"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -618,12 +618,12 @@ export default function Documents() {
                           {getFileIcon(doc.type)}
                           <div>
                             <p className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-[200px]">{doc.name}</p>
-                            <p className="text-[10px] text-slate-400 font-medium tracking-tighter">Por: {doc.author}</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-300 font-medium tracking-tighter">Por: {doc.author}</p>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400">
+                        <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
                           {doc.folder}
                         </span>
                       </td>
@@ -637,35 +637,35 @@ export default function Documents() {
                         <div className="flex items-center justify-end gap-2">
                           <button 
                             onClick={() => openDocumentFile(doc)}
-                            className="p-2 text-slate-400 hover:text-primary transition-colors"
+                            className="p-2 text-slate-400 dark:text-slate-300 hover:text-primary transition-colors"
                             title="Ver"
                           >
                             <Eye size={16} />
                           </button>
                           <button 
                             onClick={() => handleEdit(doc)}
-                            className="p-2 text-slate-400 hover:text-primary transition-colors"
+                            className="p-2 text-slate-400 dark:text-slate-300 hover:text-primary transition-colors"
                             title="Editar"
                           >
                             <Edit2 size={16} />
                           </button>
                           <button 
                             onClick={() => downloadDocumentFile(doc)}
-                            className="p-2 text-slate-400 hover:text-primary transition-colors"
+                            className="p-2 text-slate-400 dark:text-slate-300 hover:text-primary transition-colors"
                             title="Descargar"
                           >
                             <Download size={16} />
                           </button>
                           <button 
                             onClick={() => void shareDocumentFile(doc)}
-                            className="p-2 text-slate-400 hover:text-primary transition-colors"
+                            className="p-2 text-slate-400 dark:text-slate-300 hover:text-primary transition-colors"
                             title="Compartir"
                           >
                             <Share2 size={16} />
                           </button>
                           <button 
                             onClick={() => handleDelete(doc.id)}
-                            className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                            className="p-2 text-slate-400 dark:text-slate-300 hover:text-rose-600 transition-colors"
                             title="Eliminar"
                           >
                             <Trash2 size={16} />
@@ -681,7 +681,7 @@ export default function Documents() {
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/30 dark:bg-slate-800/30">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                <p className="text-[10px] font-black text-slate-400 dark:text-slate-300 uppercase tracking-widest">
                   Página {currentPage} de {totalPages}
                 </p>
                 <div className="flex items-center gap-2">
@@ -690,7 +690,7 @@ export default function Documents() {
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     aria-label="Pagina anterior"
                     title="Pagina anterior"
-                    className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-50 text-slate-600 dark:text-slate-400"
+                    className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-50 text-slate-600 dark:text-slate-300"
                   >
                     <ChevronLeft size={16} />
                   </button>
@@ -699,7 +699,7 @@ export default function Documents() {
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                     aria-label="Pagina siguiente"
                     title="Pagina siguiente"
-                    className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-50 text-slate-600 dark:text-slate-400"
+                    className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-50 text-slate-600 dark:text-slate-300"
                   >
                     <ChevronRight size={16} />
                   </button>
@@ -721,7 +721,7 @@ export default function Documents() {
               <div className="flex items-end justify-between">
                 <div>
                   <p className="text-2xl font-black text-slate-900 dark:text-white">12.4 GB</p>
-                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Usado de 50 GB</p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-300 font-black uppercase tracking-widest">Usado de 50 GB</p>
                 </div>
                 <span className="text-xs font-black text-primary">24.8%</span>
               </div>
@@ -742,7 +742,7 @@ export default function Documents() {
                   <div key={i} className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
                     <div className="flex items-center gap-2">
                       <div className={cn("w-2 h-2 rounded-full", item.color)} />
-                      <span className="text-slate-500">{item.label}</span>
+                      <span className="text-slate-500 dark:text-slate-300">{item.label}</span>
                     </div>
                     <span className="text-slate-900 dark:text-white">{item.size}</span>
                   </div>
