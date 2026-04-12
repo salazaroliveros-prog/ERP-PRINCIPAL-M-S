@@ -101,6 +101,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 const PREFETCH_ENABLED = (import.meta.env.VITE_PREFETCH_ENABLED ?? 'true') !== 'false';
 const NAV_METRICS_ENABLED = import.meta.env.DEV && import.meta.env.VITE_NAV_METRICS === 'true';
 const MODULE_LAYOUT_PROFILE_STORAGE_KEY = 'module_layout_profile_v1';
+const MODULE_SUBMODULE_LAYOUT_PROFILE_STORAGE_KEY = 'module_submodule_layout_profile_v1';
 
 type ModuleLayoutProfile = 'compact' | 'balanced' | 'airy';
 type ModuleLayoutMap = {
@@ -109,10 +110,20 @@ type ModuleLayoutMap = {
   financials: ModuleLayoutProfile;
 };
 
+type SubmoduleLayoutMap = {
+  clients: ModuleLayoutProfile;
+  purchaseOrders: ModuleLayoutProfile;
+};
+
 const DEFAULT_MODULE_LAYOUTS: ModuleLayoutMap = {
   dashboard: 'balanced',
   projects: 'airy',
   financials: 'compact',
+};
+
+const DEFAULT_SUBMODULE_LAYOUTS: SubmoduleLayoutMap = {
+  clients: 'airy',
+  purchaseOrders: 'compact',
 };
 
 function loadModuleLayoutProfiles(): ModuleLayoutMap {
@@ -131,6 +142,33 @@ function loadModuleLayoutProfiles(): ModuleLayoutMap {
   } catch {
     return DEFAULT_MODULE_LAYOUTS;
   }
+}
+
+function loadSubmoduleLayoutProfiles(): SubmoduleLayoutMap {
+  try {
+    const raw = localStorage.getItem(MODULE_SUBMODULE_LAYOUT_PROFILE_STORAGE_KEY);
+    if (!raw) return DEFAULT_SUBMODULE_LAYOUTS;
+
+    const parsed = JSON.parse(raw) as Partial<SubmoduleLayoutMap>;
+    const allowed = new Set<ModuleLayoutProfile>(['compact', 'balanced', 'airy']);
+
+    return {
+      clients: allowed.has(parsed.clients as ModuleLayoutProfile) ? (parsed.clients as ModuleLayoutProfile) : DEFAULT_SUBMODULE_LAYOUTS.clients,
+      purchaseOrders: allowed.has(parsed.purchaseOrders as ModuleLayoutProfile) ? (parsed.purchaseOrders as ModuleLayoutProfile) : DEFAULT_SUBMODULE_LAYOUTS.purchaseOrders,
+    };
+  } catch {
+    return DEFAULT_SUBMODULE_LAYOUTS;
+  }
+}
+
+function getSubmoduleScope(pathname: string): keyof SubmoduleLayoutMap | null {
+  if (pathname.startsWith('/clients')) {
+    return 'clients';
+  }
+  if (pathname.startsWith('/purchase-orders')) {
+    return 'purchaseOrders';
+  }
+  return null;
 }
 
 function getModuleScope(pathname: string): keyof ModuleLayoutMap {
@@ -860,8 +898,10 @@ function AppContent({
     root.classList.remove(...moduleClassNames);
 
     const profiles = loadModuleLayoutProfiles();
+    const submoduleProfiles = loadSubmoduleLayoutProfiles();
     const scope = getModuleScope(location.pathname);
-    const profile = profiles[scope] || 'balanced';
+    const submoduleScope = getSubmoduleScope(location.pathname);
+    const profile = (submoduleScope ? submoduleProfiles[submoduleScope] : undefined) || profiles[scope] || 'balanced';
 
     root.classList.add(`module-layout-${profile}`);
 
