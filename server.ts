@@ -29,6 +29,7 @@ const DB_HEALTH_FAIL_CACHE_MS = Number(process.env.DB_HEALTH_FAIL_CACHE_MS || 15
 const DB_HEALTH_RETRY_ATTEMPTS = Number(process.env.DB_HEALTH_RETRY_ATTEMPTS || 2);
 const UPLOADS_PUBLIC_DIR = path.join(process.cwd(), "public", "uploads");
 const UPLOADS_FALLBACK_DIR = path.join(process.env.TMPDIR || "/tmp", "uploads");
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 const pool = DATABASE_URL
   ? new Pool({
@@ -2023,6 +2024,7 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
   app.get("/api/health", async (req, res) => {
     try {
       if (!pool) {
+<<<<<<< HEAD
         return res.json({
           status: "ok",
           db: "not-configured",
@@ -2036,6 +2038,12 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
             lastError: dbHealthStats.lastError,
           },
         });
+=======
+        if (IS_PRODUCTION) {
+          return res.status(503).json({ status: "error", db: "not-configured" });
+        }
+        return res.json({ status: "ok", db: "not-configured" });
+>>>>>>> b07b928 (Panel de métricas interactivo: gauges, widgets personalizables y reorganización drag & drop)
       }
       await pool.query("select 1");
       return res.json({

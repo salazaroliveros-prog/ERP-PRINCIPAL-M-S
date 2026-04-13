@@ -2,93 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { User, auth, getFallbackAvatarUrl } from '../lib/authStorageClient';
 import { 
-  LayoutDashboard, 
   Construction, 
-  Users, 
-  Package, 
-  HandCoins, 
-  FileText, 
-  LogOut, 
-  Menu, 
-  X,
-  HardHat,
-  Wrench,
-  ShoppingBag,
-  Wifi,
-  WifiOff,
-  ChevronDown,
-  ChevronRight,
-  ChevronLeft,
-  Settings as SettingsIcon,
-  Moon,
-  Sun,
-  Truck,
-  ShieldAlert,
-  AlertCircle,
-  Files,
-  Briefcase,
-  BarChart3,
-  CheckSquare,
-  History,
-  Download
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
-
-const NavItem = ({ to, icon: Icon, label, active, isCollapsed, onClick, onPrefetchRoute, onNavigateIntent }: { to: string, icon: any, label: string, active: boolean, isCollapsed?: boolean, onClick?: () => void, onPrefetchRoute?: (path: string) => void, onNavigateIntent?: (path: string) => void }) => (
-  <motion.div
-    whileTap={{ scale: 0.96 }}
-    whileHover={{ x: 4 }}
-    className="w-full"
-  >
-    <Link
-      to={to}
-      onClick={() => {
-        onNavigateIntent?.(to);
-        onClick?.();
-      }}
-      onMouseEnter={() => onPrefetchRoute?.(to)}
-      onFocus={() => onPrefetchRoute?.(to)}
-      onTouchStart={() => onPrefetchRoute?.(to)}
-      title={isCollapsed ? label : undefined}
-      className={cn(
-        "flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl transition-all duration-300 group relative overflow-hidden",
-        active 
-          ? "text-white shadow-lg shadow-primary-shadow/30" 
-          : "text-slate-500 dark:text-slate-400 hover:bg-primary-light/30 dark:hover:bg-primary/10 hover:text-primary dark:hover:text-primary",
-        isCollapsed && "justify-center px-0"
-      )}
-    >
-      {active && (
-        <motion.div
-          layoutId="sidebar-active"
-          className="absolute inset-0 bg-primary z-0"
-          transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-        />
-      )}
-      <Icon size={18} className={cn("transition-transform group-hover:scale-110 relative z-10 sm:w-5 sm:h-5", active ? "text-white" : "text-slate-400 group-hover:text-primary")} />
-      {!isCollapsed && <span className="font-black text-[10px] sm:text-xs uppercase tracking-widest relative z-10">{label}</span>}
-    </Link>
-  </motion.div>
-);
-
-const NavGroup = ({ label, icon: Icon, children, active, isCollapsed }: { label: string, icon: any, children: React.ReactNode, active?: boolean, isCollapsed?: boolean }) => {
-  const [isOpen, setIsOpen] = useState(active || false);
-  
-  useEffect(() => {
-    if (active) setIsOpen(true);
-  }, [active]);
-
-  if (isCollapsed) {
-    return <div className="py-1 sm:py-2 flex flex-col items-center gap-1">{children}</div>;
-  }
-
-  return (
-    <div className="space-y-0.5 sm:space-y-1">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={cn(
-          "w-full flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 transition-colors group",
+                {/* Aquí se omite el botón de notificaciones para mantener la vista limpia según la preferencia del usuario. */}
           isOpen ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
         )}
       >
@@ -231,6 +146,93 @@ export const Sidebar = ({
               >
                 {isCollapsed ? <ChevronRight size={14} className="sm:w-4 sm:h-4" /> : <ChevronLeft size={14} className="sm:w-4 sm:h-4" />}
               </motion.button>
+<<<<<<< HEAD
+=======
+              <div className="relative">
+                {/* Solo mostrar el botón de notificaciones si hay no leídas */}
+                {unreadCount > 0 && (
+                  <button
+                    onClick={() => {
+                      const nextState = !isNotificationsOpen;
+                      setIsNotificationsOpen(nextState);
+                      if (nextState) {
+                        markAllAsRead();
+                      }
+                    }}
+                    className="p-1.5 sm:p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg sm:rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all relative"
+                    title="Notificaciones"
+                  >
+                    <AlertCircle size={14} className="sm:w-4 sm:h-4" />
+                    <span className="absolute top-0 right-0 w-2 h-2 sm:w-2.5 sm:h-2.5 bg-rose-500 border-2 border-white dark:border-slate-900 rounded-full" />
+                  </button>
+                )}
+
+                <AnimatePresence>
+                  {isNotificationsOpen && (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsNotificationsOpen(false)}
+                        className="fixed inset-0 z-40"
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute left-0 mt-2 w-80 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 z-50 overflow-hidden"
+                      >
+                        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                          <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 dark:text-white">Notificaciones</h3>
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => markAllAsRead()}
+                              className="text-[9px] font-black uppercase text-primary hover:text-primary-hover transition-colors"
+                            >
+                              Marcar todas como leídas
+                            </button>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">{notifications.length} Total</span>
+                          </div>
+                        </div>
+                        <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+                          {notifications.length === 0 ? (
+                            <div className="p-8 text-center">
+                              <p className="text-xs text-slate-400 font-medium italic">No hay notificaciones</p>
+                            </div>
+                          ) : (
+                            notifications.map((n) => (
+                              <div 
+                                key={n.id} 
+                                onClick={() => markAsRead(n.id!)}
+                                className={cn(
+                                  "p-4 border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer",
+                                  !n.read && "bg-primary-light/30 dark:bg-primary/5"
+                                )}
+                              >
+                                <div className="flex gap-3">
+                                  <div className={cn(
+                                    "w-2 h-2 rounded-full mt-1.5 flex-shrink-0",
+                                    n.type === 'subcontract' ? "bg-rose-500" : n.type === 'project' ? "bg-amber-500" : "bg-blue-500"
+                                  )} />
+                                  <div className="flex-1">
+                                    <p className="text-xs font-black text-slate-900 dark:text-white leading-tight mb-1">{n.title}</p>
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-2">{n.body}</p>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
+                                      {n.createdAt ? new Date(n.createdAt).toLocaleString() : 'Reciente'}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+>>>>>>> b07b928 (Panel de métricas interactivo: gauges, widgets personalizables y reorganización drag & drop)
 
               <button
                 onClick={toggleDarkMode}

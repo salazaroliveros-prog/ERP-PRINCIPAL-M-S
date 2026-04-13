@@ -33,6 +33,9 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis
 } from 'recharts';
+import Gauge from './Gauge';
+import DraggableGrid from './DraggableGrid';
+import { WidgetPicker, WidgetType } from './WidgetPicker';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -390,57 +393,7 @@ export default function Dashboard() {
   const [quickBudgetItems, setQuickBudgetItems] = useState<any[]>([]);
   const [isLoadingQuickItems, setIsLoadingQuickItems] = useState(false);
   const [quickSearchTerm, setQuickSearchTerm] = useState('');
-  const [inflationScenarioPct, setInflationScenarioPct] = useState(0);
-  const [selectedProviderVolatility, setSelectedProviderVolatility] = useState('all');
-  const [selectedMarginProjectId, setSelectedMarginProjectId] = useState('all');
-  const [materialWeeklySpikeThreshold, setMaterialWeeklySpikeThreshold] = useState<number>(() => {
-    const saved = Number(localStorage.getItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY) || 10);
-    if (!Number.isFinite(saved)) return 10;
-    return Math.max(3, Math.min(40, saved));
-  });
-  const [physicalFinancialDeviationThreshold, setPhysicalFinancialDeviationThreshold] = useState<number>(() => {
-    const saved = Number(localStorage.getItem(PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY) || 15);
-    if (!Number.isFinite(saved)) return 15;
-    return Math.max(5, Math.min(40, saved));
-  });
-  const [progressChartScope, setProgressChartScope] = useState<'all' | 'selected'>('all');
-  const [executingRecommendationId, setExecutingRecommendationId] = useState<string | null>(null);
-  const [executedRecommendationIds, setExecutedRecommendationIds] = useState<string[]>([]);
-  const [ocrRawText, setOcrRawText] = useState('');
-  const [ocrImageDataUrl, setOcrImageDataUrl] = useState<string | null>(null);
-  const [ocrFileName, setOcrFileName] = useState<string | null>(null);
-  const [ocrSelectedPurchaseOrderId, setOcrSelectedPurchaseOrderId] = useState('');
-  const [ocrSelectedProjectId, setOcrSelectedProjectId] = useState('');
-  const [ocrValidationResult, setOcrValidationResult] = useState<any | null>(null);
-  const [isValidatingDocument, setIsValidatingDocument] = useState(false);
-  const [ocrAutoApply, setOcrAutoApply] = useState(true);
-  const [cashflowScenario, setCashflowScenario] = useState<'base' | 'inflation' | 'stress'>('base');
-  const [ocrValidationHistory, setOcrValidationHistory] = useState<any[]>([]);
-  const [ocrHistoryProjectFilter, setOcrHistoryProjectFilter] = useState('all');
-  const [ocrHistoryDecisionFilter, setOcrHistoryDecisionFilter] = useState<'all' | 'approved' | 'review' | 'rejected'>('all');
-  const [ocrHistoryDateRange, setOcrHistoryDateRange] = useState<'7' | '30' | '90' | 'all'>('30');
-  const [ocrHistorySupplierFilter, setOcrHistorySupplierFilter] = useState('');
-  const [ocrHistoryInvoiceFilter, setOcrHistoryInvoiceFilter] = useState('');
-  const [ocrHistoryViewMode, setOcrHistoryViewMode] = useState<'cards' | 'table'>('cards');
-  const [ocrHistorySortBy, setOcrHistorySortBy] = useState<OcrHistorySortBy>('date');
-  const [ocrHistorySortDirection, setOcrHistorySortDirection] = useState<'asc' | 'desc'>('desc');
-  const [ocrHistorySelectedColumns, setOcrHistorySelectedColumns] = useState<OcrHistoryColumnKey[]>(OCR_HISTORY_DEFAULT_COLUMNS);
-  const [ocrHistoryStickyColumnsEnabled, setOcrHistoryStickyColumnsEnabled] = useState(true);
-  const [ocrHistorySelectedPresetId, setOcrHistorySelectedPresetId] = useState<string>('operaciones');
-  const [ocrHistoryCustomPresets, setOcrHistoryCustomPresets] = useState<OcrCustomNamedPreset[]>([]);
-  const [ocrHistoryPresetNameInput, setOcrHistoryPresetNameInput] = useState('Mi preset OCR');
-  const [ocrHistoryPresetSearchTerm, setOcrHistoryPresetSearchTerm] = useState('');
-  const [ocrHistoryOffset, setOcrHistoryOffset] = useState(0);
-  const [ocrHistoryHasMore, setOcrHistoryHasMore] = useState(false);
-  const [isLoadingMoreOcrHistory, setIsLoadingMoreOcrHistory] = useState(false);
-  const [chartPreferences, setChartPreferences] = useState<DashboardChartPreferences>(
-    THEME_DEFAULT_CHARTS.sunset
-  );
-  const [isMobileChartView, setIsMobileChartView] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth < MOBILE_CHART_BREAKPOINT;
-  });
-  const navigate = useNavigate();
+  // ...existing code...
 
   const ocrHistoryPreferencesStorageKey = useMemo(() => {
     const actor = auth.currentUser?.email || auth.currentUser?.displayName || 'default';
@@ -1197,6 +1150,15 @@ export default function Dashboard() {
       return clampPercent((spent / budget) * 100);
     }
     return clampPercent(project?.financialProgress || 0);
+=======
+  const [widgets, setWidgets] = useState<WidgetType[]>(['presupuesto', 'gastado', 'ganancia', 'obras']);
+  const [showWidgetPicker, setShowWidgetPicker] = useState(false);
+  const navigate = useNavigate();
+
+  const handleAddWidget = (type: WidgetType) => {
+    setWidgets(prev => [...prev, type]);
+    setShowWidgetPicker(false);
+>>>>>>> b07b928 (Panel de métricas interactivo: gauges, widgets personalizables y reorganización drag & drop)
   };
 
   useEffect(() => {
@@ -2641,6 +2603,7 @@ export default function Dashboard() {
         <p className="text-slate-500 dark:text-slate-400">Resumen ejecutivo y salud de proyectos</p>
       </header>
 
+<<<<<<< HEAD
       <div className="bento-grid">
         <StatCard 
           title="Presupuesto Total (Ejecución)" 
@@ -2680,7 +2643,79 @@ export default function Dashboard() {
           icon={Construction} 
           color="bg-purple-600 shadow-purple-600/20"
         />
+=======
+      <div className="mb-6">
+        <button
+          className="px-4 py-2 rounded-xl bg-primary text-white font-bold shadow hover:bg-primary-hover transition-all"
+          onClick={() => setShowWidgetPicker(true)}
+        >
+          + Agregar Widget
+        </button>
+>>>>>>> b07b928 (Panel de métricas interactivo: gauges, widgets personalizables y reorganización drag & drop)
       </div>
+      {showWidgetPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <WidgetPicker onPick={handleAddWidget} />
+          <button className="absolute top-6 right-6 text-white text-2xl" onClick={() => setShowWidgetPicker(false)}>×</button>
+        </div>
+      )}
+      <DraggableGrid cols={4} gap={32}>
+        {widgets.map((w, idx) => {
+          if (w === 'presupuesto') return (
+            <Gauge 
+              key={idx}
+              value={Math.round(totalBudget / 10000)} 
+              min={0} 
+              max={100} 
+              label="Presupuesto (x10k)" 
+              units="k"
+              tooltip={`Presupuesto total asignado a todos los proyectos.\nValor en decenas de miles.`}
+            />
+          );
+          if (w === 'gastado') return (
+            <Gauge 
+              key={idx}
+              value={Math.round(totalSpent / 10000)} 
+              min={0} 
+              max={100} 
+              label="Gastado (x10k)" 
+              units="k"
+              tooltip={`Total gastado en todos los proyectos.\nValor en decenas de miles.`}
+            />
+          );
+          if (w === 'ganancia') return (
+            <Gauge 
+              key={idx}
+              value={Math.round(globalProfit / 10000)} 
+              min={-100} 
+              max={100} 
+              label="Ganancia (x10k)" 
+              units="k"
+              tooltip={`Ganancia estimada (ingresos - gastos).\nValor en decenas de miles.`}
+            />
+          );
+          if (w === 'obras') return (
+            <Gauge 
+              key={idx}
+              value={activeProjects} 
+              min={0} 
+              max={20} 
+              label="Obras Activas" 
+              tooltip={`Cantidad de proyectos actualmente en ejecución.`}
+            />
+          );
+          // Futuro: widgets personalizados
+          return null;
+        })}
+      </DraggableGrid>
+// Estado para widgets y picker
+const [widgets, setWidgets] = useState<WidgetType[]>(['presupuesto', 'gastado', 'ganancia', 'obras']);
+const [showWidgetPicker, setShowWidgetPicker] = useState(false);
+
+const handleAddWidget = (type: WidgetType) => {
+  setWidgets(prev => [...prev, type]);
+  setShowWidgetPicker(false);
+};
 
       <div id="executive-control-center" ref={executiveControlRef} className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">

@@ -42,79 +42,79 @@ type GoogleOauth2Api = {
     callback: (response: GoogleTokenResponse) => void;
     error_callback?: (error: { type?: string }) => void;
     prompt?: string;
-  }) => GoogleTokenClient;
-};
-
-type WindowWithGoogle = Window & {
-  google?: {
-    accounts?: {
-      oauth2?: GoogleOauth2Api;
-    };
-  };
-};
-
-function buildInitials(name: string) {
-  const normalized = String(name || 'Usuario').trim();
-  const parts = normalized.split(/\s+/).filter(Boolean);
-  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || '').join('');
-  return initials || 'U';
-}
-
-export function getFallbackAvatarUrl(name: string) {
-  const initials = buildInitials(name);
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#2563eb'/><stop offset='100%' stop-color='#0ea5e9'/></linearGradient></defs><rect width='96' height='96' rx='16' fill='url(#g)'/><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='Inter, Arial, sans-serif' font-size='34' font-weight='700'>${initials}</text></svg>`;
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
-}
-
-function createDefaultAvatar(name: string) {
-  return getFallbackAvatarUrl(name);
-}
-
-function loadStoredUser(): User | null {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as User;
-    if (!parsed?.uid || !parsed?.email) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-class LocalAuth {
-  public currentUser: User | null = loadStoredUser();
-  private listeners = new Set<AuthStateCallback>();
-
-  private emit() {
-    this.listeners.forEach((callback) => callback(this.currentUser));
-  }
-
-  setCurrentUser(user: User | null) {
-    this.currentUser = user;
-
-    if (typeof window !== 'undefined') {
-      if (user) {
-        window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-      } else {
-        window.localStorage.removeItem(AUTH_STORAGE_KEY);
-      }
+  // ...existing code...
+  async function ensureGoogleIdentityClientLoaded() {
+    if (typeof window === 'undefined') {
+      throw Object.assign(new Error('Google Identity Services no está disponible en este entorno'), {
+        code: 'auth/operation-not-supported-in-this-environment',
+      });
     }
 
-    this.emit();
+    const runtimeWindow = window as WindowWithGoogle;
+    if (runtimeWindow.google?.accounts?.oauth2) {
+      return;
+    }
+
+    if (!googleScriptPromise) {
+      googleScriptPromise = new Promise<void>((resolve, reject) => {
+        const existing = document.querySelector<HTMLScriptElement>(`script[src="${GOOGLE_GSI_SRC}"]`);
+        if (existing) {
+          existing.addEventListener('load', () => resolve(), { once: true });
+          existing.addEventListener('error', () => reject(new Error('No se pudo cargar Google Identity Services')), { once: true });
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = GOOGLE_GSI_SRC;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('No se pudo cargar Google Identity Services'));
+        document.head.appendChild(script);
+      });
+    }
+
+    await googleScriptPromise;
   }
 
-  onAuthStateChanged(callback: AuthStateCallback) {
-    this.listeners.add(callback);
-    callback(this.currentUser);
-    return () => {
-      this.listeners.delete(callback);
-    };
-  }
+  async function requestGoogleAccessToken() {
+    await ensureGoogleIdentityClientLoaded();
+
+    const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+    if (!clientId) {
+      throw Object.assign(new Error('Falta VITE_GOOGLE_CLIENT_ID para habilitar el selector de cuentas de Google'), {
+        code: 'auth/google-client-id-missing',
+      });
+    }
+
+    const runtimeWindow = window as WindowWithGoogle;
+    const oauth2 = runtimeWindow.google?.accounts?.oauth2;
+
+    if (!oauth2) {
+      throw Object.assign(new Error('Google Identity Services no está disponible'), {
+        code: 'auth/google-identity-unavailable',
+      });
+    }
+
+    return new Promise<string>((resolve, reject) => {
+      const tokenClient = oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'openid email profile',
+        prompt: 'select_account',
+        callback: (response) => {
+          if (response.error) {
+            reject(
+              Object.assign(new Error(response.error_description || response.error), {
+                code: `auth/${response.error}`,
+              })
+            );
+            return;
+          }
+
+          if (!response.access_token) {
+            reject(
+              Object.assign(new Error('Google no devolvió un token de acceso'), {
+                code: 'auth/missing-access-token',
 
   async signOut() {
     this.setCurrentUser(null);
@@ -125,6 +125,7 @@ export const auth = new LocalAuth();
 
 export class GoogleAuthProvider {}
 
+<<<<<<< HEAD
 async function ensureGoogleIdentityClientLoaded() {
   if (typeof window === 'undefined') {
     throw Object.assign(new Error('Google Identity Services no está disponible en este entorno'), {
@@ -242,6 +243,19 @@ export async function signInWithPopup(_auth: LocalAuth, _provider: GoogleAuthPro
   if (!normalizedEmail) {
     throw Object.assign(new Error('Google no devolvió un correo válido para iniciar sesión'), {
       code: 'auth/missing-email',
+=======
+const IS_PRODUCTION = import.meta.env.PROD;
+
+export async function signInWithPopup(_auth: LocalAuth, _provider: GoogleAuthProvider) {
+  const defaultEmail = auth.currentUser?.email || '';
+  const email = typeof window !== 'undefined'
+    ? window.prompt('Ingresa tu correo corporativo para iniciar sesion', defaultEmail)
+    : null;
+
+  if (!email || !email.trim()) {
+    const error = Object.assign(new Error('Inicio de sesion cancelado por el usuario'), {
+      code: 'auth/popup-closed-by-user',
+>>>>>>> b07b928 (Panel de métricas interactivo: gauges, widgets personalizables y reorganización drag & drop)
     });
   }
 
@@ -280,7 +294,11 @@ export async function signInWithPopup(_auth: LocalAuth, _provider: GoogleAuthPro
     const persistedUser = (await response.json()) as User;
     auth.setCurrentUser(persistedUser);
     return { user: persistedUser };
-  } catch {
+  } catch (error) {
+    if (IS_PRODUCTION) {
+      throw error;
+    }
+
     const fallbackUser: User = {
       uid: auth.currentUser?.uid || (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}`),
       email: normalizedEmail,
@@ -353,7 +371,8 @@ export async function uploadBytes(fileRef: StorageReference, file: File) {
   }
 
   const data = await response.json();
-  fileRef.downloadURL = String(data?.url || '');
+  const rawUrl = String(data?.url || '');
+  fileRef.downloadURL = rawUrl.startsWith('/') ? buildApiUrl(rawUrl) : rawUrl;
 
   return {
     ref: fileRef,
@@ -462,6 +481,7 @@ const checkApiHealth = async () => {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), HEALTHCHECK_TIMEOUT_MS);
 
+<<<<<<< HEAD
     try {
       const response = await fetch(buildApiUrl('/api/health'), {
         method: 'GET',
@@ -480,6 +500,19 @@ const checkApiHealth = async () => {
     if (attempt < HEALTHCHECK_RETRY_ATTEMPTS) {
       await wait(attempt * 250);
     }
+=======
+  try {
+    const response = await fetch(buildApiUrl('/api/health'), {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timeout);
+>>>>>>> b07b928 (Panel de métricas interactivo: gauges, widgets personalizables y reorganización drag & drop)
   }
 
   return false;

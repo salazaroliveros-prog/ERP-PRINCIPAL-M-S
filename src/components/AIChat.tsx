@@ -57,39 +57,41 @@ const CONTROL_HISTORY_MAX_ITEMS = 24;
 
 const loadControlHistory = () => {
   if (typeof window === 'undefined') return [] as PortfolioControlSnapshot[];
-  try {
-    const raw = window.localStorage.getItem(CONTROL_HISTORY_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as PortfolioControlSnapshot[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((item) => item && item.createdAt)
-      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
-  } catch {
-    return [];
-  }
-};
+    // Mostrar acceso discreto: botón pequeño en la esquina inferior derecha
+    const [showAgentButton, setShowAgentButton] = useState(true);
 
-const persistControlHistory = (items: PortfolioControlSnapshot[]) => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(CONTROL_HISTORY_STORAGE_KEY, JSON.stringify(items.slice(0, CONTROL_HISTORY_MAX_ITEMS)));
-  } catch {
-    // Ignore storage quota errors.
-  }
-};
+    // ...existing code...
 
-const GEMINI_DIAGNOSTIC_PREFIX = '[GEMINI_DIAGNOSTIC]';
-const AI_DIAGNOSTIC_PREFIX = '[AI_DIAGNOSTIC]';
-const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+    const latestControlSnapshot = controlHistory[0] || null;
+    const previousControlSnapshot = controlHistory[1] || null;
+    const scoreDelta = latestControlSnapshot && previousControlSnapshot
+      ? Number((latestControlSnapshot.score - previousControlSnapshot.score).toFixed(1))
+      : null;
 
-const getEmailFromPrompt = (prompt: string) => {
-  const match = prompt.match(EMAIL_REGEX);
-  return match ? match[0].toLowerCase() : '';
-};
+    // ...existing code...
 
-const slugifyText = (value: string) =>
-  String(value || 'reporte')
+    return (
+      <div className={cn(
+        "fixed z-[100] transition-all duration-300",
+        isOpen && isMobile ? "inset-0 flex items-end justify-center p-4" : "bottom-20 sm:bottom-6 right-6"
+      )}>
+        <AnimatePresence>
+          {!isOpen && showAgentButton && (
+            <motion.button
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setIsOpen(true)}
+              className="w-8 h-8 sm:w-10 sm:h-10 bg-primary text-white rounded-full shadow-lg flex items-center justify-center hover:bg-primary-hover transition-all group fixed bottom-4 right-4 z-[110]"
+              style={{ opacity: 0.7 }}
+              title="Abrir Asistente IA"
+            >
+              <Bot size={18} className="group-hover:scale-110 transition-transform" />
+            </motion.button>
+          )}
+        </AnimatePresence>
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9_-]/g, '_')
@@ -1037,11 +1039,39 @@ export default function AIChat() {
     { icon: Wrench, label: "Ajustes Plataforma", prompt: "¿Cómo puedo configurar alertas automáticas para stock bajo?" }
   ];
 
+<<<<<<< HEAD
   const latestControlSnapshot = controlHistory[0] || null;
   const previousControlSnapshot = controlHistory[1] || null;
   const scoreDelta = latestControlSnapshot && previousControlSnapshot
     ? Number((latestControlSnapshot.score - previousControlSnapshot.score).toFixed(1))
     : null;
+=======
+  // Mostrar acceso discreto: botón pequeño en la esquina inferior derecha
+  const [showAgentButton, setShowAgentButton] = useState(true);
+
+  return (
+    <div className={cn(
+      "fixed z-[100] transition-all duration-300",
+      isOpen && isMobile && !isMinimized ? "inset-0 flex items-end justify-center p-4" : "bottom-20 sm:bottom-6 right-6"
+    )}>
+      <AnimatePresence>
+        {!isOpen && showAgentButton && (
+          <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsOpen(true)}
+            className="w-8 h-8 sm:w-10 sm:h-10 bg-primary text-white rounded-full shadow-lg flex items-center justify-center hover:bg-primary-hover transition-all group fixed bottom-4 right-4 z-[110]"
+            style={{ opacity: 0.7 }}
+            title="Abrir Asistente IA"
+          >
+            <Bot size={18} className="group-hover:scale-110 transition-transform" />
+          </motion.button>
+        )}
+      </AnimatePresence>
+>>>>>>> b07b928 (Panel de métricas interactivo: gauges, widgets personalizables y reorganización drag & drop)
 
   const weeklyBaselineSnapshot = useMemo(() => {
     if (!latestControlSnapshot || controlHistory.length < 2) return null;
@@ -1311,9 +1341,9 @@ export default function AIChat() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Quick Actions Popup */}
+                {/* Quick Actions Popup oculto por defecto, solo se muestra si showQuickActions y showAgentButton están activos */}
                 <AnimatePresence>
-                  {showQuickActions && (
+                  {showQuickActions && showAgentButton && (
                     <motion.div 
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}

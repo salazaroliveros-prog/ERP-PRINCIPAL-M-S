@@ -1,4 +1,5 @@
-# ERP Constructora WM_M&S
+
+doa# ERP Constructora WM_M&S
 
 Frontend React/Vite desplegable en GitHub Pages.
 Backend en PostgreSQL (Express + SQL migrations).
@@ -254,6 +255,12 @@ Fase completada en este repo:
 - Notificaciones y auditoria persistidas en PostgreSQL.
 - Inicio de sesion persistido en PostgreSQL (tabla app_users) con fallback local si la BD no esta disponible.
 - Carga de archivos migrada a endpoint local /api/uploads con archivos servidos desde /uploads.
+
+Comportamiento por entorno:
+
+- Desarrollo: si falla /api/auth/login, el cliente puede usar fallback local para no bloquear pruebas.
+- Produccion: no hay fallback local de login; la API SQL debe estar operativa.
+- Produccion: GET /api/health responde 503 cuando falta DATABASE_URL.
 
 Pendiente para terminar migracion total:
 
