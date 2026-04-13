@@ -1,3 +1,5 @@
+import FloatingToolsButton from './components/FloatingToolsButton';
+import TopbarNotificationButton from './components/TopbarNotificationButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User, auth, getFallbackAvatarUrl } from './lib/authStorageClient';
@@ -1187,7 +1189,8 @@ function AppContent({
                 </div>
               </div>
 
-              <div className="flex items-center justify-center min-w-0">
+
+              <div className="flex items-center justify-center min-w-0 gap-2 sm:gap-3">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <div
                     className={cn(
@@ -1206,13 +1209,17 @@ function AppContent({
                     />
                   </div>
                   <div className="leading-tight min-w-0">
-                    <p className={cn("font-black uppercase tracking-widest text-slate-900 dark:text-white truncate transition-all duration-300", isSidebarOpen ? "text-[9px] sm:text-xs" : "text-[10px] sm:text-sm")}>
+                    <p className={cn("font-black uppercase tracking-widest text-slate-900 dark:text-white truncate transition-all duration-300", isSidebarOpen ? "text-[9px] sm:text-xs" : "text-[10px] sm:text-sm")}> 
                       CONSTRUCTORA WM/M&S
                     </p>
-                    <p className={cn("font-semibold text-slate-600 dark:text-slate-300 truncate transition-all duration-300", isSidebarOpen ? "text-[7px] sm:text-[10px]" : "text-[8px] sm:text-xs")}>
+                    <p className={cn("font-semibold text-slate-600 dark:text-slate-300 truncate transition-all duration-300", isSidebarOpen ? "text-[7px] sm:text-[10px]" : "text-[8px] sm:text-xs")}> 
                       Edificando El Futuro
                     </p>
                   </div>
+                </div>
+                {/* Campanita de notificaciones fija en la barra superior */}
+                <div className="ml-2">
+                  <TopbarNotificationButton unreadCount={unreadCount} onClick={() => window.dispatchEvent(new Event('OPEN_NOTIFICATIONS_DOCK'))} />
                 </div>
               </div>
 
@@ -1300,25 +1307,8 @@ function AppContent({
           )}
         </main>
 
-        <Suspense fallback={null}>
-          <AIChat />
-        </Suspense>
-
-        <Suspense fallback={null}>
-          <QuickActionsLauncher />
-        </Suspense>
-        <Suspense fallback={null}>
-          <SideToolsDock />
-        </Suspense>
-        <Suspense fallback={null}>
-          <NotificationsDock />
-        </Suspense>
-
-        {NAV_METRICS_ENABLED && (
-          <Suspense fallback={null}>
-            <NavMetricsPanel />
-          </Suspense>
-        )}
+        {/* Botón flotante solo para Chat IA y Acciones rápidas */}
+        <FloatingToolsButton />
       </div>
   );
 }
