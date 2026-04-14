@@ -1150,7 +1150,8 @@ export default function Dashboard() {
       return clampPercent((spent / budget) * 100);
     }
     return clampPercent(project?.financialProgress || 0);
-=======
+  }
+
   const [widgets, setWidgets] = useState<WidgetType[]>(['presupuesto', 'gastado', 'ganancia', 'obras']);
   const [showWidgetPicker, setShowWidgetPicker] = useState(false);
   const navigate = useNavigate();
@@ -1158,7 +1159,7 @@ export default function Dashboard() {
   const handleAddWidget = (type: WidgetType) => {
     setWidgets(prev => [...prev, type]);
     setShowWidgetPicker(false);
->>>>>>> b07b928 (Panel de métricas interactivo: gauges, widgets personalizables y reorganización drag & drop)
+  } 
   };
 
   useEffect(() => {
@@ -2603,47 +2604,6 @@ export default function Dashboard() {
         <p className="text-slate-500 dark:text-slate-400">Resumen ejecutivo y salud de proyectos</p>
       </header>
 
-<<<<<<< HEAD
-      <div className="bento-grid">
-        <StatCard 
-          title="Presupuesto Total (Ejecución)" 
-          value={formatCurrency(totalBudget)} 
-          icon={HandCoins} 
-          trend="up" 
-          trendValue="+12.0%" 
-          color="bg-primary shadow-primary/20"
-        />
-        <StatCard 
-          title="Costos en Evaluación" 
-          value={formatCurrency(evaluationBudget)} 
-          icon={Clock} 
-          trend="up" 
-          trendValue={`${formatCurrency(evaluationSpent)} gastado`} 
-          color="bg-violet-600 shadow-violet-600/20"
-        />
-        <StatCard 
-          title="Total Gastado" 
-          value={formatCurrency(totalSpent)} 
-          icon={TrendingDown} 
-          trend="up" 
-          trendValue="+8.0%" 
-          color="bg-blue-600 shadow-blue-600/20"
-        />
-        <StatCard 
-          title="Ganancia Estimada" 
-          value={formatCurrency(globalProfit)} 
-          icon={TrendingUp} 
-          trend="up" 
-          trendValue="+15.0%" 
-          color="bg-emerald-600 shadow-emerald-600/20"
-        />
-        <StatCard 
-          title="Obras Activas" 
-          value={activeProjects} 
-          icon={Construction} 
-          color="bg-purple-600 shadow-purple-600/20"
-        />
-=======
       <div className="mb-6">
         <button
           className="px-4 py-2 rounded-xl bg-primary text-white font-bold shadow hover:bg-primary-hover transition-all"
@@ -2651,7 +2611,7 @@ export default function Dashboard() {
         >
           + Agregar Widget
         </button>
->>>>>>> b07b928 (Panel de métricas interactivo: gauges, widgets personalizables y reorganización drag & drop)
+      </div>
       </div>
       {showWidgetPicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
