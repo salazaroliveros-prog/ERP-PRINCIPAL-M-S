@@ -2111,28 +2111,25 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
           message: 'GITHUB_MODELS_TOKEN no configurado. Define GITHUB_MODELS_TOKEN en el entorno del servidor.',
         });
       }
-
-      if (!runTest) {
+    try {
+      if (!pool) {
+        if (IS_PRODUCTION) {
+          return res.status(503).json({ status: "error", db: "not-configured" });
+        }
         return res.json({
-          status: 'ok',
-          ai: 'github-models',
-          provider: AI_PROVIDER,
-          configured: true,
-          endpoint: GITHUB_MODELS_ENDPOINT,
-          model: GITHUB_MODELS_MODEL,
-          runTest: false,
+          status: "ok",
+          db: "not-configured",
+          telemetry: {
+            checks: dbHealthStats.checks,
+            successes: dbHealthStats.successes,
+            failures: dbHealthStats.failures,
+            consecutiveFailures: dbHealthStats.consecutiveFailures,
+            lastSuccessAt: dbHealthStats.lastSuccessAt,
+            lastFailureAt: dbHealthStats.lastFailureAt,
+            lastError: dbHealthStats.lastError,
+          },
         });
       }
-
-      try {
-        const response = await fetch(GITHUB_MODELS_ENDPOINT, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${GITHUB_MODELS_TOKEN}`,
-          },
-          body: JSON.stringify({
-            model: GITHUB_MODELS_MODEL,
             temperature: 0,
             max_tokens: 16,
             messages: [
