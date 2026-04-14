@@ -2709,7 +2709,6 @@ export default function Dashboard() {
 
       {/* Estado para widgets y picker (debe ir fuera del render) */}
 
-
       <div id="executive-control-center" ref={executiveControlRef} className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div>
@@ -4588,6 +4587,7 @@ export default function Dashboard() {
           </div>
         )}
       </AnimatePresence>
+
     </div>
   );
 }

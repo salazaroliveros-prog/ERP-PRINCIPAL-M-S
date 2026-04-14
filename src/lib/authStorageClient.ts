@@ -42,8 +42,11 @@ type GoogleOauth2Api = {
     callback: (response: GoogleTokenResponse) => void;
     error_callback?: (error: { type?: string }) => void;
     prompt?: string;
-  // ...existing code...
-  async function ensureGoogleIdentityClientLoaded() {
+  }) => GoogleTokenClient;
+};
+
+// ...existing code...
+async function ensureGoogleIdentityClientLoaded() {
     if (typeof window === 'undefined') {
       throw Object.assign(new Error('Google Identity Services no está disponible en este entorno'), {
         code: 'auth/operation-not-supported-in-this-environment',
