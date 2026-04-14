@@ -2704,15 +2704,11 @@ export default function Dashboard() {
             </Sparklines>
           )}
         </div>
-      </DraggableGrid>
-// Estado para widgets y picker
-const [widgets, setWidgets] = useState<WidgetType[]>(['presupuesto', 'gastado', 'ganancia', 'obras']);
-const [showWidgetPicker, setShowWidgetPicker] = useState(false);
 
-const handleAddWidget = (type: WidgetType) => {
-  setWidgets(prev => [...prev, type]);
-  setShowWidgetPicker(false);
-};
+      </DraggableGrid>
+
+      {/* Estado para widgets y picker (debe ir fuera del render) */}
+
 
       <div id="executive-control-center" ref={executiveControlRef} className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
