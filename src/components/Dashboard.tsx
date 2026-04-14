@@ -34,6 +34,7 @@ import {
   PolarRadiusAxis
 } from 'recharts';
 import Gauge from './Gauge';
+import { Sparklines, SparklinesLine } from 'react-sparklines';
 import DraggableGrid from './DraggableGrid';
 import { WidgetPicker, WidgetType } from './WidgetPicker';
 import { 
@@ -2620,53 +2621,89 @@ export default function Dashboard() {
         </div>
       )}
       <DraggableGrid cols={4} gap={32}>
-        {widgets.map((w, idx) => {
-          if (w === 'presupuesto') return (
-            <Gauge 
-              key={idx}
-              value={Math.round(totalBudget / 10000)} 
-              min={0} 
-              max={100} 
-              label="Presupuesto (x10k)" 
-              units="k"
-              tooltip={`Presupuesto total asignado a todos los proyectos.\nValor en decenas de miles.`}
-            />
-          );
-          if (w === 'gastado') return (
-            <Gauge 
-              key={idx}
-              value={Math.round(totalSpent / 10000)} 
-              min={0} 
-              max={100} 
-              label="Gastado (x10k)" 
-              units="k"
-              tooltip={`Total gastado en todos los proyectos.\nValor en decenas de miles.`}
-            />
-          );
-          if (w === 'ganancia') return (
-            <Gauge 
-              key={idx}
-              value={Math.round(globalProfit / 10000)} 
-              min={-100} 
-              max={100} 
-              label="Ganancia (x10k)" 
-              units="k"
-              tooltip={`Ganancia estimada (ingresos - gastos).\nValor en decenas de miles.`}
-            />
-          );
-          if (w === 'obras') return (
-            <Gauge 
-              key={idx}
-              value={activeProjects} 
-              min={0} 
-              max={20} 
-              label="Obras Activas" 
-              tooltip={`Cantidad de proyectos actualmente en ejecución.`}
-            />
-          );
-          // Futuro: widgets personalizados
-          return null;
-        })}
+        {/* Gauge: Presupuesto */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+          <Gauge
+            value={Math.round(totalBudget / 10000)}
+            min={0}
+            max={Math.max(100, Math.ceil(totalBudget / 10000) + 10)}
+            label="Presupuesto Total"
+            units="k"
+            color="#3b82f6"
+            tooltip={`Presupuesto total asignado a todos los proyectos.\nValor en decenas de miles.`}
+          />
+          {Array.isArray(profitTrendData) && profitTrendData.length > 0 && (
+            <Sparklines data={profitTrendData.map(d=>d.presupuesto || 0)} width={60} height={18} margin={4}>
+              <SparklinesLine color="#3b82f6" style={{strokeWidth:2,fill:'none'}} />
+            </Sparklines>
+          )}
+        </div>
+        {/* Gauge: Gastado */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+          <Gauge
+            value={Math.round(totalSpent / 10000)}
+            min={0}
+            max={Math.max(100, Math.ceil(totalBudget / 10000) + 10)}
+            label="Gastado"
+            units="k"
+            color="#ef4444"
+            tooltip={`Total gastado en todos los proyectos.\nValor en decenas de miles.`}
+          />
+          {Array.isArray(profitTrendData) && profitTrendData.length > 0 && (
+            <Sparklines data={profitTrendData.map(d=>d.gastado || 0)} width={60} height={18} margin={4}>
+              <SparklinesLine color="#ef4444" style={{strokeWidth:2,fill:'none'}} />
+            </Sparklines>
+          )}
+        </div>
+        {/* Gauge: Ganancia */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+          <Gauge
+            value={Math.round(globalProfit / 10000)}
+            min={-100}
+            max={100}
+            label="Ganancia"
+            units="k"
+            color={globalProfit >= 0 ? '#10b981' : '#ef4444'}
+            tooltip={`Ganancia estimada (ingresos - gastos).\nValor en decenas de miles.`}
+          />
+          {Array.isArray(profitTrendData) && profitTrendData.length > 0 && (
+            <Sparklines data={profitTrendData.map(d=>d.profit || 0)} width={60} height={18} margin={4}>
+              <SparklinesLine color={globalProfit >= 0 ? '#10b981' : '#ef4444'} style={{strokeWidth:2,fill:'none'}} />
+            </Sparklines>
+          )}
+        </div>
+        {/* Gauge: Obras Activas */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+          <Gauge
+            value={activeProjects}
+            min={0}
+            max={20}
+            label="Obras Activas"
+            color="#6366f1"
+            tooltip={`Cantidad de proyectos actualmente en ejecución.`}
+          />
+          {Array.isArray(projectHealthChartData) && projectHealthChartData.length > 0 && (
+            <Sparklines data={projectHealthChartData.map(d=>d.obras || 0)} width={60} height={18} margin={4}>
+              <SparklinesLine color="#6366f1" style={{strokeWidth:2,fill:'none'}} />
+            </Sparklines>
+          )}
+        </div>
+        {/* Gauge: Score Semáforo Ejecutivo */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+          <Gauge
+            value={portfolioSemaforo?.score || 0}
+            min={0}
+            max={100}
+            label="Salud Portafolio (%)"
+            color={portfolioSemaforo?.status === 'verde' ? '#10b981' : portfolioSemaforo?.status === 'amarillo' ? '#f59e42' : '#ef4444'}
+            tooltip={`Score global del Semáforo Ejecutivo IA.\nVerde: óptimo, Amarillo: atención, Rojo: crítico.`}
+          />
+          {Array.isArray(portfolioSemaforo?.scoreHistory) && portfolioSemaforo.scoreHistory.length > 0 && (
+            <Sparklines data={portfolioSemaforo.scoreHistory} width={60} height={18} margin={4}>
+              <SparklinesLine color={portfolioSemaforo?.status === 'verde' ? '#10b981' : portfolioSemaforo?.status === 'amarillo' ? '#f59e42' : '#ef4444'} style={{strokeWidth:2,fill:'none'}} />
+            </Sparklines>
+          )}
+        </div>
       </DraggableGrid>
 // Estado para widgets y picker
 const [widgets, setWidgets] = useState<WidgetType[]>(['presupuesto', 'gastado', 'ganancia', 'obras']);
