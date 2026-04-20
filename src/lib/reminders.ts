@@ -100,7 +100,7 @@ export function loadReminders(): CalendarReminder[] {
 
     return parsed
       .filter((item) => item && typeof item === 'object')
-      .map((item) => ({
+      .map((item): CalendarReminder => ({
         id: String(item.id || (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}`)),
         title: String(item.title || '').trim(),
         note: String(item.note || '').trim(),
@@ -281,13 +281,12 @@ function loadDispatchMap() {
   try {
     const raw = window.localStorage.getItem(REMINDER_DISPATCH_STORAGE_KEY);
     if (!raw) return new Map<string, number>();
-    const entries = JSON.parse(raw) as Array<[string, number]>;
-    return new Map(
-      (Array.isArray(entries) ? entries : [])
-        .filter((entry) => Array.isArray(entry) && entry.length === 2)
-        .map((entry) => [String(entry[0]), Number(entry[1])])
-        .filter((entry) => Number.isFinite(entry[1]))
-    );
+    const entries = JSON.parse(raw) as unknown;
+    const normalizedEntries: Array<[string, number]> = (Array.isArray(entries) ? entries : [])
+      .filter((entry): entry is [unknown, unknown] => Array.isArray(entry) && entry.length === 2)
+      .map((entry) => [String(entry[0]), Number(entry[1])] as [string, number])
+      .filter((entry) => Number.isFinite(entry[1]));
+    return new Map<string, number>(normalizedEntries);
   } catch {
     return new Map<string, number>();
   }
@@ -315,7 +314,6 @@ async function showBrowserReminder(reminder: CalendarReminder) {
         await registration.showNotification(title, {
           body,
           tag: `reminder_${reminder.id}`,
-          renotify: false,
           requireInteraction: false,
           data: { reminderId: reminder.id },
         });

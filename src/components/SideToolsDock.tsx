@@ -101,7 +101,7 @@ export function SideToolsDock() {
     window.removeEventListener('pointercancel', stopDragging);
   };
 
-  const startDragging = (event: React.PointerEvent<HTMLDivElement>) => {
+  const startDragging = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (typeof window === 'undefined' || window.innerHeight <= 0) return;
     draggingRef.current = true;
     startPointerYRef.current = event.clientY;

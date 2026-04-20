@@ -1,4 +1,3 @@
-import FloatingToolsButton from './components/FloatingToolsButton';
 import TopbarNotificationButton from './components/TopbarNotificationButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
@@ -874,16 +873,43 @@ function AppContent({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [enhancementsReady, setEnhancementsReady] = useState(false);
+  const [isTopbarNotificationsOpen, setIsTopbarNotificationsOpen] = useState(false);
   const prefetchedRoutesRef = useRef<Set<string>>(new Set());
+  const topbarNotificationsRef = useRef<HTMLDivElement | null>(null);
   const { isDarkMode, toggleDarkMode } = useTheme();
-  const { unreadCount } = useNotifications();
+  const { notifications, unreadCount, markAllAsRead, markAsRead, removeNotification } = useNotifications();
   const location = useLocation();
   const lastQuickActionTokenRef = useRef<string>('');
   const [moduleLayoutRefreshTick, setModuleLayoutRefreshTick] = useState(0);
 
   useEffect(() => {
     setIsSidebarOpen(false);
+    setIsTopbarNotificationsOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const openFromTopbarButton = () => {
+      setIsTopbarNotificationsOpen(true);
+      void markAllAsRead();
+    };
+
+    window.addEventListener('OPEN_NOTIFICATIONS_DOCK', openFromTopbarButton);
+    return () => window.removeEventListener('OPEN_NOTIFICATIONS_DOCK', openFromTopbarButton);
+  }, [markAllAsRead]);
+
+  useEffect(() => {
+    if (!isTopbarNotificationsOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!topbarNotificationsRef.current) return;
+      if (!topbarNotificationsRef.current.contains(event.target as Node)) {
+        setIsTopbarNotificationsOpen(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    return () => window.removeEventListener('mousedown', handlePointerDown);
+  }, [isTopbarNotificationsOpen]);
 
   useEffect(() => {
     const handleModuleLayoutChanged = () => {
@@ -1167,7 +1193,7 @@ function AppContent({
         >
           <div
             className={cn(
-              "mx-auto max-w-[1600px] bg-blue-500/50 dark:bg-white/50 border border-blue-200/50 dark:border-white/50 backdrop-blur-xl shadow-lg rounded-2xl px-3 sm:px-4 pointer-events-auto transition-all duration-300",
+              "mx-auto max-w-[1600px] bg-white/22 dark:bg-slate-900/26 border border-white/35 dark:border-slate-700/35 backdrop-blur-xl shadow-md rounded-2xl px-3 sm:px-4 pointer-events-auto transition-all duration-300",
               isSidebarOpen ? "py-1.5 sm:py-2" : "py-2 sm:py-3"
             )}
           >
@@ -1218,8 +1244,98 @@ function AppContent({
                   </div>
                 </div>
                 {/* Campanita de notificaciones fija en la barra superior */}
-                <div className="ml-2">
-                  <TopbarNotificationButton unreadCount={unreadCount} onClick={() => window.dispatchEvent(new Event('OPEN_NOTIFICATIONS_DOCK'))} />
+                <div className="ml-2 relative" ref={topbarNotificationsRef}>
+                  <TopbarNotificationButton
+                    unreadCount={unreadCount}
+                    onClick={() => {
+                      const next = !isTopbarNotificationsOpen;
+                      setIsTopbarNotificationsOpen(next);
+                      if (next) {
+                        void markAllAsRead();
+                      }
+                    }}
+                  />
+                  <AnimatePresence>
+                    {isTopbarNotificationsOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                        className="absolute right-0 top-12 sm:top-14 z-[140] w-[min(92vw,380px)] bg-white/95 dark:bg-slate-900/95 border border-slate-200/80 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden"
+                      >
+                        <div className="px-3 py-2.5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between bg-slate-50/90 dark:bg-slate-800/90">
+                          <h3 className="font-black text-[11px] uppercase tracking-widest text-slate-900 dark:text-white">Notificaciones</h3>
+                          <button
+                            onClick={() => markAllAsRead()}
+                            className="text-[10px] font-black uppercase text-primary hover:text-primary-hover"
+                          >
+                            Marcar leídas
+                          </button>
+                        </div>
+                        <div className="max-h-[52vh] overflow-y-auto custom-scrollbar">
+                          {notifications.length === 0 ? (
+                            <div className="p-5 text-center">
+                              <p className="text-xs text-slate-500 dark:text-slate-300 font-semibold">No hay notificaciones</p>
+                            </div>
+                          ) : (
+                            notifications.map((notification) => (
+                              <div
+                                key={notification.id || `${notification.type}_${notification.createdAt}_${notification.title}`}
+                                onClick={() => {
+                                  if (notification.id) {
+                                    void markAsRead(notification.id);
+                                  }
+                                }}
+                                className={cn(
+                                  "px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors",
+                                  notification.id ? "cursor-pointer" : "cursor-default",
+                                  !notification.read && "bg-primary-light/40 dark:bg-primary/15"
+                                )}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div
+                                    className={cn(
+                                      "mt-1 w-2 h-2 rounded-full flex-shrink-0",
+                                      notification.type === 'subcontract'
+                                        ? "bg-rose-500"
+                                        : notification.type === 'project'
+                                          ? "bg-amber-500"
+                                          : notification.type === 'inventory'
+                                            ? "bg-blue-500"
+                                            : "bg-slate-500"
+                                    )}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-black text-slate-900 dark:text-white leading-tight mb-1">{notification.title}</p>
+                                    <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed mb-1.5 break-words">{notification.body}</p>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                                        {notification.createdAt ? new Date(notification.createdAt).toLocaleString() : 'Reciente'}
+                                      </p>
+                                      {notification.id && (
+                                        <button
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            void removeNotification(notification.id!);
+                                          }}
+                                          className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:text-slate-300 dark:hover:text-rose-300 dark:hover:bg-rose-900/30 transition-colors"
+                                          title="Eliminar notificación"
+                                          aria-label="Eliminar notificación"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
 
@@ -1306,9 +1422,6 @@ function AppContent({
             </Suspense>
           )}
         </main>
-
-        {/* Botón flotante solo para Chat IA y Acciones rápidas */}
-        <FloatingToolsButton />
       </div>
   );
 }

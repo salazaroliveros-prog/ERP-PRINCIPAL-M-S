@@ -700,17 +700,34 @@
   }
 
   /* Mobile Responsiveness & Overflow Fixes */
-  html, body {
+  html, body, #root {
     overflow-x: hidden;
     width: 100%;
+    max-width: 100%;
     position: relative;
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Responsive Table Container */
+  /* Force vertical scrolling and prevent horizontal overflow in modules */
+  .overflow-x-auto,
+  .overflow-x-scroll,
+  .table-container {
+    overflow-x: hidden !important;
+  }
+
   .table-container {
     width: 100%;
-    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  th,
+  td {
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   /* Ensure images don't overflow */

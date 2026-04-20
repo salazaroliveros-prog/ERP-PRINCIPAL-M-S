@@ -2,8 +2,93 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { User, auth, getFallbackAvatarUrl } from '../lib/authStorageClient';
 import { 
+  LayoutDashboard, 
   Construction, 
-                {/* Aquí se omite el botón de notificaciones para mantener la vista limpia según la preferencia del usuario. */}
+  Users, 
+  Package, 
+  HandCoins, 
+  FileText, 
+  LogOut, 
+  Menu, 
+  X,
+  HardHat,
+  Wrench,
+  ShoppingBag,
+  Wifi,
+  WifiOff,
+  ChevronDown,
+  ChevronRight,
+  ChevronLeft,
+  Settings as SettingsIcon,
+  Moon,
+  Sun,
+  AlertCircle,
+  Truck,
+  ShieldAlert,
+  Files,
+  Briefcase,
+  BarChart3,
+  CheckSquare,
+  History,
+  Download
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { cn } from '../lib/utils';
+
+const NavItem = ({ to, icon: Icon, label, active, isCollapsed, onClick, onPrefetchRoute, onNavigateIntent }: { to: string, icon: any, label: string, active: boolean, isCollapsed?: boolean, onClick?: () => void, onPrefetchRoute?: (path: string) => void, onNavigateIntent?: (path: string) => void }) => (
+  <motion.div
+    whileTap={{ scale: 0.96 }}
+    whileHover={{ x: 4 }}
+    className="w-full"
+  >
+    <Link
+      to={to}
+      onClick={() => {
+        onNavigateIntent?.(to);
+        onClick?.();
+      }}
+      onMouseEnter={() => onPrefetchRoute?.(to)}
+      onFocus={() => onPrefetchRoute?.(to)}
+      onTouchStart={() => onPrefetchRoute?.(to)}
+      title={isCollapsed ? label : undefined}
+      className={cn(
+        "flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl transition-all duration-300 group relative overflow-hidden",
+        active 
+          ? "text-white shadow-lg shadow-primary-shadow/30" 
+          : "text-slate-500 dark:text-slate-400 hover:bg-primary-light/30 dark:hover:bg-primary/10 hover:text-primary dark:hover:text-primary",
+        isCollapsed && "justify-center px-0"
+      )}
+    >
+      {active && (
+        <motion.div
+          layoutId="sidebar-active"
+          className="absolute inset-0 bg-primary z-0"
+          transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+        />
+      )}
+      <Icon size={18} className={cn("transition-transform group-hover:scale-110 relative z-10 sm:w-5 sm:h-5", active ? "text-white" : "text-slate-400 group-hover:text-primary")} />
+      {!isCollapsed && <span className="font-black text-[10px] sm:text-xs uppercase tracking-widest relative z-10">{label}</span>}
+    </Link>
+  </motion.div>
+);
+
+const NavGroup = ({ label, icon: Icon, children, active, isCollapsed }: { label: string, icon: any, children: React.ReactNode, active?: boolean, isCollapsed?: boolean }) => {
+  const [isOpen, setIsOpen] = useState(active || false);
+  
+  useEffect(() => {
+    if (active) setIsOpen(true);
+  }, [active]);
+
+  if (isCollapsed) {
+    return <div className="py-1 sm:py-2 flex flex-col items-center gap-1">{children}</div>;
+  }
+
+  return (
+    <div className="space-y-0.5 sm:space-y-1">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          "w-full flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 transition-colors group",
           isOpen ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
         )}
       >
@@ -38,6 +123,8 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { Logo } from './Logo';
 
+import { useNotifications } from '../contexts/NotificationContext';
+
 export const Sidebar = ({ 
   user, 
   isOpen, 
@@ -46,6 +133,7 @@ export const Sidebar = ({
   onPrefetchRoute,
   onNavigateIntent,
   onClose,
+  initialNotificationsOpen = false,
   deferredPrompt,
   onInstall
 }: { 
@@ -56,18 +144,35 @@ export const Sidebar = ({
   onPrefetchRoute?: (path: string) => void,
   onNavigateIntent?: (path: string) => void,
   onClose: () => void,
+  initialNotificationsOpen?: boolean,
   deferredPrompt: any,
   onInstall: () => void
 }) => {
   const { isDarkMode, toggleDarkMode } = useTheme();
+  const { notifications, unreadCount, markAllAsRead, markAsRead, setPanelOpen } = useNotifications();
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(initialNotificationsOpen);
   const location = useLocation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showInstall, setShowInstall] = useState(!!deferredPrompt);
-  const hiddenOffset = isCollapsed ? -120 : -340;
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
+  const isTouchViewport = viewportWidth < 1024;
+  const expandedWidth = viewportWidth < 640
+    ? Math.min(320, Math.max(264, Math.round(viewportWidth * 0.88)))
+    : 288;
+  const sidebarWidth = isCollapsed ? 80 : expandedWidth;
+  const hiddenOffset = -(sidebarWidth + 20);
 
   useEffect(() => {
     setShowInstall(!!deferredPrompt);
   }, [deferredPrompt]);
+
+  useEffect(() => {
+    setIsNotificationsOpen(initialNotificationsOpen);
+  }, [initialNotificationsOpen]);
+
+  useEffect(() => {
+    setPanelOpen(isNotificationsOpen);
+  }, [isNotificationsOpen, setPanelOpen]);
 
   const isOperacionesActive = ["/projects", "/quotes", "/clients", "/safety", "/workflows", "/risks"].some(path => location.pathname.startsWith(path));
   const isLogisticaActive = ["/inventory", "/equipment", "/purchase-orders", "/suppliers"].some(path => location.pathname.startsWith(path));
@@ -95,16 +200,15 @@ export const Sidebar = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
             onClick={onClose}
-            className="fixed inset-0 bg-slate-900/45 backdrop-blur-sm z-30"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-40 lg:hidden"
           />
         )}
       </AnimatePresence>
 
       <motion.aside 
         initial={false}
-        drag={window.innerWidth < 1024 ? "x" : false}
+        drag={isTouchViewport ? "x" : false}
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={{ left: 0.1, right: 0.5 }}
         onDragEnd={(_, info) => {
@@ -114,13 +218,10 @@ export const Sidebar = ({
         }}
         animate={{ 
           x: isOpen ? 0 : hiddenOffset,
-          width: isCollapsed ? 80 : 288
+          width: sidebarWidth,
         }}
-        transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
-        className={cn(
-          "fixed inset-y-0 left-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-100 dark:border-slate-800 shadow-2xl lg:shadow-none",
-          ""
-        )}
+        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        className="fixed inset-y-0 left-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-100 dark:border-slate-800 shadow-2xl lg:shadow-none"
       >
         <div className={cn("flex flex-col h-full", isCollapsed ? "p-2 sm:p-4" : "p-4 sm:p-6")}>
           <div className={cn("mb-6 sm:mb-10 flex justify-between items-center", isCollapsed ? "flex-col gap-3 sm:gap-4" : "px-1 sm:px-2")}>
@@ -146,26 +247,23 @@ export const Sidebar = ({
               >
                 {isCollapsed ? <ChevronRight size={14} className="sm:w-4 sm:h-4" /> : <ChevronLeft size={14} className="sm:w-4 sm:h-4" />}
               </motion.button>
-<<<<<<< HEAD
-=======
               <div className="relative">
-                {/* Solo mostrar el botón de notificaciones si hay no leídas */}
-                {unreadCount > 0 && (
-                  <button
-                    onClick={() => {
-                      const nextState = !isNotificationsOpen;
-                      setIsNotificationsOpen(nextState);
-                      if (nextState) {
-                        markAllAsRead();
-                      }
-                    }}
-                    className="p-1.5 sm:p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg sm:rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all relative"
-                    title="Notificaciones"
-                  >
-                    <AlertCircle size={14} className="sm:w-4 sm:h-4" />
+                <button
+                  onClick={() => {
+                    const nextState = !isNotificationsOpen;
+                    setIsNotificationsOpen(nextState);
+                    if (nextState) {
+                      markAllAsRead();
+                    }
+                  }}
+                  className="p-1.5 sm:p-2 bg-transparent text-slate-600/70 dark:text-slate-300/70 rounded-lg sm:rounded-xl hover:bg-slate-900/10 dark:hover:bg-white/10 hover:text-slate-700 dark:hover:text-slate-100 transition-all relative backdrop-blur-sm"
+                  title="Notificaciones"
+                >
+                  <AlertCircle size={14} className="sm:w-4 sm:h-4" />
+                  {unreadCount > 0 && !isNotificationsOpen && (
                     <span className="absolute top-0 right-0 w-2 h-2 sm:w-2.5 sm:h-2.5 bg-rose-500 border-2 border-white dark:border-slate-900 rounded-full" />
-                  </button>
-                )}
+                  )}
+                </button>
 
                 <AnimatePresence>
                   {isNotificationsOpen && (
@@ -232,7 +330,6 @@ export const Sidebar = ({
                   )}
                 </AnimatePresence>
               </div>
->>>>>>> b07b928 (Panel de métricas interactivo: gauges, widgets personalizables y reorganización drag & drop)
 
               <button
                 onClick={toggleDarkMode}
@@ -468,7 +565,7 @@ export const Sidebar = ({
               isCollapsed ? "flex-col" : "flex-row"
             )}>
               <div className="relative group">
-                <div className="w-10 h-10 rounded-full overflow-hidden">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-primary/10 border border-primary/20 overflow-hidden shadow-inner">
                   <img 
                     src={user.photoURL || getFallbackAvatarUrl(user.displayName || 'Usuario')} 
                     alt={user.displayName || ''} 

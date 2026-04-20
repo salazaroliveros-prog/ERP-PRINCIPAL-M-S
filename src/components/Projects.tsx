@@ -1744,7 +1744,6 @@ export default function Projects() {
                   setValidationErrors({});
                   setIsModalOpen(true);
                 }}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 bg-primary text-white font-black py-1.5 sm:py-2.5 px-2.5 sm:px-5 rounded-xl hover:bg-primary-hover transition-all duration-200 shadow-lg shadow-primary-shadow group shrink-0 text-[8px] sm:text-[10px] uppercase tracking-widest min-h-8 sm:min-h-0 active:scale-105 focus-visible:scale-105 focus-visible:outline-none"
                 className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 bg-primary text-white font-black py-1.5 sm:py-2.5 px-2.5 sm:px-5 rounded-xl hover:bg-primary-hover transition-all duration-200 shadow-lg shadow-primary-shadow group shrink-0 text-[8px] sm:text-[10px] uppercase tracking-widest min-h-8 sm:min-h-0 active:scale-105 active:shadow-xl active:ring-2 active:ring-primary/40 focus-visible:scale-105 focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none"
               >
                 <Plus size={14} className="sm:w-5 sm:h-5 group-hover:rotate-90 transition-transform duration-300" />

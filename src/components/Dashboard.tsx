@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -33,10 +33,6 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis
 } from 'recharts';
-import Gauge from './Gauge';
-import { Sparklines, SparklinesLine } from 'react-sparklines';
-import DraggableGrid from './DraggableGrid';
-import { WidgetPicker, WidgetType } from './WidgetPicker';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -55,7 +51,11 @@ import {
   Search,
   Loader2,
   Save,
-  X
+  Plus,
+  X,
+  Construction as ConstructionIcon,
+  ShoppingBag,
+  Package as PackageIcon
 } from 'lucide-react';
 import { formatCurrency, cn, handleApiError, OperationType, getMitigationSuggestions } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -63,17 +63,10 @@ import { sendNotification } from '../lib/notifications';
 import { logAction } from '../lib/audit';
 import { listProjects, listProjectBudgetItemsDetailed, updateProject, updateProjectBudgetItem } from '../lib/projectsApi';
 import { listTransactions } from '../lib/financialsApi';
-import { createPurchaseOrder, listInventory, listPurchaseOrders } from '../lib/operationsApi';
+import { listInventory } from '../lib/operationsApi';
 import { listSubcontracts } from '../lib/subcontractsApi';
-import { createWorkflow, listWorkflows } from '../lib/workflowsApi';
+import { listWorkflows } from '../lib/workflowsApi';
 import { useTheme } from '../contexts/ThemeContext';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
-import { drawReportHeader } from '../lib/pdfUtils';
-import { getThresholdSettings } from '../lib/settingsApi';
-import { listOcrValidations, validateDocumentOCR } from '../lib/aiOpsApi';
-import { auth } from '../lib/authStorageClient';
 
 const COLORS = [
   '#3b82f6', // Blue
@@ -88,22 +81,6 @@ const COLORS = [
   '#14b8a6', // Teal
 ];
 
-const MARKET_RATE_BY_TYPOLOGY: Record<string, number> = {
-  RESIDENCIAL: 4500,
-  COMERCIAL: 6500,
-  INDUSTRIAL: 5500,
-  CIVIL: 3500,
-  PUBLICA: 4000,
-  SALUD: 8500,
-  EDUCACION: 5000,
-  DEPORTIVA: 4800,
-  INFRAESTRUCTURA: 7500,
-  TURISMO: 7000,
-};
-
-const MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY = 'material_weekly_spike_threshold_pct';
-const PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY = 'physical_financial_deviation_threshold_pct';
-
 type DashboardChartKey =
   | 'profitTrend'
   | 'projectHealth'
@@ -113,95 +90,6 @@ type DashboardChartKey =
   | 'scheduleProgress';
 
 type DashboardChartPreferences = Record<DashboardChartKey, string>;
-
-type OcrHistoryColumnKey =
-  | 'id'
-  | 'date'
-  | 'projectId'
-  | 'purchaseOrderId'
-  | 'invoiceNumber'
-  | 'supplier'
-  | 'detectedTotal'
-  | 'score'
-  | 'resultStatus'
-  | 'decision'
-  | 'autoApply'
-  | 'autoActionSummary';
-
-type OcrHistorySortBy = 'date' | 'score' | 'amount' | 'supplier' | 'invoiceNumber' | 'decision' | 'resultStatus';
-type OcrHistoryPresetKey = 'auditoria' | 'operaciones' | 'gerencia';
-
-type OcrHistoryPresetConfig = {
-  viewMode: 'cards' | 'table';
-  sortBy: OcrHistorySortBy;
-  sortDirection: 'asc' | 'desc';
-  selectedColumns: OcrHistoryColumnKey[];
-  stickyColumnsEnabled: boolean;
-};
-
-type OcrCustomNamedPreset = {
-  id: string;
-  name: string;
-  config: OcrHistoryPresetConfig;
-};
-
-type OcrPresetExchangePayload = {
-  schemaVersion: 1;
-  exportedAt: string;
-  source: string;
-  name?: string;
-  preset: OcrHistoryPresetConfig;
-};
-
-const OCR_HISTORY_COLUMN_OPTIONS: Array<{ key: OcrHistoryColumnKey; label: string }> = [
-  { key: 'invoiceNumber', label: 'Factura' },
-  { key: 'supplier', label: 'Proveedor' },
-  { key: 'detectedTotal', label: 'Monto detectado' },
-  { key: 'score', label: 'Score' },
-  { key: 'resultStatus', label: 'Resultado' },
-  { key: 'decision', label: 'Decisión' },
-  { key: 'date', label: 'Fecha' },
-  { key: 'projectId', label: 'Proyecto' },
-  { key: 'purchaseOrderId', label: 'Orden de compra' },
-  { key: 'autoApply', label: 'Auto-aplicar' },
-  { key: 'autoActionSummary', label: 'Auto-acción' },
-  { key: 'id', label: 'ID' },
-];
-
-const OCR_HISTORY_DEFAULT_COLUMNS: OcrHistoryColumnKey[] = [
-  'invoiceNumber',
-  'supplier',
-  'detectedTotal',
-  'score',
-  'resultStatus',
-  'decision',
-  'date',
-  'autoActionSummary',
-];
-
-const OCR_HISTORY_PRESET_CONFIGS: Record<OcrHistoryPresetKey, OcrHistoryPresetConfig> = {
-  auditoria: {
-    viewMode: 'table',
-    sortBy: 'date',
-    sortDirection: 'desc',
-    selectedColumns: ['date', 'invoiceNumber', 'supplier', 'detectedTotal', 'score', 'resultStatus', 'decision', 'projectId', 'purchaseOrderId', 'autoActionSummary', 'id'],
-    stickyColumnsEnabled: true,
-  },
-  operaciones: {
-    viewMode: 'cards',
-    sortBy: 'amount',
-    sortDirection: 'desc',
-    selectedColumns: ['invoiceNumber', 'supplier', 'detectedTotal', 'score', 'decision', 'resultStatus', 'date', 'autoActionSummary'],
-    stickyColumnsEnabled: true,
-  },
-  gerencia: {
-    viewMode: 'table',
-    sortBy: 'score',
-    sortDirection: 'asc',
-    selectedColumns: ['date', 'supplier', 'invoiceNumber', 'detectedTotal', 'score', 'decision', 'resultStatus'],
-    stickyColumnsEnabled: true,
-  },
-};
 
 const CHART_TYPE_OPTIONS: Record<DashboardChartKey, Array<{ value: string; label: string }>> = {
   profitTrend: [
@@ -240,32 +128,9 @@ const CHART_TYPE_OPTIONS: Record<DashboardChartKey, Array<{ value: string; label
   ],
   scheduleProgress: [
     { value: 'gantt', label: 'Cronograma' },
+    { value: 'horizontal-bars', label: 'Barras horizontales' },
+    { value: 'radar', label: 'Radar avance' },
   ],
-};
-
-const MOBILE_CHART_BREAKPOINT = 640;
-const MOBILE_MAX_CHART_ITEMS = 6;
-
-const truncateChartLabel = (value: string, maxLength: number) => {
-  if (!value) return 'N/A';
-  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}...` : value;
-};
-
-const sanitizeChartPreferences = (
-  preferences: Partial<DashboardChartPreferences> | undefined,
-  fallback: DashboardChartPreferences,
-): DashboardChartPreferences => {
-  const sanitized = { ...fallback };
-
-  (Object.keys(CHART_TYPE_OPTIONS) as DashboardChartKey[]).forEach((chartKey) => {
-    const allowedValues = CHART_TYPE_OPTIONS[chartKey].map((option) => option.value);
-    const preferred = preferences?.[chartKey];
-    sanitized[chartKey] = preferred && allowedValues.includes(preferred)
-      ? preferred
-      : fallback[chartKey];
-  });
-
-  return sanitized;
 };
 
 const THEME_DEFAULT_CHARTS: Record<string, DashboardChartPreferences> = {
@@ -339,67 +204,38 @@ const StatCard = ({ title, value, icon: Icon, trend, trendValue, color }: any) =
   </motion.div>
 );
 
-const normalizeProjectStatus = (status: string) =>
-  String(status || '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-
-const isEvaluationStatus = (status: string) => {
-  const normalized = normalizeProjectStatus(status);
-  return normalized === 'evaluation' || normalized === 'planning' || normalized === 'en evaluacion' || normalized === 'en planeacion';
-};
-
-const isExecutionStatus = (status: string) => {
-  const normalized = normalizeProjectStatus(status);
-  return normalized === 'in progress' || normalized === 'inprogress' || normalized === 'active' || normalized === 'en ejecucion' || normalized === 'execution';
-};
-
-const isCompletedStatus = (status: string) => {
-  const normalized = normalizeProjectStatus(status);
-  return normalized === 'completed' || normalized === 'completado' || normalized === 'finished' || normalized === 'finalizado';
-};
-
-const isOnHoldStatus = (status: string) => {
-  const normalized = normalizeProjectStatus(status);
-  return normalized === 'on hold' || normalized === 'onhold' || normalized === 'en pausa' || normalized === 'pausa' || normalized === 'paused';
-};
-
-const isPlanningStatus = (status: string) => {
-  const normalized = normalizeProjectStatus(status);
-  return normalized === 'planning' || normalized === 'en planeacion';
-};
-
-const isEvaluationOnlyStatus = (status: string) => {
-  const normalized = normalizeProjectStatus(status);
-  return normalized === 'evaluation' || normalized === 'en evaluacion';
-};
+const QuickActionButton = ({ icon: Icon, label, onClick, color }: any) => (
+  <button
+    onClick={onClick}
+    className="flex items-center gap-2 sm:gap-3 w-full p-3 sm:p-4 bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-all active:scale-95"
+  >
+    <div className={cn("p-1.5 sm:p-2 rounded-lg sm:rounded-xl", color)}>
+      <Icon size={16} className="text-white sm:w-5 sm:h-5" />
+    </div>
+    <span className="font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-300">{label}</span>
+  </button>
+);
 
 export default function Dashboard() {
   const { currentTheme } = useTheme();
-  const executiveControlRef = useRef<HTMLDivElement>(null);
-  const ocrPresetImportInputRef = useRef<HTMLInputElement>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
-  const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
-  const [portfolioBudgetItemsByProject, setPortfolioBudgetItemsByProject] = useState<Record<string, any[]>>({});
   const [subcontracts, setSubcontracts] = useState<any[]>([]);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [pendingWorkflows, setPendingWorkflows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isFabOpen, setIsFabOpen] = useState(false);
   const [isQuickProgressModalOpen, setIsQuickProgressModalOpen] = useState(false);
   const [selectedQuickProjectId, setSelectedQuickProjectId] = useState<string | null>(null);
   const [quickBudgetItems, setQuickBudgetItems] = useState<any[]>([]);
   const [isLoadingQuickItems, setIsLoadingQuickItems] = useState(false);
   const [quickSearchTerm, setQuickSearchTerm] = useState('');
-  // ...existing code...
-
-  const ocrHistoryPreferencesStorageKey = useMemo(() => {
-    const actor = auth.currentUser?.email || auth.currentUser?.displayName || 'default';
-    return `dashboard_ocr_history_preferences_${actor}`;
-  }, [auth.currentUser?.email, auth.currentUser?.displayName]);
+  const [progressChartScope, setProgressChartScope] = useState<'all' | 'selected'>('all');
+  const [chartPreferences, setChartPreferences] = useState<DashboardChartPreferences>(
+    THEME_DEFAULT_CHARTS.sunset
+  );
+  const navigate = useNavigate();
 
   const updateChartPreference = (chartKey: DashboardChartKey, value: string) => {
     setChartPreferences((prev) => ({
@@ -416,715 +252,11 @@ export default function Dashboard() {
       const raw = localStorage.getItem(storageKey);
       const parsed = raw ? JSON.parse(raw) : {};
       const persistedForTheme = parsed?.[currentTheme.id];
-      setChartPreferences(sanitizeChartPreferences(
-        persistedForTheme ? { ...fallback, ...persistedForTheme } : fallback,
-        fallback,
-      ));
+      setChartPreferences(persistedForTheme ? { ...fallback, ...persistedForTheme } : fallback);
     } catch {
       setChartPreferences(fallback);
     }
   }, [currentTheme.id]);
-
-  useEffect(() => {
-    const onResize = () => {
-      setIsMobileChartView(window.innerWidth < MOBILE_CHART_BREAKPOINT);
-    };
-
-    onResize();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(ocrHistoryPreferencesStorageKey);
-      if (!raw) return;
-
-      const parsed = JSON.parse(raw);
-      if (typeof parsed?.projectFilter === 'string') setOcrHistoryProjectFilter(parsed.projectFilter);
-      if (parsed?.decisionFilter === 'all' || parsed?.decisionFilter === 'approved' || parsed?.decisionFilter === 'review' || parsed?.decisionFilter === 'rejected') {
-        setOcrHistoryDecisionFilter(parsed.decisionFilter);
-      }
-      if (parsed?.dateRange === '7' || parsed?.dateRange === '30' || parsed?.dateRange === '90' || parsed?.dateRange === 'all') {
-        setOcrHistoryDateRange(parsed.dateRange);
-      }
-      if (typeof parsed?.supplierFilter === 'string') setOcrHistorySupplierFilter(parsed.supplierFilter);
-      if (typeof parsed?.invoiceFilter === 'string') setOcrHistoryInvoiceFilter(parsed.invoiceFilter);
-      if (parsed?.viewMode === 'cards' || parsed?.viewMode === 'table') {
-        setOcrHistoryViewMode(parsed.viewMode);
-      }
-      if (
-        parsed?.sortBy === 'date' ||
-        parsed?.sortBy === 'score' ||
-        parsed?.sortBy === 'amount' ||
-        parsed?.sortBy === 'supplier' ||
-        parsed?.sortBy === 'invoiceNumber' ||
-        parsed?.sortBy === 'decision' ||
-        parsed?.sortBy === 'resultStatus'
-      ) {
-        setOcrHistorySortBy(parsed.sortBy);
-      }
-      if (parsed?.sortDirection === 'asc' || parsed?.sortDirection === 'desc') {
-        setOcrHistorySortDirection(parsed.sortDirection);
-      }
-      if (Array.isArray(parsed?.selectedColumns)) {
-        const allowed = new Set<OcrHistoryColumnKey>(OCR_HISTORY_COLUMN_OPTIONS.map((option) => option.key));
-        const normalized = parsed.selectedColumns
-          .filter((key: unknown): key is OcrHistoryColumnKey => typeof key === 'string' && allowed.has(key as OcrHistoryColumnKey));
-        if (normalized.length > 0) {
-          setOcrHistorySelectedColumns(normalized);
-        }
-      }
-      if (typeof parsed?.stickyColumnsEnabled === 'boolean') {
-        setOcrHistoryStickyColumnsEnabled(parsed.stickyColumnsEnabled);
-      }
-      if (typeof parsed?.selectedPresetId === 'string') {
-        setOcrHistorySelectedPresetId(parsed.selectedPresetId);
-      } else if (
-        parsed?.selectedPreset === 'auditoria' ||
-        parsed?.selectedPreset === 'operaciones' ||
-        parsed?.selectedPreset === 'gerencia'
-      ) {
-        setOcrHistorySelectedPresetId(parsed.selectedPreset);
-      }
-      if (Array.isArray(parsed?.customPresets)) {
-        const normalizedCustomPresets = parsed.customPresets
-          .map((item: any) => {
-            if (!item || typeof item !== 'object' || typeof item.id !== 'string' || typeof item.name !== 'string') return null;
-            if (!item.config || typeof item.config !== 'object') return null;
-            const config = item.config;
-            if (
-              (config.viewMode !== 'cards' && config.viewMode !== 'table') ||
-              (config.sortDirection !== 'asc' && config.sortDirection !== 'desc') ||
-              (config.sortBy !== 'date' &&
-                config.sortBy !== 'score' &&
-                config.sortBy !== 'amount' &&
-                config.sortBy !== 'supplier' &&
-                config.sortBy !== 'invoiceNumber' &&
-                config.sortBy !== 'decision' &&
-                config.sortBy !== 'resultStatus') ||
-              !Array.isArray(config.selectedColumns)
-            ) {
-              return null;
-            }
-            const allowed = new Set<OcrHistoryColumnKey>(OCR_HISTORY_COLUMN_OPTIONS.map((option) => option.key));
-            const normalizedColumns = config.selectedColumns
-              .filter((key: unknown): key is OcrHistoryColumnKey => typeof key === 'string' && allowed.has(key as OcrHistoryColumnKey));
-            if (normalizedColumns.length === 0) return null;
-
-            return {
-              id: item.id,
-              name: item.name,
-              config: {
-                viewMode: config.viewMode,
-                sortBy: config.sortBy,
-                sortDirection: config.sortDirection,
-                selectedColumns: normalizedColumns,
-                stickyColumnsEnabled: Boolean(config.stickyColumnsEnabled),
-              },
-            } as OcrCustomNamedPreset;
-          })
-          .filter((item: OcrCustomNamedPreset | null): item is OcrCustomNamedPreset => Boolean(item));
-        setOcrHistoryCustomPresets(normalizedCustomPresets);
-      }
-      if (parsed?.customPreset && typeof parsed.customPreset === 'object') {
-        const custom = parsed.customPreset;
-        if (
-          (custom.viewMode === 'cards' || custom.viewMode === 'table') &&
-          (custom.sortDirection === 'asc' || custom.sortDirection === 'desc') &&
-          (custom.sortBy === 'date' ||
-            custom.sortBy === 'score' ||
-            custom.sortBy === 'amount' ||
-            custom.sortBy === 'supplier' ||
-            custom.sortBy === 'invoiceNumber' ||
-            custom.sortBy === 'decision' ||
-            custom.sortBy === 'resultStatus') &&
-          Array.isArray(custom.selectedColumns)
-        ) {
-          const allowed = new Set<OcrHistoryColumnKey>(OCR_HISTORY_COLUMN_OPTIONS.map((option) => option.key));
-          const normalizedColumns = custom.selectedColumns
-            .filter((key: unknown): key is OcrHistoryColumnKey => typeof key === 'string' && allowed.has(key as OcrHistoryColumnKey));
-          if (normalizedColumns.length > 0) {
-            setOcrHistoryCustomPresets((prev) => {
-              if (prev.length > 0) return prev;
-              return [
-                {
-                  id: `custom_${Date.now()}`,
-                  name: 'Migrado',
-                  config: {
-                    viewMode: custom.viewMode,
-                    sortBy: custom.sortBy,
-                    sortDirection: custom.sortDirection,
-                    selectedColumns: normalizedColumns,
-                    stickyColumnsEnabled: Boolean(custom.stickyColumnsEnabled),
-                  },
-                },
-              ];
-            });
-          }
-        }
-      }
-    } catch {
-      // Ignore malformed preference payloads.
-    }
-  }, [ocrHistoryPreferencesStorageKey]);
-
-  useEffect(() => {
-    const payload = {
-      projectFilter: ocrHistoryProjectFilter,
-      decisionFilter: ocrHistoryDecisionFilter,
-      dateRange: ocrHistoryDateRange,
-      supplierFilter: ocrHistorySupplierFilter,
-      invoiceFilter: ocrHistoryInvoiceFilter,
-      viewMode: ocrHistoryViewMode,
-      sortBy: ocrHistorySortBy,
-      sortDirection: ocrHistorySortDirection,
-      selectedColumns: ocrHistorySelectedColumns,
-      stickyColumnsEnabled: ocrHistoryStickyColumnsEnabled,
-      selectedPresetId: ocrHistorySelectedPresetId,
-      customPresets: ocrHistoryCustomPresets,
-    };
-    localStorage.setItem(ocrHistoryPreferencesStorageKey, JSON.stringify(payload));
-  }, [
-    ocrHistoryPreferencesStorageKey,
-    ocrHistoryProjectFilter,
-    ocrHistoryDecisionFilter,
-    ocrHistoryDateRange,
-    ocrHistorySupplierFilter,
-    ocrHistoryInvoiceFilter,
-    ocrHistoryViewMode,
-    ocrHistorySortBy,
-    ocrHistorySortDirection,
-    ocrHistorySelectedColumns,
-    ocrHistoryStickyColumnsEnabled,
-    ocrHistorySelectedPresetId,
-    ocrHistoryCustomPresets,
-  ]);
-
-  const ocrHistoryProjectOptions = useMemo(() => {
-    const unique = new Map<string, string>();
-
-    for (const project of projects) {
-      if (!project?.id) continue;
-      unique.set(String(project.id), project.name || String(project.id));
-    }
-
-    for (const row of ocrValidationHistory) {
-      if (!row?.projectId || unique.has(String(row.projectId))) continue;
-      unique.set(String(row.projectId), String(row.projectId));
-    }
-
-    return Array.from(unique.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [projects, ocrValidationHistory]);
-
-  const visibleOcrValidationHistory = useMemo(() => {
-    return ocrValidationHistory.filter((row: any) => {
-      if (ocrHistoryDecisionFilter !== 'all' && row.decision !== ocrHistoryDecisionFilter) {
-        return false;
-      }
-      const supplierFilter = ocrHistorySupplierFilter.trim().toLowerCase();
-      if (supplierFilter) {
-        const supplierValue = String(row.supplier || '').toLowerCase();
-        if (!supplierValue.includes(supplierFilter)) {
-          return false;
-        }
-      }
-
-      const invoiceFilter = ocrHistoryInvoiceFilter.trim().toLowerCase();
-      if (invoiceFilter) {
-        const invoiceValue = String(row.invoiceNumber || '').toLowerCase();
-        if (!invoiceValue.includes(invoiceFilter)) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [ocrValidationHistory, ocrHistoryDecisionFilter, ocrHistorySupplierFilter, ocrHistoryInvoiceFilter]);
-
-  const sortedVisibleOcrValidationHistory = useMemo(() => {
-    const sorted = [...visibleOcrValidationHistory];
-    sorted.sort((a: any, b: any) => {
-      const direction = ocrHistorySortDirection === 'asc' ? 1 : -1;
-
-      if (ocrHistorySortBy === 'score') {
-        return (Number(a.score || 0) - Number(b.score || 0)) * direction;
-      }
-
-      if (ocrHistorySortBy === 'amount') {
-        return (Number(a.detectedTotal || 0) - Number(b.detectedTotal || 0)) * direction;
-      }
-
-      if (ocrHistorySortBy === 'supplier') {
-        return String(a.supplier || '').localeCompare(String(b.supplier || '')) * direction;
-      }
-
-      if (ocrHistorySortBy === 'invoiceNumber') {
-        return String(a.invoiceNumber || '').localeCompare(String(b.invoiceNumber || '')) * direction;
-      }
-
-      if (ocrHistorySortBy === 'decision') {
-        return String(a.decision || '').localeCompare(String(b.decision || '')) * direction;
-      }
-
-      if (ocrHistorySortBy === 'resultStatus') {
-        return String(a.resultStatus || '').localeCompare(String(b.resultStatus || '')) * direction;
-      }
-
-      const aDate = new Date(a.createdAt || 0).getTime();
-      const bDate = new Date(b.createdAt || 0).getTime();
-      return (aDate - bDate) * direction;
-    });
-    return sorted;
-  }, [visibleOcrValidationHistory, ocrHistorySortBy, ocrHistorySortDirection]);
-
-  const ocrHistoryColumnLabelMap = useMemo(
-    () => Object.fromEntries(OCR_HISTORY_COLUMN_OPTIONS.map((option) => [option.key, option.label])) as Record<OcrHistoryColumnKey, string>,
-    []
-  );
-
-  const ocrStickyColumnLeftMap = useMemo(() => {
-    const stickyOrder: OcrHistoryColumnKey[] = ['invoiceNumber', 'supplier', 'score'];
-    const widthByColumn: Record<OcrHistoryColumnKey, number> = {
-      id: 180,
-      date: 180,
-      projectId: 170,
-      purchaseOrderId: 170,
-      invoiceNumber: 220,
-      supplier: 200,
-      detectedTotal: 140,
-      score: 110,
-      resultStatus: 140,
-      decision: 120,
-      autoApply: 120,
-      autoActionSummary: 220,
-    };
-
-    const map: Partial<Record<OcrHistoryColumnKey, number>> = {};
-    if (!ocrHistoryStickyColumnsEnabled) {
-      return map;
-    }
-
-    let left = 0;
-    for (const columnKey of stickyOrder) {
-      if (!ocrHistorySelectedColumns.includes(columnKey)) continue;
-      map[columnKey] = left;
-      left += widthByColumn[columnKey];
-    }
-
-    return map;
-  }, [ocrHistorySelectedColumns, ocrHistoryStickyColumnsEnabled]);
-
-  const handleOcrTableHeaderSort = (columnKey: OcrHistoryColumnKey) => {
-    const map: Partial<Record<OcrHistoryColumnKey, 'date' | 'score' | 'amount' | 'supplier' | 'invoiceNumber' | 'decision' | 'resultStatus'>> = {
-      date: 'date',
-      score: 'score',
-      detectedTotal: 'amount',
-      supplier: 'supplier',
-      invoiceNumber: 'invoiceNumber',
-      decision: 'decision',
-      resultStatus: 'resultStatus',
-    };
-
-    const mappedSortBy = map[columnKey];
-    if (!mappedSortBy) return;
-
-    setOcrHistorySortBy((prevSortBy) => {
-      if (prevSortBy === mappedSortBy) {
-        setOcrHistorySortDirection((prevDirection) => (prevDirection === 'asc' ? 'desc' : 'asc'));
-        return prevSortBy;
-      }
-
-      setOcrHistorySortDirection('desc');
-      return mappedSortBy;
-    });
-  };
-
-  const getOcrColumnRawValue = (row: any, key: OcrHistoryColumnKey): string | number => {
-    switch (key) {
-      case 'id':
-        return row.id || '';
-      case 'date':
-        return row.createdAt || '';
-      case 'projectId':
-        return row.projectId || '';
-      case 'purchaseOrderId':
-        return row.purchaseOrderId || '';
-      case 'invoiceNumber':
-        return row.invoiceNumber || '';
-      case 'supplier':
-        return row.supplier || '';
-      case 'detectedTotal':
-        return Number(row.detectedTotal || 0);
-      case 'score':
-        return Number(row.score || 0);
-      case 'resultStatus':
-        return row.resultStatus || '';
-      case 'decision':
-        return row.decision || '';
-      case 'autoApply':
-        return row.autoApply ? 'true' : 'false';
-      case 'autoActionSummary':
-        return row.autoActionSummary || '';
-      default:
-        return '';
-    }
-  };
-
-  const getOcrColumnDisplayValue = (row: any, key: OcrHistoryColumnKey): string => {
-    if (key === 'detectedTotal') {
-      return formatCurrency(Number(row.detectedTotal || 0));
-    }
-    if (key === 'date') {
-      return row.createdAt ? new Date(row.createdAt).toLocaleString('es-GT') : 'N/A';
-    }
-    if (key === 'autoApply') {
-      return row.autoApply ? 'Sí' : 'No';
-    }
-    const value = getOcrColumnRawValue(row, key);
-    return String(value || 'N/A');
-  };
-
-  const toggleOcrHistoryColumn = (columnKey: OcrHistoryColumnKey) => {
-    setOcrHistorySelectedColumns((prev) => {
-      if (prev.includes(columnKey)) {
-        if (prev.length === 1) {
-          toast.info('Debes mantener al menos una columna visible.');
-          return prev;
-        }
-        return prev.filter((key) => key !== columnKey);
-      }
-      return [...prev, columnKey];
-    });
-  };
-
-  const applyOcrPresetById = (presetId: string) => {
-    const config = (presetId === 'auditoria' || presetId === 'operaciones' || presetId === 'gerencia')
-      ? OCR_HISTORY_PRESET_CONFIGS[presetId]
-      : ocrHistoryCustomPresets.find((preset) => preset.id === presetId)?.config;
-    if (!config) {
-      toast.info('Preset OCR no encontrado.');
-      return;
-    }
-
-    setOcrHistoryViewMode(config.viewMode);
-    setOcrHistorySortBy(config.sortBy);
-    setOcrHistorySortDirection(config.sortDirection);
-    setOcrHistorySelectedColumns(config.selectedColumns);
-    setOcrHistoryStickyColumnsEnabled(config.stickyColumnsEnabled);
-    setOcrHistorySelectedPresetId(presetId);
-
-    const customPreset = ocrHistoryCustomPresets.find((preset) => preset.id === presetId);
-    if (customPreset) {
-      setOcrHistoryPresetNameInput(customPreset.name);
-    }
-  };
-
-  const saveCurrentAsCustomOcrPreset = () => {
-    const config: OcrHistoryPresetConfig = {
-      viewMode: ocrHistoryViewMode,
-      sortBy: ocrHistorySortBy,
-      sortDirection: ocrHistorySortDirection,
-      selectedColumns: ocrHistorySelectedColumns,
-      stickyColumnsEnabled: ocrHistoryStickyColumnsEnabled,
-    };
-
-    const inputName = ocrHistoryPresetNameInput.trim();
-    if (!inputName) {
-      toast.error('Ingresa un nombre para el preset personalizado.');
-      return;
-    }
-
-    const existingById = ocrHistoryCustomPresets.find((preset) => preset.id === ocrHistorySelectedPresetId);
-
-    if (existingById) {
-      setOcrHistoryCustomPresets((prev) =>
-        prev.map((preset) =>
-          preset.id === existingById.id
-            ? { ...preset, name: inputName, config }
-            : preset
-        )
-      );
-      toast.success('Preset personalizado OCR actualizado.');
-      return;
-    }
-
-    const newPreset: OcrCustomNamedPreset = {
-      id: `custom_${Date.now()}`,
-      name: inputName,
-      config,
-    };
-
-    setOcrHistoryCustomPresets((prev) => [...prev, newPreset]);
-    setOcrHistorySelectedPresetId(newPreset.id);
-    toast.success('Preset personalizado OCR guardado.');
-  };
-
-  const deleteSelectedCustomOcrPreset = () => {
-    const existing = ocrHistoryCustomPresets.find((preset) => preset.id === ocrHistorySelectedPresetId);
-    if (!existing) {
-      toast.info('Selecciona un preset personalizado para eliminar.');
-      return;
-    }
-
-    setOcrHistoryCustomPresets((prev) => prev.filter((preset) => preset.id !== existing.id));
-    setOcrHistorySelectedPresetId('operaciones');
-    setOcrHistoryPresetNameInput('Mi preset OCR');
-    toast.success('Preset personalizado eliminado.');
-  };
-
-  const moveSelectedCustomOcrPreset = (direction: 'up' | 'down') => {
-    const currentIndex = ocrHistoryCustomPresets.findIndex((preset) => preset.id === ocrHistorySelectedPresetId);
-    if (currentIndex < 0) {
-      toast.info('Selecciona un preset personalizado para reordenar.');
-      return;
-    }
-
-    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= ocrHistoryCustomPresets.length) {
-      return;
-    }
-
-    setOcrHistoryCustomPresets((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(currentIndex, 1);
-      next.splice(targetIndex, 0, moved);
-      return next;
-    });
-  };
-
-  const restoreBaseOcrPreset = () => {
-    const base = OCR_HISTORY_PRESET_CONFIGS.operaciones;
-    setOcrHistoryProjectFilter('all');
-    setOcrHistoryDecisionFilter('all');
-    setOcrHistoryDateRange('30');
-    setOcrHistorySupplierFilter('');
-    setOcrHistoryInvoiceFilter('');
-    setOcrHistoryPresetSearchTerm('');
-    setOcrHistoryViewMode(base.viewMode);
-    setOcrHistorySortBy(base.sortBy);
-    setOcrHistorySortDirection(base.sortDirection);
-    setOcrHistorySelectedColumns(base.selectedColumns);
-    setOcrHistoryStickyColumnsEnabled(base.stickyColumnsEnabled);
-    setOcrHistorySelectedPresetId('operaciones');
-    setOcrHistoryPresetNameInput('Mi preset OCR');
-    toast.success('Se restauró el preset base de Operaciones.');
-  };
-
-  const exportCustomOcrPresetJson = () => {
-    const selectedCustomPreset = ocrHistoryCustomPresets.find((preset) => preset.id === ocrHistorySelectedPresetId);
-    if (!selectedCustomPreset) {
-      toast.info('Selecciona un preset personalizado para exportar.');
-      return;
-    }
-
-    const payload: OcrPresetExchangePayload = {
-      schemaVersion: 1,
-      exportedAt: new Date().toISOString(),
-      source: auth.currentUser?.email || auth.currentUser?.displayName || 'ERP OCR',
-      name: selectedCustomPreset.name,
-      preset: selectedCustomPreset.config,
-    };
-
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    link.href = url;
-    link.download = `ocr-preset-${stamp}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const normalizeImportedPreset = (value: unknown): OcrHistoryPresetConfig | null => {
-    if (!value || typeof value !== 'object') return null;
-    const candidate = value as Partial<OcrHistoryPresetConfig>;
-
-    const validViewMode = candidate.viewMode === 'cards' || candidate.viewMode === 'table';
-    const validSortBy =
-      candidate.sortBy === 'date' ||
-      candidate.sortBy === 'score' ||
-      candidate.sortBy === 'amount' ||
-      candidate.sortBy === 'supplier' ||
-      candidate.sortBy === 'invoiceNumber' ||
-      candidate.sortBy === 'decision' ||
-      candidate.sortBy === 'resultStatus';
-    const validSortDirection = candidate.sortDirection === 'asc' || candidate.sortDirection === 'desc';
-    const validSticky = typeof candidate.stickyColumnsEnabled === 'boolean';
-    const validColumns = Array.isArray(candidate.selectedColumns);
-
-    if (!validViewMode || !validSortBy || !validSortDirection || !validSticky || !validColumns) {
-      return null;
-    }
-
-    const allowed = new Set<OcrHistoryColumnKey>(OCR_HISTORY_COLUMN_OPTIONS.map((option) => option.key));
-    const normalizedColumns = candidate.selectedColumns
-      .filter((key: unknown): key is OcrHistoryColumnKey => typeof key === 'string' && allowed.has(key as OcrHistoryColumnKey));
-
-    if (normalizedColumns.length === 0) {
-      return null;
-    }
-
-    return {
-      viewMode: candidate.viewMode,
-      sortBy: candidate.sortBy,
-      sortDirection: candidate.sortDirection,
-      selectedColumns: normalizedColumns,
-      stickyColumnsEnabled: candidate.stickyColumnsEnabled,
-    };
-  };
-
-  const importCustomOcrPresetJson = (file: File | null) => {
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const raw = String(reader.result || '');
-        const parsed = JSON.parse(raw);
-        const directPreset = normalizeImportedPreset(parsed);
-        const wrappedPreset = normalizeImportedPreset(parsed?.preset);
-        const preset = directPreset || wrappedPreset;
-
-        if (!preset) {
-          toast.error('Archivo de preset OCR inválido.');
-          return;
-        }
-        const importedName = typeof parsed?.name === 'string' && parsed.name.trim()
-          ? parsed.name.trim()
-          : `Importado ${new Date().toLocaleDateString('es-GT')}`;
-        const importedPreset: OcrCustomNamedPreset = {
-          id: `custom_${Date.now()}`,
-          name: importedName,
-          config: preset,
-        };
-
-        setOcrHistoryCustomPresets((prev) => [...prev, importedPreset]);
-        setOcrHistoryViewMode(preset.viewMode);
-        setOcrHistorySortBy(preset.sortBy);
-        setOcrHistorySortDirection(preset.sortDirection);
-        setOcrHistorySelectedColumns(preset.selectedColumns);
-        setOcrHistoryStickyColumnsEnabled(preset.stickyColumnsEnabled);
-        setOcrHistorySelectedPresetId(importedPreset.id);
-        setOcrHistoryPresetNameInput(importedPreset.name);
-        toast.success('Preset OCR importado y aplicado correctamente.');
-      } catch {
-        toast.error('No se pudo leer el archivo JSON del preset OCR.');
-      } finally {
-        if (ocrPresetImportInputRef.current) {
-          ocrPresetImportInputRef.current.value = '';
-        }
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const selectedCustomPresetIndex = useMemo(
-    () => ocrHistoryCustomPresets.findIndex((preset) => preset.id === ocrHistorySelectedPresetId),
-    [ocrHistoryCustomPresets, ocrHistorySelectedPresetId]
-  );
-
-  const filteredCustomOcrPresets = useMemo(() => {
-    const term = ocrHistoryPresetSearchTerm.trim().toLowerCase();
-    if (!term) return ocrHistoryCustomPresets;
-    return ocrHistoryCustomPresets.filter((preset) => preset.name.toLowerCase().includes(term));
-  }, [ocrHistoryCustomPresets, ocrHistoryPresetSearchTerm]);
-
-  const hasSelectedCustomPreset = selectedCustomPresetIndex >= 0;
-
-  const ocrEffectiveness = useMemo(() => {
-    const total = visibleOcrValidationHistory.length;
-    if (total === 0) {
-      return {
-        total,
-        approved: 0,
-        review: 0,
-        rejected: 0,
-        autoApplied: 0,
-        avgScore: 0,
-      };
-    }
-
-    const approved = visibleOcrValidationHistory.filter((row: any) => row.decision === 'approved').length;
-    const review = visibleOcrValidationHistory.filter((row: any) => row.decision === 'review').length;
-    const rejected = visibleOcrValidationHistory.filter((row: any) => row.decision === 'rejected').length;
-    const autoApplied = visibleOcrValidationHistory.filter((row: any) => Boolean(row.autoApply)).length;
-    const avgScore =
-      visibleOcrValidationHistory.reduce((acc: number, row: any) => acc + Number(row.score || 0), 0) /
-      Math.max(1, total);
-
-    return {
-      total,
-      approved,
-      review,
-      rejected,
-      autoApplied,
-      avgScore: Number(avgScore.toFixed(1)),
-    };
-  }, [visibleOcrValidationHistory]);
-
-  useEffect(() => {
-    const focusExecutiveControl = () => {
-      executiveControlRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
-
-    window.addEventListener('FOCUS_EXECUTIVE_CONTROL_CENTER', focusExecutiveControl);
-    return () => window.removeEventListener('FOCUS_EXECUTIVE_CONTROL_CENTER', focusExecutiveControl);
-  }, []);
-
-  useEffect(() => {
-    const refreshThreshold = () => {
-      const saved = Number(localStorage.getItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY) || 10);
-      if (!Number.isFinite(saved)) {
-        setMaterialWeeklySpikeThreshold(10);
-        return;
-      }
-      setMaterialWeeklySpikeThreshold(Math.max(3, Math.min(40, saved)));
-    };
-
-    window.addEventListener('MATERIAL_ALERT_THRESHOLD_CHANGED', refreshThreshold);
-    return () => window.removeEventListener('MATERIAL_ALERT_THRESHOLD_CHANGED', refreshThreshold);
-  }, []);
-
-  useEffect(() => {
-    const refreshThreshold = () => {
-      const saved = Number(localStorage.getItem(PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY) || 15);
-      if (!Number.isFinite(saved)) {
-        setPhysicalFinancialDeviationThreshold(15);
-        return;
-      }
-      setPhysicalFinancialDeviationThreshold(Math.max(5, Math.min(40, saved)));
-    };
-
-    window.addEventListener('PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_CHANGED', refreshThreshold);
-    return () => window.removeEventListener('PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_CHANGED', refreshThreshold);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const remote = await getThresholdSettings();
-        if (cancelled) return;
-
-        setMaterialWeeklySpikeThreshold(remote.materialWeeklySpikeThresholdPct);
-        setPhysicalFinancialDeviationThreshold(remote.physicalFinancialDeviationThresholdPct);
-
-        localStorage.setItem(MATERIAL_WEEKLY_SPIKE_THRESHOLD_STORAGE_KEY, String(remote.materialWeeklySpikeThresholdPct));
-        localStorage.setItem(PHYSICAL_FINANCIAL_DEVIATION_THRESHOLD_STORAGE_KEY, String(remote.physicalFinancialDeviationThresholdPct));
-      } catch {
-        // Keep local thresholds when remote settings are unavailable.
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     const storageKey = 'dashboard-chart-preferences-by-theme';
@@ -1151,16 +283,6 @@ export default function Dashboard() {
       return clampPercent((spent / budget) * 100);
     }
     return clampPercent(project?.financialProgress || 0);
-  }
-
-  const [widgets, setWidgets] = useState<WidgetType[]>(['presupuesto', 'gastado', 'ganancia', 'obras']);
-  const [showWidgetPicker, setShowWidgetPicker] = useState(false);
-  const navigate = useNavigate();
-
-  const handleAddWidget = (type: WidgetType) => {
-    setWidgets(prev => [...prev, type]);
-    setShowWidgetPicker(false);
-  } 
   };
 
   useEffect(() => {
@@ -1277,11 +399,10 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        const [projectsItems, transactionsResult, inventoryResult, purchaseOrdersItems, subcontractsItems, workflowsItems] = await Promise.all([
+        const [projectsItems, transactionsResult, inventoryResult, subcontractsItems, workflowsItems] = await Promise.all([
           listProjects(),
           listTransactions({ limit: 100, offset: 0 }),
           listInventory({ limit: 500, offset: 0 }),
-          listPurchaseOrders(),
           listSubcontracts({ status: 'Active' }),
           listWorkflows({ status: 'pending' }),
         ]);
@@ -1315,37 +436,9 @@ export default function Dashboard() {
         setProjects(normalizedProjects);
         setTransactions(transactionsResult.items);
         setInventory(inventoryResult.items);
-        setPurchaseOrders(purchaseOrdersItems);
         setSubcontracts(subcontractsItems);
         setPendingWorkflows(workflowsItems.slice(0, 5));
         setRecentLogs([]);
-
-        const projectsForBaseline = normalizedProjects
-          .filter((project: any) => {
-            const status = String(project?.status || '').toLowerCase();
-            return status !== 'completed' && status !== 'cancelled';
-          })
-          .slice(0, 15);
-
-        const budgetDetailPairs = await Promise.all(
-          projectsForBaseline.map(async (project: any) => {
-            try {
-              const items = await listProjectBudgetItemsDetailed(project.id);
-              return [project.id, items] as [string, any[]];
-            } catch {
-              return [project.id, [] as any[]] as [string, any[]];
-            }
-          })
-        );
-
-        if (!cancelled) {
-          setPortfolioBudgetItemsByProject(
-            budgetDetailPairs.reduce((acc, [projectId, items]) => {
-              acc[projectId] = items;
-              return acc;
-            }, {} as Record<string, any[]>)
-          );
-        }
       } catch (error) {
         if (!cancelled) {
           handleApiError(error, OperationType.GET, 'dashboard');
@@ -1399,10 +492,10 @@ export default function Dashboard() {
         const progressDeviation = financialProgress - (p.physicalProgress || 0);
         const projectId = `proj_dev_${p.id}`;
 
-        if (progressDeviation > physicalFinancialDeviationThreshold && !notifiedItems[projectId]) {
+        if (progressDeviation > 15 && !notifiedItems[projectId]) {
           sendNotification(
             'Alerta de Desviación Financiera',
-            `La obra ${p.name} tiene una desviación del ${progressDeviation.toFixed(1)}% (umbral ${physicalFinancialDeviationThreshold}%).`,
+            `La obra ${p.name} tiene una desviación del ${progressDeviation.toFixed(1)}% (Gasto > Avance Físico).`,
             'project'
           );
           notifiedItems[projectId] = true;
@@ -1414,35 +507,21 @@ export default function Dashboard() {
     if (hasNewNotifications) {
       localStorage.setItem(notifiedKey, JSON.stringify(notifiedItems));
     }
-  }, [projects, subcontracts, loading, physicalFinancialDeviationThreshold]);
+  }, [projects, subcontracts, loading]);
 
-  const executionProjects = projects.filter((p) => isExecutionStatus(p.status));
-  const executionProjectIds = new Set(executionProjects.map((p) => p.id));
-  const profitEligibleTransactions = transactions.filter((t) => {
-    if (t.accountType === 'owner') return true;
-    return executionProjectIds.has(t.projectId);
-  });
-  const evaluationProjects = projects.filter(p => isEvaluationStatus(p.status));
-  const totalBudget = executionProjects.reduce((acc, p) => acc + (Number(p.budget) || 0), 0);
-  const evaluationBudget = evaluationProjects.reduce((acc, p) => acc + (Number(p.budget) || 0), 0);
-  const evaluationSpent = evaluationProjects.reduce((acc, p) => acc + (Number(p.spent) || 0), 0);
-  const totalSpent = profitEligibleTransactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0);
-  const totalIncome = profitEligibleTransactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0);
+  const totalBudget = projects.reduce((acc, p) => acc + (p.budget || 0), 0);
+  const totalSpent = transactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0);
+  const totalIncome = transactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0);
   const globalProfit = totalIncome - totalSpent;
-  const activeProjects = executionProjects.length;
+  const activeProjects = projects.filter(p => p.status === 'In Progress').length;
 
   const projectHealthData = projects.map(p => {
-    const includeInProfit = isExecutionStatus(p.status);
-    const projectExpenses = includeInProfit
-      ? transactions
-          .filter(t => t.projectId === p.id && t.type === 'Expense')
-          .reduce((acc, t) => acc + (t.amount || 0), 0)
-      : 0;
-    const projectIncome = includeInProfit
-      ? transactions
-          .filter(t => t.projectId === p.id && t.type === 'Income')
-          .reduce((acc, t) => acc + (t.amount || 0), 0)
-      : 0;
+    const projectExpenses = transactions
+      .filter(t => t.projectId === p.id && t.type === 'Expense')
+      .reduce((acc, t) => acc + (t.amount || 0), 0);
+    const projectIncome = transactions
+      .filter(t => t.projectId === p.id && t.type === 'Income')
+      .reduce((acc, t) => acc + (t.amount || 0), 0);
 
     return {
       name: p.name,
@@ -1467,11 +546,10 @@ export default function Dashboard() {
   })).sort((a, b) => b.value - a.value);
 
   const statusData = [
-    { name: 'En Evaluación', value: projects.filter((p) => isEvaluationOnlyStatus(p.status)).length },
-    { name: 'En Planeación', value: projects.filter((p) => isPlanningStatus(p.status)).length },
-    { name: 'En Ejecución', value: projects.filter((p) => isExecutionStatus(p.status)).length },
-    { name: 'Completadas', value: projects.filter((p) => isCompletedStatus(p.status)).length },
-    { name: 'En Pausa', value: projects.filter((p) => isOnHoldStatus(p.status)).length },
+    { name: 'En Planeación', value: projects.filter(p => p.status === 'Planning').length },
+    { name: 'En Ejecución', value: projects.filter(p => p.status === 'In Progress').length },
+    { name: 'Completadas', value: projects.filter(p => p.status === 'Completed').length },
+    { name: 'En Pausa', value: projects.filter(p => p.status === 'On Hold').length },
   ].filter(d => d.value > 0);
 
   const statusRadarData = statusData.map((item) => ({
@@ -1484,7 +562,7 @@ export default function Dashboard() {
     value: item.value,
   }));
 
-  const activeProjectsList = executionProjects;
+  const activeProjectsList = projects.filter(p => p.status === 'In Progress' || p.status === 'Active');
   
   const progressComparisonData = projects
     .map(p => {
@@ -1505,24 +583,6 @@ export default function Dashboard() {
   const progressComparisonChartData = progressChartScope === 'selected' && selectedQuickProjectId
     ? progressComparisonData.filter((p) => p.id === selectedQuickProjectId)
     : progressComparisonData;
-
-  const projectHealthChartData = (isMobileChartView
-    ? [...projectHealthData]
-      .sort((a, b) => Math.max(b.presupuesto, b.gastado) - Math.max(a.presupuesto, a.gastado))
-      .slice(0, MOBILE_MAX_CHART_ITEMS)
-    : projectHealthData
-  ).map((item) => ({
-    ...item,
-    chartName: isMobileChartView ? truncateChartLabel(item.name, 13) : item.name,
-  }));
-
-  const progressComparisonDisplayData = (isMobileChartView
-    ? progressComparisonChartData.slice(0, MOBILE_MAX_CHART_ITEMS)
-    : progressComparisonChartData
-  ).map((item) => ({
-    ...item,
-    chartName: isMobileChartView ? truncateChartLabel(item.name, 12) : item.name,
-  }));
   
   const allProjectDates = activeProjectsList.flatMap(p => [
     p.startDate ? parseISO(p.startDate) : null,
@@ -1589,33 +649,11 @@ export default function Dashboard() {
   const lowStockItems = inventory.filter(i => i.stock <= i.minStock);
 
   const riskProjects = projects.filter(p => {
-    if (!isExecutionStatus(p.status)) return false;
+    if (p.status !== 'In Progress') return false;
     const financialProgress = p.budget > 0 ? (p.spent / p.budget) * 100 : 0;
     const progressDeviation = financialProgress - (p.physicalProgress || 0);
-    return progressDeviation > physicalFinancialDeviationThreshold;
+    return progressDeviation > 15;
   });
-
-  const physicalFinancialGapRanking = useMemo(() => {
-    return projects
-      .filter((project: any) => isExecutionStatus(project.status))
-      .map((project: any) => {
-        const physicalProgress = clampPercent(project.physicalProgress || 0);
-        const financialProgress = getFinancialProgress(project);
-        const gap = Number((financialProgress - physicalProgress).toFixed(1));
-        return {
-          projectId: project.id,
-          projectName: project.name,
-          shortName: String(project.name || '').length > 22 ? `${String(project.name).slice(0, 21)}...` : String(project.name || 'Proyecto'),
-          physicalProgress,
-          financialProgress,
-          gap,
-          recommendation: getMitigationSuggestions(gap)[0] || 'Revisar control de ejecución y flujo de caja de obra.',
-        };
-      })
-      .filter((row) => row.gap > 0)
-      .sort((left, right) => right.gap - left.gap)
-      .slice(0, 6);
-  }, [projects]);
 
   const inactiveProjects = projects.filter(p => {
     if (p.status === 'Completed') return false;
@@ -1629,11 +667,11 @@ export default function Dashboard() {
     date.setDate(date.getDate() - (6 - i));
     const dateStr = date.toISOString().split('T')[0];
     
-    const spentUpToDate = profitEligibleTransactions
+    const spentUpToDate = transactions
       .filter(t => t.type === 'Expense' && t.date <= dateStr)
       .reduce((acc, t) => acc + (t.amount || 0), 0);
       
-    const incomeUpToDate = profitEligibleTransactions
+    const incomeUpToDate = transactions
       .filter(t => t.type === 'Income' && t.date <= dateStr)
       .reduce((acc, t) => acc + (t.amount || 0), 0);
 
@@ -1654,2056 +692,49 @@ export default function Dashboard() {
     totalExpense: totalSpent,
   };
 
-  const portfolioSemaforo = useMemo(() => {
-    const active = projects.filter((project: any) => {
-      const status = String(project?.status || '').toLowerCase();
-      return status !== 'completed' && status !== 'cancelled';
-    });
-
-    let high = 0;
-    let medium = 0;
-    const risks: string[] = [];
-    const strengths: string[] = [];
-
-    active.forEach((project: any) => {
-      const name = String(project?.name || 'Proyecto');
-      const budget = Number(project?.budget || 0);
-      const spent = Number(project?.spent || 0);
-      const physical = clampPercent(project?.physicalProgress || 0);
-      const financial = budget > 0 ? clampPercent((spent / budget) * 100) : clampPercent(project?.financialProgress || 0);
-      const gap = financial - physical;
-
-      if (gap > 12) {
-        high += 1;
-        risks.push(`${name}: sobreconsumo financiero (${gap.toFixed(1)}% sobre avance físico).`);
-      } else if (gap > 6) {
-        medium += 1;
-      } else if (physical > 30) {
-        strengths.push(`${name}: balance físico-financiero saludable.`);
-      }
-
-      const area = Number(project?.area || 0);
-      const typology = String(project?.typology || '').toUpperCase();
-      const rate = MARKET_RATE_BY_TYPOLOGY[typology];
-      if (area > 0 && budget > 0 && rate) {
-        const expected = area * rate;
-        if (budget < expected * 0.8) {
-          high += 1;
-          risks.push(`${name}: presupuesto base bajo para ${typology}.`);
-        } else if (budget < expected * 0.9) {
-          medium += 1;
-        } else if (budget <= expected * 1.1) {
-          strengths.push(`${name}: baseline consistente con benchmark de ${typology}.`);
-        }
-      }
-
-      const startDate = project?.startDate ? new Date(project.startDate) : null;
-      const endDate = project?.endDate ? new Date(project.endDate) : null;
-      if (startDate && endDate && !Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
-        const totalDuration = endDate.getTime() - startDate.getTime();
-        const elapsed = Date.now() - startDate.getTime();
-        if (totalDuration > 0 && elapsed > 0) {
-          const expectedPhysical = clampPercent((elapsed / totalDuration) * 100);
-          const delayGap = expectedPhysical - physical;
-          if (delayGap > 15) {
-            high += 1;
-            risks.push(`${name}: atraso crítico (${delayGap.toFixed(1)}% bajo cronograma esperado).`);
-          } else if (delayGap > 8) {
-            medium += 1;
-          }
-        }
-      }
-    });
-
-    if (lowStockItems.length >= 5) {
-      high += 1;
-      risks.push(`Inventario: ${lowStockItems.length} materiales en nivel crítico.`);
-    } else if (lowStockItems.length > 0) {
-      medium += 1;
-      risks.push(`Inventario: ${lowStockItems.length} materiales cerca de stock mínimo.`);
-    } else {
-      strengths.push('Inventario: sin alertas críticas de abastecimiento.');
-    }
-
-    const score = Math.max(0, Math.min(100, 100 - (high * 18) - (medium * 8)));
-    const status = high > 0 ? 'rojo' : medium > 0 ? 'amarillo' : 'verde';
-
-    return {
-      status,
-      score,
-      high,
-      medium,
-      risks: risks.slice(0, 4),
-      strengths: strengths.slice(0, 4),
-    };
-  }, [projects, lowStockItems]);
-
-  const financialSplitData = [
-    { name: 'Ingresos', value: financialSummary.totalIncome, color: '#10b981' },
-    { name: 'Gastos', value: financialSummary.totalExpense, color: '#ef4444' },
-  ].filter((item) => item.value > 0);
-
-  const materialPriceSignals = useMemo(() => {
-    return [...inventory]
-      .filter((item: any) => Number(item.unitPrice || 0) > 0)
-      .sort((left: any, right: any) => Number(right.unitPrice || 0) - Number(left.unitPrice || 0))
-      .slice(0, 5)
-      .map((item: any) => {
-        const minStock = Number(item.minStock || 0);
-        const stock = Number(item.stock || 0);
-        const critical = minStock > 0 && stock <= minStock;
-        return {
-          id: item.id,
-          name: item.name,
-          unitPrice: Number(item.unitPrice || 0),
-          stock,
-          minStock,
-          critical,
-        };
-      });
-  }, [inventory]);
-
-  const materialBudgetBaseline = useMemo(() => {
-    const baseline: Record<string, { name: string; weightedUnitPrice: number; sampleCount: number }> = {};
-
-    Object.values(portfolioBudgetItemsByProject).forEach((items) => {
-      (items || []).forEach((item: any) => {
-        const rowQty = Number(item?.quantity || 0);
-        const materials = Array.isArray(item?.materials) ? item.materials : [];
-
-        materials.forEach((material: any) => {
-          const materialName = String(material?.name || '').trim();
-          const expectedUnitPrice = Number(material?.unitPrice || 0);
-          const materialQtyPerItem = Number(material?.quantity || 0);
-          if (!materialName || expectedUnitPrice <= 0 || materialQtyPerItem <= 0 || rowQty <= 0) return;
-
-          const key = materialName.toLowerCase();
-          const weight = materialQtyPerItem * rowQty;
-          if (!baseline[key]) {
-            baseline[key] = { name: materialName, weightedUnitPrice: 0, sampleCount: 0 };
-          }
-
-          baseline[key].weightedUnitPrice += expectedUnitPrice * weight;
-          baseline[key].sampleCount += weight;
-        });
-      });
-    });
-
-    Object.keys(baseline).forEach((key) => {
-      const entry = baseline[key];
-      if (entry.sampleCount > 0) {
-        entry.weightedUnitPrice = entry.weightedUnitPrice / entry.sampleCount;
-      }
-    });
-
-    return baseline;
-  }, [portfolioBudgetItemsByProject]);
-
-  const recentMaterialPriceHistory = useMemo(() => {
-    const validOrders = purchaseOrders
-      .filter((order: any) => Number(order?.quantity || 0) > 0 && Number(order?.estimatedCost || 0) > 0)
-      .map((order: any) => {
-        const quantity = Number(order.quantity || 0);
-        const totalCost = Number(order.estimatedCost || 0);
-        const unitPrice = quantity > 0 ? totalCost / quantity : 0;
-        const dateValue = String(order.datePaid || order.dateReceived || order.date || '');
-        return {
-          materialName: String(order.materialName || 'Material').trim(),
-          unitPrice,
-          dateValue,
-          timestamp: Date.parse(dateValue),
-        };
-      })
-      .filter((item: any) => item.materialName && item.unitPrice > 0 && Number.isFinite(item.timestamp));
-
-    const byMaterial = validOrders.reduce((acc: Record<string, any[]>, item: any) => {
-      const key = item.materialName.toLowerCase();
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(item);
-      return acc;
-    }, {});
-
-    const topMaterialKey = Object.keys(byMaterial)
-      .sort((left, right) => byMaterial[right].length - byMaterial[left].length)[0];
-
-    if (!topMaterialKey) {
-      return {
-        materialName: '',
-        points: [] as Array<{ dateLabel: string; unitPrice: number }>,
-        weeklyChangePct: 0,
-        monthlyChangePct: 0,
-      };
-    }
-
-    const pointsRaw = [...byMaterial[topMaterialKey]]
-      .sort((left, right) => left.timestamp - right.timestamp)
-      .slice(-10);
-
-    const points = pointsRaw.map((item) => ({
-      dateLabel: formatDateFns(new Date(item.timestamp), 'dd/MM'),
-      unitPrice: Number(item.unitPrice.toFixed(2)),
-    }));
-
-    const latest = pointsRaw[pointsRaw.length - 1]?.unitPrice || 0;
-    const weeklyBaseline = pointsRaw[Math.max(0, pointsRaw.length - 4)]?.unitPrice || latest;
-    const monthlyBaseline = pointsRaw[0]?.unitPrice || latest;
-
-    const weeklyChangePct = weeklyBaseline > 0 ? ((latest - weeklyBaseline) / weeklyBaseline) * 100 : 0;
-    const monthlyChangePct = monthlyBaseline > 0 ? ((latest - monthlyBaseline) / monthlyBaseline) * 100 : 0;
-
-    return {
-      materialName: byMaterial[topMaterialKey][0]?.materialName || '',
-      points,
-      weeklyChangePct: Number(weeklyChangePct.toFixed(1)),
-      monthlyChangePct: Number(monthlyChangePct.toFixed(1)),
-    };
-  }, [purchaseOrders]);
-
-  const materialDeviationAlerts = useMemo(() => {
-    return inventory
-      .map((item: any) => {
-        const key = String(item?.name || '').toLowerCase();
-        const expected = Number(materialBudgetBaseline[key]?.weightedUnitPrice || 0);
-        const current = Number(item?.unitPrice || 0);
-        if (expected <= 0 || current <= 0) return null;
-
-        const deviationPct = ((current - expected) / expected) * 100;
-        if (Math.abs(deviationPct) < 12) return null;
-
-        return {
-          id: item.id,
-          name: item.name,
-          expected,
-          current,
-          deviationPct: Number(deviationPct.toFixed(1)),
-          severity: deviationPct >= 25 ? 'high' : 'medium',
-        };
-      })
-      .filter(Boolean)
-      .sort((left: any, right: any) => Math.abs(right.deviationPct) - Math.abs(left.deviationPct))
-      .slice(0, 6) as Array<{
-        id: string;
-        name: string;
-        expected: number;
-        current: number;
-        deviationPct: number;
-        severity: 'high' | 'medium';
-      }>;
-  }, [inventory, materialBudgetBaseline]);
-
-  const projectedCostOverrunByProject = useMemo(() => {
-    const rows = projects
-      .map((project: any) => {
-        const budgetRows = portfolioBudgetItemsByProject[project.id] || [];
-        let projectedOverrun = 0;
-
-        budgetRows.forEach((row: any) => {
-          const rowQty = Number(row?.quantity || 0);
-          const materials = Array.isArray(row?.materials) ? row.materials : [];
-
-          materials.forEach((material: any) => {
-            const nameKey = String(material?.name || '').toLowerCase();
-            const expectedPrice = Number(material?.unitPrice || 0);
-            const inventoryPrice = Number(
-              inventory.find((inv: any) => String(inv?.name || '').toLowerCase() === nameKey)?.unitPrice || 0
-            );
-            const currentInventoryPrice = inventoryPrice * (1 + (inflationScenarioPct / 100));
-            const plannedQty = Number(material?.quantity || 0) * rowQty;
-            if (expectedPrice <= 0 || currentInventoryPrice <= 0 || plannedQty <= 0) return;
-
-            const delta = currentInventoryPrice - expectedPrice;
-            if (delta > 0) {
-              projectedOverrun += delta * plannedQty;
-            }
-          });
-        });
-
-        const projectBudget = Number(project?.budget || 0);
-        const overrunPctBudget = projectBudget > 0 ? (projectedOverrun / projectBudget) * 100 : 0;
-
-        return {
-          projectId: project.id,
-          projectName: project.name,
-          projectedOverrun,
-          overrunPctBudget: Number(overrunPctBudget.toFixed(2)),
-          recommendation:
-            overrunPctBudget >= 8
-              ? 'Cerrar compras anticipadas y renegociar proveedores críticos de inmediato.'
-              : overrunPctBudget >= 3
-                ? 'Programar compras por lote y revisar alternativas de marca/proveedor.'
-                : 'Mantener monitoreo quincenal de precios para proteger margen.',
-        };
-      })
-      .filter((row) => row.projectedOverrun > 0)
-      .sort((left, right) => right.projectedOverrun - left.projectedOverrun)
-      .slice(0, 5);
-
-    return rows;
-  }, [inflationScenarioPct, inventory, portfolioBudgetItemsByProject, projects]);
-
-  const providerVolatilityRanking = useMemo(() => {
-    const normalized = purchaseOrders
-      .filter((order: any) => Number(order?.quantity || 0) > 0 && Number(order?.estimatedCost || 0) > 0)
-      .map((order: any) => ({
-        supplierName: String(order?.supplier || 'Proveedor sin nombre').trim(),
-        materialName: String(order?.materialName || 'Material').trim(),
-        unitPrice: Number(order.estimatedCost || 0) / Math.max(1, Number(order.quantity || 1)),
-        timestamp: Date.parse(String(order.datePaid || order.dateReceived || order.date || '')),
-      }))
-      .filter((item: any) => Number.isFinite(item.timestamp) && item.unitPrice > 0);
-
-    const bySupplier = normalized.reduce((acc: Record<string, any[]>, row: any) => {
-      const key = row.supplierName;
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(row);
-      return acc;
-    }, {});
-
-    return Object.entries(bySupplier)
-      .map(([supplierName, rows]) => {
-        const byMaterial = (rows as any[]).reduce((acc: Record<string, any[]>, row: any) => {
-          const materialKey = row.materialName.toLowerCase();
-          if (!acc[materialKey]) acc[materialKey] = [];
-          acc[materialKey].push(row);
-          return acc;
-        }, {});
-
-        let totalAbsChangePct = 0;
-        let transitions = 0;
-
-        Object.values(byMaterial).forEach((materialRows: any[]) => {
-          const sorted = [...materialRows].sort((left, right) => left.timestamp - right.timestamp);
-          for (let index = 1; index < sorted.length; index += 1) {
-            const previous = Number(sorted[index - 1].unitPrice || 0);
-            const current = Number(sorted[index].unitPrice || 0);
-            if (previous <= 0 || current <= 0) continue;
-            totalAbsChangePct += Math.abs(((current - previous) / previous) * 100);
-            transitions += 1;
-          }
-        });
-
-        const volatilityPct = transitions > 0 ? totalAbsChangePct / transitions : 0;
-        return {
-          supplierName,
-          volatilityPct: Number(volatilityPct.toFixed(1)),
-          records: (rows as any[]).length,
-          risk: volatilityPct >= 18 ? 'alto' : volatilityPct >= 10 ? 'medio' : 'bajo',
-        };
-      })
-      .filter((row) => row.records >= 2)
-      .sort((left, right) => right.volatilityPct - left.volatilityPct)
-      .slice(0, 5);
-  }, [purchaseOrders]);
-
-  const projectMarginRisk = useMemo(() => {
-    return projects
-      .map((project: any) => {
-        const budget = Number(project?.budget || 0);
-        const spent = Number(project?.spent || 0);
-        const overrun = Number(
-          projectedCostOverrunByProject.find((item) => item.projectId === project.id)?.projectedOverrun || 0
-        );
-
-        const remainingBudget = budget - spent - overrun;
-        const remainingPct = budget > 0 ? (remainingBudget / budget) * 100 : 0;
-
-        let risk: 'verde' | 'amarillo' | 'rojo' = 'verde';
-        if (remainingPct < 5) risk = 'rojo';
-        else if (remainingPct < 12) risk = 'amarillo';
-
-        return {
-          projectId: project.id,
-          projectName: project.name,
-          remainingBudget,
-          remainingPct: Number(remainingPct.toFixed(2)),
-          risk,
-        };
-      })
-      .sort((left, right) => left.remainingPct - right.remainingPct)
-      .slice(0, 6);
-  }, [projects, projectedCostOverrunByProject]);
-
-  const filteredProviderVolatilityRanking = useMemo(() => {
-    if (selectedProviderVolatility === 'all') return providerVolatilityRanking;
-    return providerVolatilityRanking.filter((item) => item.supplierName === selectedProviderVolatility);
-  }, [providerVolatilityRanking, selectedProviderVolatility]);
-
-  const filteredProjectMarginRisk = useMemo(() => {
-    if (selectedMarginProjectId === 'all') return projectMarginRisk;
-    return projectMarginRisk.filter((project) => project.projectId === selectedMarginProjectId);
-  }, [projectMarginRisk, selectedMarginProjectId]);
-
-  const cashflowForecastByHorizon = useMemo(() => {
-    const horizons = [4, 8, 12];
-    const weeksSample = 12;
-    const now = Date.now();
-    const windowStart = now - (weeksSample * 7 * 24 * 60 * 60 * 1000);
-
-    const activeProjects = projects.filter((project: any) => {
-      const status = String(project?.status || '').toLowerCase();
-      return status === 'in progress' || status === 'active';
-    });
-
-    const scenario =
-      cashflowScenario === 'inflation'
-        ? { expenseMultiplier: 1.14, incomeMultiplier: 0.96 }
-        : cashflowScenario === 'stress'
-          ? { expenseMultiplier: 1.22, incomeMultiplier: 0.86 }
-          : { expenseMultiplier: 1, incomeMultiplier: 1 };
-
-    const projectForecast = activeProjects.map((project: any) => {
-      const projectTransactions = transactions.filter((tx: any) => {
-        const txDate = Date.parse(String(tx?.date || ''));
-        return String(tx?.projectId || '') === String(project.id) && Number.isFinite(txDate) && txDate >= windowStart;
-      });
-
-      const sampleExpense = projectTransactions
-        .filter((tx: any) => tx.type === 'Expense')
-        .reduce((acc: number, tx: any) => acc + Number(tx.amount || 0), 0);
-
-      const sampleIncome = projectTransactions
-        .filter((tx: any) => tx.type === 'Income')
-        .reduce((acc: number, tx: any) => acc + Number(tx.amount || 0), 0);
-
-      const avgExpenseWeekly = (sampleExpense / weeksSample) * scenario.expenseMultiplier;
-      const avgIncomeWeekly = (sampleIncome / weeksSample) * scenario.incomeMultiplier;
-
-      const budget = Number(project?.budget || 0);
-      const spent = Number(project?.spent || 0);
-      const remainingBudget = budget - spent;
-
-      return {
-        projectId: project.id,
-        projectName: project.name,
-        remainingBudget,
-        avgExpenseWeekly,
-        avgIncomeWeekly,
-      };
-    });
-
-    const summary = horizons.map((weeks) => {
-      const rows = projectForecast.map((project) => {
-        const projectedExpense = project.avgExpenseWeekly * weeks;
-        const projectedIncome = project.avgIncomeWeekly * weeks;
-        const projectedNet = projectedIncome - projectedExpense;
-        const projectedRemaining = project.remainingBudget - projectedExpense;
-
-        return {
-          ...project,
-          weeks,
-          projectedExpense,
-          projectedIncome,
-          projectedNet,
-          projectedRemaining,
-          risk:
-            projectedRemaining < 0
-              ? 'alto'
-              : projectedRemaining < project.remainingBudget * 0.2
-                ? 'medio'
-                : 'bajo',
-        };
-      });
-
-      return {
-        weeks,
-        projectedExpense: rows.reduce((acc, row) => acc + row.projectedExpense, 0),
-        projectedIncome: rows.reduce((acc, row) => acc + row.projectedIncome, 0),
-        projectedNet: rows.reduce((acc, row) => acc + row.projectedNet, 0),
-        projectedRemaining: rows.reduce((acc, row) => acc + row.projectedRemaining, 0),
-        highRiskProjects: rows.filter((row) => row.risk === 'alto').length,
-        rows,
-      };
-    });
-
-    return summary;
-  }, [cashflowScenario, projects, transactions]);
-
-  const actionableRecommendations = useMemo(() => {
-    const rows: Array<{
-      id: string;
-      title: string;
-      detail: string;
-      impact: 'alto' | 'medio';
-      actionKind: 'workflow' | 'purchase_order' | 'notification';
-      projectId?: string;
-      materialName?: string;
-      quantity?: number;
-      estimatedCost?: number;
-    }> = [];
-
-    riskProjects.slice(0, 2).forEach((project: any) => {
-      const deviation = (Number(project.spent || 0) / Math.max(1, Number(project.budget || 0))) * 100 - Number(project.physicalProgress || 0);
-      rows.push({
-        id: `risk_workflow_${project.id}`,
-        title: `Plan correctivo para ${project.name}`,
-        detail: `Desviación físico-financiera de ${deviation.toFixed(1)}%. Crear flujo de aprobación urgente.`,
-        impact: 'alto',
-        actionKind: 'workflow',
-        projectId: project.id,
-      });
-    });
-
-    lowStockItems.slice(0, 2).forEach((item: any) => {
-      const quantityNeeded = Math.max(1, Number(item.minStock || 0) - Number(item.stock || 0));
-      rows.push({
-        id: `stock_po_${item.id}`,
-        title: `Generar OC para ${item.name}`,
-        detail: `Stock crítico (${item.stock}/${item.minStock}). Crear orden de compra sugerida.`,
-        impact: 'alto',
-        actionKind: 'purchase_order',
-        materialName: item.name,
-        quantity: quantityNeeded,
-        estimatedCost: quantityNeeded * Number(item.unitPrice || 0),
-      });
-    });
-
-    projectedCostOverrunByProject.slice(0, 2).forEach((project) => {
-      rows.push({
-        id: `overrun_notify_${project.projectId}`,
-        title: `Escalar sobrecosto ${project.projectName}`,
-        detail: `Sobre-costo proyectado ${formatCurrency(project.projectedOverrun)}. Notificar al comité ejecutivo.`,
-        impact: 'medio',
-        actionKind: 'notification',
-        projectId: project.projectId,
-      });
-    });
-
-    return rows.slice(0, 6);
-  }, [lowStockItems, projectedCostOverrunByProject, riskProjects]);
-
-  const handleExecuteRecommendation = async (recommendation: {
-    id: string;
-    title: string;
-    detail: string;
-    actionKind: 'workflow' | 'purchase_order' | 'notification';
-    projectId?: string;
-    materialName?: string;
-    quantity?: number;
-    estimatedCost?: number;
-  }) => {
-    try {
-      setExecutingRecommendationId(recommendation.id);
-
-      if (recommendation.actionKind === 'workflow') {
-        await createWorkflow({
-          title: recommendation.title,
-          type: 'other',
-          referenceId: recommendation.projectId || recommendation.id,
-          priority: 'high',
-          description: recommendation.detail,
-          requestedBy: 'IA Copiloto',
-          amount: recommendation.estimatedCost,
-        });
-      } else if (recommendation.actionKind === 'purchase_order') {
-        await createPurchaseOrder({
-          projectId: recommendation.projectId,
-          materialName: recommendation.materialName || 'Material crítico',
-          quantity: Math.max(1, Number(recommendation.quantity || 1)),
-          unit: 'unidad',
-          estimatedCost: Number(recommendation.estimatedCost || 0),
-          supplier: 'Pendiente definir por IA',
-          notes: `Generado automáticamente desde recomendación IA: ${recommendation.detail}`,
-          status: 'Pending',
-          budgetApplied: false,
-          stockApplied: false,
-        });
-      } else {
-        await sendNotification('Acción Ejecutiva IA', recommendation.detail, 'project');
-      }
-
-      await logAction(
-        'Ejecución de recomendación IA',
-        'Dashboard',
-        `${recommendation.title} ejecutada desde Centro de Control`,
-        'update',
-        { recommendationId: recommendation.id, actionKind: recommendation.actionKind }
-      );
-
-      setExecutedRecommendationIds((prev) => [...prev, recommendation.id]);
-      toast.success('Acción ejecutada correctamente');
-    } catch (error) {
-      handleApiError(error, OperationType.WRITE, 'dashboard/recommendations/execute');
-    } finally {
-      setExecutingRecommendationId(null);
-    }
-  };
-
-  const handleOcrFileChange = async (file: File | null) => {
-    if (!file) {
-      setOcrFileName(null);
-      setOcrImageDataUrl(null);
-      return;
-    }
-
-    setOcrFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || '');
-      if (result.startsWith('data:image/')) {
-        setOcrImageDataUrl(result);
-      } else {
-        setOcrImageDataUrl(null);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const buildOcrHistoryQuery = () => {
-    const query: {
-      limit: number;
-      offset?: number;
-      projectId?: string;
-      supplier?: string;
-      invoiceNumber?: string;
-      from?: string;
-      to?: string;
-    } = { limit: 150 };
-
-    if (ocrHistoryProjectFilter !== 'all') {
-      query.projectId = ocrHistoryProjectFilter;
-    }
-
-    const supplierFilter = ocrHistorySupplierFilter.trim();
-    if (supplierFilter) {
-      query.supplier = supplierFilter;
-    }
-
-    const invoiceFilter = ocrHistoryInvoiceFilter.trim();
-    if (invoiceFilter) {
-      query.invoiceNumber = invoiceFilter;
-    }
-
-    if (ocrHistoryDateRange !== 'all') {
-      const days = Number(ocrHistoryDateRange);
-      const fromDate = new Date();
-      fromDate.setHours(0, 0, 0, 0);
-      fromDate.setDate(fromDate.getDate() - Math.max(0, days - 1));
-
-      query.from = fromDate.toISOString();
-      query.to = new Date().toISOString();
-    }
-
-    return query;
-  };
-
-  const refreshOcrValidationHistory = async (mode: 'reset' | 'append' = 'reset') => {
-    const currentOffset = mode === 'append' ? ocrHistoryOffset : 0;
-    const history = await listOcrValidations({
-      ...buildOcrHistoryQuery(),
-      offset: currentOffset,
-    });
-    const incomingItems = history.items || [];
-
-    if (mode === 'append') {
-      setOcrValidationHistory((prev) => {
-        const existingIds = new Set(prev.map((item: any) => item.id));
-        const merged = [...prev];
-        for (const row of incomingItems) {
-          if (!existingIds.has(row.id)) {
-            merged.push(row);
-          }
-        }
-        return merged;
-      });
-    } else {
-      setOcrValidationHistory(incomingItems);
-    }
-
-    setOcrHistoryOffset(currentOffset + incomingItems.length);
-    setOcrHistoryHasMore(Boolean(history.hasMore));
-  };
-
-  const loadMoreOcrHistory = async () => {
-    if (!ocrHistoryHasMore || isLoadingMoreOcrHistory) return;
-
-    try {
-      setIsLoadingMoreOcrHistory(true);
-      await refreshOcrValidationHistory('append');
-    } catch (error) {
-      handleApiError(error, OperationType.GET, 'documents/ocr-validations/load-more');
-    } finally {
-      setIsLoadingMoreOcrHistory(false);
-    }
-  };
-
-  const exportVisibleOcrHistoryCsv = () => {
-    if (sortedVisibleOcrValidationHistory.length === 0) {
-      toast.info('No hay validaciones OCR para exportar con los filtros actuales.');
-      return;
-    }
-
-    const selectedColumns = ocrHistorySelectedColumns;
-    const headers = selectedColumns.map((column) => ocrHistoryColumnLabelMap[column]);
-
-    const escapeCell = (value: unknown) => {
-      const text = String(value ?? '');
-      if (text.includes('"') || text.includes(',') || text.includes('\n')) {
-        return `"${text.replace(/"/g, '""')}"`;
-      }
-      return text;
-    };
-
-    const lines = [
-      headers.join(','),
-      ...sortedVisibleOcrValidationHistory.map((row: any) =>
-        selectedColumns
-          .map((columnKey) => getOcrColumnRawValue(row, columnKey))
-          .map(escapeCell)
-          .join(',')
-      ),
-    ];
-
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    link.href = url;
-    link.download = `ocr-validaciones-${stamp}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const exportVisibleOcrHistoryXlsx = () => {
-    if (sortedVisibleOcrValidationHistory.length === 0) {
-      toast.info('No hay validaciones OCR para exportar con los filtros actuales.');
-      return;
-    }
-
-    const selectedColumns = ocrHistorySelectedColumns;
-    const rows = sortedVisibleOcrValidationHistory.map((row: any) => {
-      const entry: Record<string, string | number> = {};
-      for (const columnKey of selectedColumns) {
-        entry[ocrHistoryColumnLabelMap[columnKey]] = getOcrColumnRawValue(row, columnKey);
-      }
-      return entry;
-    });
-
-    const workbook = XLSX.utils.book_new();
-    const sheet = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(workbook, sheet, 'OCR');
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    XLSX.writeFile(workbook, `ocr-validaciones-${stamp}.xlsx`);
-  };
-
-  const handleValidateDocumentOcr = async () => {
-    if (!ocrRawText.trim() && !ocrImageDataUrl) {
-      toast.error('Proporciona texto OCR o una imagen del documento.');
-      return;
-    }
-
-    try {
-      setIsValidatingDocument(true);
-      const result = await validateDocumentOCR({
-        rawText: ocrRawText,
-        imageDataUrl: ocrImageDataUrl || undefined,
-        purchaseOrderId: ocrSelectedPurchaseOrderId || undefined,
-        projectId: ocrSelectedProjectId || undefined,
-        autoApply: ocrAutoApply,
-        requestedBy: auth.currentUser?.email || auth.currentUser?.displayName || 'IA Copiloto',
-      });
-      setOcrValidationResult(result);
-      try {
-        await refreshOcrValidationHistory('reset');
-      } catch {
-        // Ignore history refresh failures.
-      }
-      toast.success('Validación documental completada');
-    } catch (error) {
-      setOcrValidationResult(null);
-      handleApiError(error, OperationType.WRITE, 'documents/ocr-validate');
-    } finally {
-      setIsValidatingDocument(false);
-    }
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const history = await listOcrValidations({
-          ...buildOcrHistoryQuery(),
-          offset: 0,
-        });
-        if (!cancelled) {
-          const items = history.items || [];
-          setOcrValidationHistory(items);
-          setOcrHistoryOffset(items.length);
-          setOcrHistoryHasMore(Boolean(history.hasMore));
-        }
-      } catch {
-        if (!cancelled) {
-          setOcrValidationHistory([]);
-          setOcrHistoryOffset(0);
-          setOcrHistoryHasMore(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ocrHistoryProjectFilter, ocrHistoryDateRange, ocrHistorySupplierFilter, ocrHistoryInvoiceFilter]);
-
-  useEffect(() => {
-    if (loading || !recentMaterialPriceHistory.materialName || recentMaterialPriceHistory.points.length < 2) return;
-
-    const notifiedKey = `material_price_spike_${new Date().toISOString().slice(0, 10)}`;
-    const notifiedItems = JSON.parse(localStorage.getItem(notifiedKey) || '{}');
-    const materialKey = recentMaterialPriceHistory.materialName.toLowerCase();
-
-    if (
-      recentMaterialPriceHistory.weeklyChangePct >= materialWeeklySpikeThreshold &&
-      !notifiedItems[materialKey]
-    ) {
-      void sendNotification(
-        'Alerta de Precio de Material',
-        `${recentMaterialPriceHistory.materialName} subió ${recentMaterialPriceHistory.weeklyChangePct}% en la última semana (umbral ${materialWeeklySpikeThreshold}%). Recomendado: anticipar compra o renegociar proveedor.`,
-        'inventory'
-      );
-
-      notifiedItems[materialKey] = true;
-      localStorage.setItem(notifiedKey, JSON.stringify(notifiedItems));
-    }
-  }, [loading, materialWeeklySpikeThreshold, recentMaterialPriceHistory]);
-
-  useEffect(() => {
-    if (loading) return;
-
-    const runScheduledAlerts = () => {
-      const now = new Date();
-      const hour = now.getHours();
-      const slot = hour === 8 ? '08' : hour === 16 ? '16' : null;
-      if (!slot) return;
-
-      const dateKey = now.toISOString().slice(0, 10);
-      const sentKey = `scheduled_cost_intel_alert_${dateKey}_${slot}`;
-      if (localStorage.getItem(sentKey) === '1') return;
-
-      const topOverrun = projectedCostOverrunByProject[0];
-      const redProjects = projectMarginRisk.filter((item) => item.risk === 'rojo').length;
-      const volatileSupplier = providerVolatilityRanking[0];
-
-      const bodyParts: string[] = [];
-      if (topOverrun) {
-        bodyParts.push(`Proyecto crítico: ${topOverrun.projectName} (${formatCurrency(topOverrun.projectedOverrun)}).`);
-      }
-      if (redProjects > 0) {
-        bodyParts.push(`Proyectos en rojo: ${redProjects}.`);
-      }
-      if (volatileSupplier) {
-        bodyParts.push(`Proveedor más volátil: ${volatileSupplier.supplierName} (${volatileSupplier.volatilityPct}%).`);
-      }
-
-      if (bodyParts.length > 0) {
-        void sendNotification(
-          `Resumen programado de costos (${slot}:00)`,
-          bodyParts.join(' '),
-          'project'
-        );
-      }
-
-      localStorage.setItem(sentKey, '1');
-    };
-
-    runScheduledAlerts();
-    const intervalId = window.setInterval(runScheduledAlerts, 60 * 1000);
-    return () => window.clearInterval(intervalId);
-  }, [loading, projectMarginRisk, projectedCostOverrunByProject, providerVolatilityRanking]);
-
-  const handleExportMaterialIntelligenceReport = () => {
-    const doc = new jsPDF() as any;
-    const startY = drawReportHeader(doc, 'INTELIGENCIA DE COSTOS DE MATERIALES', {
-      subtitle: `Escenario de inflación aplicado: ${inflationScenarioPct}%`,
-      dateText: `Fecha: ${new Date().toLocaleDateString('es-GT')}`,
-    });
-
-    const trendRows = recentMaterialPriceHistory.points.length
-      ? recentMaterialPriceHistory.points.map((point) => [
-          point.dateLabel,
-          formatCurrency(point.unitPrice),
-        ])
-      : [['Sin datos', '-', '-']];
-
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 41, 59);
-    doc.setFontSize(11);
-    doc.text('1. Tendencia de precio unitario', 14, startY + 6);
-
-    autoTable(doc, {
-      startY: startY + 10,
-      head: [['Fecha', 'Precio unitario']],
-      body: trendRows,
-      theme: 'striped',
-      headStyles: { fillColor: [15, 118, 110] },
-      styles: { fontSize: 9 },
-    });
-
-    const deviationRows = materialDeviationAlerts.length
-      ? materialDeviationAlerts.map((alert) => [
-          alert.name,
-          formatCurrency(alert.expected),
-          formatCurrency(alert.current),
-          `${alert.deviationPct > 0 ? '+' : ''}${alert.deviationPct}%`,
-        ])
-      : [['Sin alertas relevantes', '-', '-', '-']];
-
-    const afterTrendY = (doc as any).lastAutoTable.finalY + 8;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text('2. Desvíos vs presupuesto', 14, afterTrendY);
-
-    autoTable(doc, {
-      startY: afterTrendY + 4,
-      head: [['Material', 'Presupuesto', 'Actual', 'Desvío']],
-      body: deviationRows,
-      theme: 'striped',
-      headStyles: { fillColor: [220, 38, 38] },
-      styles: { fontSize: 9 },
-    });
-
-    const overrunRows = projectedCostOverrunByProject.length
-      ? projectedCostOverrunByProject.map((item) => [
-          item.projectName,
-          formatCurrency(item.projectedOverrun),
-          `${item.overrunPctBudget.toFixed(2)}%`,
-          item.recommendation,
-        ])
-      : [['Sin sobrecosto proyectado', '-', '-', '-']];
-
-    const afterDeviationY = (doc as any).lastAutoTable.finalY + 8;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text('3. Proyección de sobrecosto por proyecto', 14, afterDeviationY);
-
-    autoTable(doc, {
-      startY: afterDeviationY + 4,
-      head: [['Proyecto', 'Sobre-costo', '% Presupuesto', 'Recomendación']],
-      body: overrunRows,
-      theme: 'striped',
-      headStyles: { fillColor: [217, 119, 6] },
-      styles: { fontSize: 8.5, cellPadding: 2.2 },
-      columnStyles: {
-        0: { cellWidth: 42 },
-        1: { cellWidth: 32 },
-        2: { cellWidth: 26 },
-        3: { cellWidth: 86 },
-      },
-    });
-
-    const fileName = `Inteligencia_Materiales_${new Date().toISOString().slice(0, 10)}.pdf`;
-    doc.save(fileName);
-    toast.success('Reporte gerencial exportado');
-  };
-
   return (
-    <div className="space-y-6 lg:space-y-5 min-w-0 overflow-x-hidden lg:h-[calc(100dvh-9.5rem)] lg:overflow-y-auto lg:pr-2 custom-scrollbar">
+    <div className="space-y-8 min-w-0 overflow-x-hidden">
       <header>
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Tablero de Control</h1>
         <p className="text-slate-500 dark:text-slate-400">Resumen ejecutivo y salud de proyectos</p>
       </header>
 
-      <div className="mb-6">
-        <button
-          className="px-4 py-2 rounded-xl bg-primary text-white font-bold shadow hover:bg-primary-hover transition-all"
-          onClick={() => setShowWidgetPicker(true)}
-        >
-          + Agregar Widget
-        </button>
-      
-      </div>
-      {showWidgetPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-          <WidgetPicker onPick={handleAddWidget} />
-          <button className="absolute top-6 right-6 text-white text-2xl" onClick={() => setShowWidgetPicker(false)}>×</button>
-        </div>
-      )}
-      <DraggableGrid cols={4} gap={32}>
-        {/* Gauge: Presupuesto */}
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-          <Gauge
-            value={Math.round(totalBudget / 10000)}
-            min={0}
-            max={Math.max(100, Math.ceil(totalBudget / 10000) + 10)}
-            label="Presupuesto Total"
-            units="k"
-            color="#3b82f6"
-            tooltip={`Presupuesto total asignado a todos los proyectos.\nValor en decenas de miles.`}
-          />
-          {Array.isArray(profitTrendData) && profitTrendData.length > 0 && (
-            <Sparklines data={profitTrendData.map(d=>d.presupuesto || 0)} width={60} height={18} margin={4}>
-              <SparklinesLine color="#3b82f6" style={{strokeWidth:2,fill:'none'}} />
-            </Sparklines>
-          )}
-        </div>
-        {/* Gauge: Gastado */}
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-          <Gauge
-            value={Math.round(totalSpent / 10000)}
-            min={0}
-            max={Math.max(100, Math.ceil(totalBudget / 10000) + 10)}
-            label="Gastado"
-            units="k"
-            color="#ef4444"
-            tooltip={`Total gastado en todos los proyectos.\nValor en decenas de miles.`}
-          />
-          {Array.isArray(profitTrendData) && profitTrendData.length > 0 && (
-            <Sparklines data={profitTrendData.map(d=>d.gastado || 0)} width={60} height={18} margin={4}>
-              <SparklinesLine color="#ef4444" style={{strokeWidth:2,fill:'none'}} />
-            </Sparklines>
-          )}
-        </div>
-        {/* Gauge: Ganancia */}
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-          <Gauge
-            value={Math.round(globalProfit / 10000)}
-            min={-100}
-            max={100}
-            label="Ganancia"
-            units="k"
-            color={globalProfit >= 0 ? '#10b981' : '#ef4444'}
-            tooltip={`Ganancia estimada (ingresos - gastos).\nValor en decenas de miles.`}
-          />
-          {Array.isArray(profitTrendData) && profitTrendData.length > 0 && (
-            <Sparklines data={profitTrendData.map(d=>d.profit || 0)} width={60} height={18} margin={4}>
-              <SparklinesLine color={globalProfit >= 0 ? '#10b981' : '#ef4444'} style={{strokeWidth:2,fill:'none'}} />
-            </Sparklines>
-          )}
-        </div>
-        {/* Gauge: Obras Activas */}
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-          <Gauge
-            value={activeProjects}
-            min={0}
-            max={20}
-            label="Obras Activas"
-            color="#6366f1"
-            tooltip={`Cantidad de proyectos actualmente en ejecución.`}
-          />
-          {Array.isArray(projectHealthChartData) && projectHealthChartData.length > 0 && (
-            <Sparklines data={projectHealthChartData.map(d=>d.obras || 0)} width={60} height={18} margin={4}>
-              <SparklinesLine color="#6366f1" style={{strokeWidth:2,fill:'none'}} />
-            </Sparklines>
-          )}
-        </div>
-        {/* Gauge: Score Semáforo Ejecutivo */}
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-          <Gauge
-            value={portfolioSemaforo?.score || 0}
-            min={0}
-            max={100}
-            label="Salud Portafolio (%)"
-            color={portfolioSemaforo?.status === 'verde' ? '#10b981' : portfolioSemaforo?.status === 'amarillo' ? '#f59e42' : '#ef4444'}
-            tooltip={`Score global del Semáforo Ejecutivo IA.\nVerde: óptimo, Amarillo: atención, Rojo: crítico.`}
-          />
-          {Array.isArray(portfolioSemaforo?.scoreHistory) && portfolioSemaforo.scoreHistory.length > 0 && (
-            <Sparklines data={portfolioSemaforo.scoreHistory} width={60} height={18} margin={4}>
-              <SparklinesLine color={portfolioSemaforo?.status === 'verde' ? '#10b981' : portfolioSemaforo?.status === 'amarillo' ? '#f59e42' : '#ef4444'} style={{strokeWidth:2,fill:'none'}} />
-            </Sparklines>
-          )}
-        </div>
-
-      </DraggableGrid>
-
-      {/* Estado para widgets y picker (debe ir fuera del render) */}
-
-      <div id="executive-control-center" ref={executiveControlRef} className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <div>
-            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Semáforo Ejecutivo IA</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Control integral de costos, cronograma e inventario</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent('OPEN_AI_CHAT'));
-                window.dispatchEvent(new CustomEvent('AI_COMMAND', {
-                  detail: {
-                    command: 'CONTROL_TOTAL_PORTFOLIO',
-                    params: {},
-                  },
-                }));
-              }}
-              className="px-3 py-1.5 rounded-full bg-primary text-white text-[10px] font-black uppercase tracking-widest hover:bg-primary-hover transition-all"
-            >
-              Abrir Copiloto
-            </button>
-            <span className={cn(
-              "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
-              portfolioSemaforo.status === 'verde' && "bg-emerald-50 text-emerald-700 border-emerald-200",
-              portfolioSemaforo.status === 'amarillo' && "bg-amber-50 text-amber-700 border-amber-200",
-              portfolioSemaforo.status === 'rojo' && "bg-rose-50 text-rose-700 border-rose-200"
-            )}>
-              {portfolioSemaforo.status}
-            </span>
-            <span className="text-sm font-black text-slate-900 dark:text-white">{portfolioSemaforo.score}%</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-          <div className="p-3 rounded-2xl bg-rose-50 border border-rose-100">
-            <p className="text-[10px] font-black uppercase tracking-widest text-rose-700">Alertas críticas</p>
-            <p className="text-2xl font-black text-rose-700">{portfolioSemaforo.high}</p>
-          </div>
-          <div className="p-3 rounded-2xl bg-amber-50 border border-amber-100">
-            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Alertas moderadas</p>
-            <p className="text-2xl font-black text-amber-700">{portfolioSemaforo.medium}</p>
-          </div>
-          <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100">
-            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Fortalezas detectadas</p>
-            <p className="text-2xl font-black text-emerald-700">{portfolioSemaforo.strengths.length}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Riesgos principales</p>
-            {portfolioSemaforo.risks.length === 0 ? (
-              <p className="text-xs font-semibold text-slate-500">Sin riesgos relevantes en este corte.</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {portfolioSemaforo.risks.map((risk, idx) => (
-                  <li key={idx} className="text-xs text-slate-700 dark:text-slate-200">• {risk}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Pros detectados</p>
-            {portfolioSemaforo.strengths.length === 0 ? (
-              <p className="text-xs font-semibold text-slate-500">Sin fortalezas destacadas todavía.</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {portfolioSemaforo.strengths.map((strength, idx) => (
-                  <li key={idx} className="text-xs text-slate-700 dark:text-slate-200">• {strength}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-4 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Brecha físico-financiera crítica</p>
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">Umbral {physicalFinancialDeviationThreshold}%</span>
-          </div>
-          {physicalFinancialGapRanking.length === 0 ? (
-            <p className="text-xs font-semibold text-slate-500">Sin brechas positivas relevantes en obras activas.</p>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div className="h-44">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
-                  <BarChart data={physicalFinancialGapRanking} layout="vertical" margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} unit="%" />
-                    <YAxis type="category" dataKey="shortName" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} width={92} />
-                    <Tooltip formatter={(value: number) => [`+${value.toFixed(1)}%`, 'Brecha']} />
-                    <Bar dataKey="gap" fill="#f97316" radius={[0, 8, 8, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="space-y-2">
-                {physicalFinancialGapRanking.slice(0, 3).map((row) => (
-                  <div key={row.projectId} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
-                    <p className="text-xs font-black text-slate-900 dark:text-white">{row.projectName}</p>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                      Físico {row.physicalProgress.toFixed(1)}% • Financiero {row.financialProgress.toFixed(1)}% • <span className="font-black text-rose-600">Brecha +{row.gap.toFixed(1)}%</span>
-                    </p>
-                    <p className="text-[10px] text-slate-500 mt-1">{row.recommendation}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+      <div className="bento-grid">
+        <StatCard 
+          title="Presupuesto Total" 
+          value={formatCurrency(totalBudget)} 
+          icon={HandCoins} 
+          trend="up" 
+          trendValue="+12.0%" 
+          color="bg-primary shadow-primary/20"
+        />
+        <StatCard 
+          title="Total Gastado" 
+          value={formatCurrency(totalSpent)} 
+          icon={TrendingDown} 
+          trend="up" 
+          trendValue="+8.0%" 
+          color="bg-blue-600 shadow-blue-600/20"
+        />
+        <StatCard 
+          title="Ganancia Estimada" 
+          value={formatCurrency(globalProfit)} 
+          icon={TrendingUp} 
+          trend="up" 
+          trendValue="+15.0%" 
+          color="bg-emerald-600 shadow-emerald-600/20"
+        />
+        <StatCard 
+          title="Obras Activas" 
+          value={activeProjects} 
+          icon={Construction} 
+          color="bg-purple-600 shadow-purple-600/20"
+        />
       </div>
 
-      <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-          <div>
-            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Vigilancia de Precios de Materiales</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Materiales de mayor impacto en costo unitario para presupuestar y controlar compras</p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => navigate('/inventory')}
-              className="px-3 py-1.5 rounded-full bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all"
-            >
-              Abrir Inventario
-            </button>
-            <button
-              type="button"
-              onClick={handleExportMaterialIntelligenceReport}
-              className="px-3 py-1.5 rounded-full bg-primary text-white text-[10px] font-black uppercase tracking-widest hover:bg-primary-hover transition-all"
-            >
-              Exportar PDF
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Escenario What-if inflación</p>
-          {[0, 5, 10, 15].map((pct) => (
-            <button
-              key={pct}
-              type="button"
-              onClick={() => setInflationScenarioPct(pct)}
-              className={cn(
-                'px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all',
-                inflationScenarioPct === pct
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'
-              )}
-            >
-              {pct}%
-            </button>
-          ))}
-          <span className="text-[10px] text-slate-500">Aplicado sobre precio actual de inventario para proyección.</span>
-          <span className="text-[10px] text-slate-500">Umbral alerta semanal actual: {materialWeeklySpikeThreshold}%</span>
-        </div>
-
-        {materialPriceSignals.length === 0 ? (
-          <p className="text-xs font-semibold text-slate-500">Aún no hay materiales con precio unitario registrado.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
-            {materialPriceSignals.map((item) => (
-              <div
-                key={item.id}
-                className={cn(
-                  'rounded-2xl border p-3',
-                  item.critical
-                    ? 'border-rose-200 bg-rose-50/70 dark:border-rose-500/40 dark:bg-rose-500/10'
-                    : 'border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/40'
-                )}
-              >
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 line-clamp-2">{item.name}</p>
-                <p className="text-lg font-black text-slate-900 dark:text-white mt-1">{formatCurrency(item.unitPrice)}</p>
-                <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
-                  Stock: <span className="font-black">{item.stock}</span>
-                </p>
-                <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                  Mínimo: <span className="font-black">{item.minStock}</span>
-                </p>
-                <p className={cn(
-                  'text-[10px] font-black uppercase tracking-wider mt-2',
-                  item.critical ? 'text-rose-600' : 'text-emerald-600'
-                )}>
-                  {item.critical ? 'Priorizar compra' : 'Stock aceptable'}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2">
-          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Historial de precio (compras)</p>
-              {recentMaterialPriceHistory.materialName && (
-                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{recentMaterialPriceHistory.materialName}</span>
-              )}
-            </div>
-
-            {recentMaterialPriceHistory.points.length >= 2 ? (
-              <>
-                <div className="h-44">
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
-                    <LineChart data={recentMaterialPriceHistory.points} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="dateLabel" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value}`} />
-                      <Tooltip formatter={(value: number) => [formatCurrency(value), 'Precio unitario']} />
-                      <Line type="monotone" dataKey="unitPrice" stroke="#0f766e" strokeWidth={3} dot={{ r: 2 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-2 py-1.5">
-                    <p className="text-[9px] uppercase font-black tracking-wider text-slate-500">Variación semanal</p>
-                    <p className={cn('text-xs font-black', recentMaterialPriceHistory.weeklyChangePct > 0 ? 'text-rose-600' : 'text-emerald-600')}>
-                      {recentMaterialPriceHistory.weeklyChangePct > 0 ? '+' : ''}{recentMaterialPriceHistory.weeklyChangePct}%
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-2 py-1.5">
-                    <p className="text-[9px] uppercase font-black tracking-wider text-slate-500">Variación mensual</p>
-                    <p className={cn('text-xs font-black', recentMaterialPriceHistory.monthlyChangePct > 0 ? 'text-rose-600' : 'text-emerald-600')}>
-                      {recentMaterialPriceHistory.monthlyChangePct > 0 ? '+' : ''}{recentMaterialPriceHistory.monthlyChangePct}%
-                    </p>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <p className="text-xs text-slate-500">No hay suficiente historial de órdenes de compra para generar tendencia.</p>
-            )}
-          </div>
-
-          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Desvío automático vs presupuesto</p>
-            {materialDeviationAlerts.length === 0 ? (
-              <p className="text-xs text-slate-500">Sin desvíos relevantes por ahora (umbral ±12%).</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {materialDeviationAlerts.slice(0, 4).map((alert) => (
-                  <li key={alert.id} className="text-xs text-slate-700 dark:text-slate-200">
-                    <span className={cn('font-black', alert.deviationPct > 0 ? 'text-rose-600' : 'text-emerald-600')}>
-                      {alert.name}: {alert.deviationPct > 0 ? '+' : ''}{alert.deviationPct}%
-                    </span>{' '}
-                    (Presupuesto {formatCurrency(alert.expected)} vs actual {formatCurrency(alert.current)})
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-4 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Proyección de sobrecosto por proyecto</p>
-          {projectedCostOverrunByProject.length === 0 ? (
-            <p className="text-xs text-slate-500">No se detecta sobrecosto proyectado con los precios actuales.</p>
-          ) : (
-            <div className="space-y-2">
-              {projectedCostOverrunByProject.slice(0, 3).map((project) => (
-                <div key={project.projectId} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
-                  <p className="text-xs font-black text-slate-900 dark:text-white">{project.projectName}</p>
-                  <p className="text-xs text-rose-600 font-black">Sobre-costo proyectado: {formatCurrency(project.projectedOverrun)} ({project.overrunPctBudget.toFixed(2)}% del presupuesto)</p>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">{project.recommendation}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Volatilidad de precios por proveedor</p>
-              <select
-                value={selectedProviderVolatility}
-                onChange={(e) => setSelectedProviderVolatility(e.target.value)}
-                className="px-2 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700"
-              >
-                <option value="all">Todos</option>
-                {providerVolatilityRanking.map((item) => (
-                  <option key={item.supplierName} value={item.supplierName}>{item.supplierName}</option>
-                ))}
-              </select>
-            </div>
-            {filteredProviderVolatilityRanking.length === 0 ? (
-              <p className="text-xs text-slate-500">Sin suficientes órdenes para calcular volatilidad por proveedor.</p>
-            ) : (
-              <div className="space-y-2">
-                {filteredProviderVolatilityRanking.map((item) => (
-                  <div key={item.supplierName} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
-                    <p className="text-xs font-black text-slate-900 dark:text-white">{item.supplierName}</p>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                      Volatilidad promedio: <span className="font-black">{item.volatilityPct}%</span> • registros: {item.records}
-                    </p>
-                    <p className={cn(
-                      'text-[10px] font-black uppercase tracking-wider mt-1',
-                      item.risk === 'alto' && 'text-rose-600',
-                      item.risk === 'medio' && 'text-amber-600',
-                      item.risk === 'bajo' && 'text-emerald-600'
-                    )}>
-                      Riesgo {item.risk}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Semáforo de margen por proyecto</p>
-              <select
-                value={selectedMarginProjectId}
-                onChange={(e) => setSelectedMarginProjectId(e.target.value)}
-                className="px-2 py-1 rounded-lg border border-slate-300 bg-white text-[10px] font-bold text-slate-700"
-              >
-                <option value="all">Todos</option>
-                {projectMarginRisk.map((project) => (
-                  <option key={project.projectId} value={project.projectId}>{project.projectName}</option>
-                ))}
-              </select>
-            </div>
-            {filteredProjectMarginRisk.length === 0 ? (
-              <p className="text-xs text-slate-500">Sin proyectos para evaluar margen.</p>
-            ) : (
-              <div className="space-y-2">
-                {filteredProjectMarginRisk.map((project) => (
-                  <div key={project.projectId} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-black text-slate-900 dark:text-white">{project.projectName}</p>
-                      <span className={cn(
-                        'px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border',
-                        project.risk === 'verde' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                        project.risk === 'amarillo' && 'bg-amber-50 text-amber-700 border-amber-200',
-                        project.risk === 'rojo' && 'bg-rose-50 text-rose-700 border-rose-200'
-                      )}>
-                        {project.risk}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
-                      Margen disponible: <span className="font-black">{formatCurrency(project.remainingBudget)}</span> ({project.remainingPct.toFixed(2)}% del presupuesto)
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div>
-            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Recomendaciones IA Ejecutables</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Acciones inmediatas que el sistema puede ejecutar desde este panel</p>
-          </div>
-        </div>
-        {actionableRecommendations.length === 0 ? (
-          <p className="text-xs text-slate-500">Sin acciones urgentes detectadas por ahora.</p>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {actionableRecommendations.map((recommendation) => {
-              const isExecuted = executedRecommendationIds.includes(recommendation.id);
-              const isRunning = executingRecommendationId === recommendation.id;
-
-              return (
-                <div key={recommendation.id} className="rounded-2xl border border-slate-200 dark:border-slate-700 px-3 py-3 bg-slate-50/70 dark:bg-slate-800/40">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-black text-slate-900 dark:text-white">{recommendation.title}</p>
-                    <span className={cn(
-                      'px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border',
-                      recommendation.impact === 'alto' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-                    )}>
-                      {recommendation.impact}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">{recommendation.detail}</p>
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      type="button"
-                      disabled={isExecuted || isRunning}
-                      onClick={() => void handleExecuteRecommendation(recommendation)}
-                      className="px-3 py-1.5 rounded-full bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
-                    >
-                      {isExecuted ? 'Aplicada' : isRunning ? 'Ejecutando...' : 'Aplicar ahora'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div>
-            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Forecast de Flujo de Caja (4/8/12 semanas)</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Proyección de caja con tendencia histórica por obra activa</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {[
-              { key: 'base', label: 'Base' },
-              { key: 'inflation', label: 'Inflación alta' },
-              { key: 'stress', label: 'Estrés' },
-            ].map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => setCashflowScenario(option.key as 'base' | 'inflation' | 'stress')}
-                className={cn(
-                  'px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all',
-                  cashflowScenario === option.key
-                    ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-          {cashflowForecastByHorizon.map((forecast) => (
-            <div key={forecast.weeks} className="rounded-2xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/70 dark:bg-slate-800/40">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{forecast.weeks} semanas</p>
-              <p className={cn('text-lg font-black mt-1', forecast.projectedNet >= 0 ? 'text-emerald-600' : 'text-rose-600')}>
-                {formatCurrency(forecast.projectedNet)}
-              </p>
-              <p className="text-[11px] text-slate-600 dark:text-slate-300">Ingreso: {formatCurrency(forecast.projectedIncome)}</p>
-              <p className="text-[11px] text-slate-600 dark:text-slate-300">Egreso: {formatCurrency(forecast.projectedExpense)}</p>
-              <p className="text-[11px] text-slate-600 dark:text-slate-300">Riesgo alto: {forecast.highRiskProjects} obras</p>
-            </div>
-          ))}
-        </div>
-        <div className="h-52">
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
-            <LineChart data={cashflowForecastByHorizon} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="weeks" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `${value}w`} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${Math.round(value / 1000)}k`} />
-              <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name === 'projectedNet' ? 'Neto proyectado' : 'Saldo proyectado']} />
-              <Line type="monotone" dataKey="projectedNet" stroke="#0f766e" strokeWidth={3} dot={{ r: 2 }} />
-              <Line type="monotone" dataKey="projectedRemaining" stroke="#1d4ed8" strokeWidth={2} dot={{ r: 2 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div>
-            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Validación Documental OCR</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Extrae datos de factura/orden y valida contra OC y presupuesto del proyecto</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-          <select
-            value={ocrSelectedProjectId}
-            onChange={(e) => setOcrSelectedProjectId(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-700"
-          >
-            <option value="">Proyecto (opcional)</option>
-            {projects.map((project: any) => (
-              <option key={project.id} value={project.id}>{project.name}</option>
-            ))}
-          </select>
-
-          <select
-            value={ocrSelectedPurchaseOrderId}
-            onChange={(e) => setOcrSelectedPurchaseOrderId(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-700"
-          >
-            <option value="">Orden de compra (opcional)</option>
-            {purchaseOrders.slice(0, 100).map((order: any) => (
-              <option key={order.id} value={order.id}>{order.materialName} • {order.supplier || 'N/A'} • {formatCurrency(Number(order.estimatedCost || 0))}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-          <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/70 dark:bg-slate-800/40">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Imagen para OCR (opcional)</p>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => void handleOcrFileChange(e.target.files?.[0] || null)}
-              className="text-xs"
-            />
-            <p className="text-[10px] text-slate-500 mt-2">{ocrFileName || 'Sin archivo seleccionado'}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/70 dark:bg-slate-800/40">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Texto OCR / factura</p>
-            <textarea
-              value={ocrRawText}
-              onChange={(e) => setOcrRawText(e.target.value)}
-              rows={5}
-              placeholder="Pega aquí el texto del documento (si ya tienes OCR)..."
-              className="w-full px-2 py-2 rounded-lg border border-slate-300 bg-white text-xs text-slate-700"
-            />
-          </div>
-        </div>
-
-        <div className="mb-3 rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/70 dark:bg-slate-800/40">
-          <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
-            <input
-              type="checkbox"
-              checked={ocrAutoApply}
-              onChange={(e) => setOcrAutoApply(e.target.checked)}
-              className="accent-primary"
-            />
-            Auto-aplicar decisión del motor de reglas OCR
-          </label>
-          <p className="text-[10px] text-slate-500 mt-1">
-            Reglas: aprobar si score alto y consistencia OC; revisar en zona media; rechazar alto riesgo.
-          </p>
-        </div>
-
-        <div className="flex justify-end mb-3">
-          <button
-            type="button"
-            onClick={() => void handleValidateDocumentOcr()}
-            disabled={isValidatingDocument}
-            className="px-3 py-1.5 rounded-full bg-primary text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
-          >
-            {isValidatingDocument ? 'Validando...' : 'Validar documento'}
-          </button>
-        </div>
-
-        {ocrValidationResult && (
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/70 dark:bg-slate-800/40">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <p className="text-xs font-black text-slate-900 dark:text-white">Resultado: {ocrValidationResult.status}</p>
-              <span className={cn(
-                'px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border',
-                ocrValidationResult.score >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : ocrValidationResult.score >= 60 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'
-              )}>
-                score {ocrValidationResult.score}
-              </span>
-            </div>
-            <div className="mb-2 flex items-center gap-2 flex-wrap">
-              <span className={cn(
-                'px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border',
-                ocrValidationResult.decision === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : ocrValidationResult.decision === 'review' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'
-              )}>
-                decisión {ocrValidationResult.decision || 'N/A'}
-              </span>
-              {ocrValidationResult.autoAction && (
-                <span className="text-[10px] text-slate-600 dark:text-slate-300">
-                  {ocrValidationResult.autoAction.applied ? 'Auto-acción aplicada' : 'Auto-acción no aplicada'}: {ocrValidationResult.autoAction.summary}
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-slate-600 dark:text-slate-300 mb-2">
-              Extraído: proveedor {ocrValidationResult.extracted?.supplier || 'N/A'} • total {formatCurrency(Number(ocrValidationResult.extracted?.total || 0))} • factura {ocrValidationResult.extracted?.invoiceNumber || 'N/A'}
-            </p>
-            <ul className="space-y-1.5">
-              {(ocrValidationResult.checks || []).map((check: any, index: number) => (
-                <li key={`${check.name}_${index}`} className="text-[11px] text-slate-700 dark:text-slate-200">
-                  <span className={cn('font-black uppercase', check.status === 'pass' ? 'text-emerald-600' : check.status === 'warn' ? 'text-amber-600' : 'text-rose-600')}>
-                    {check.status}
-                  </span>{' '}
-                  {check.name}: {check.detail}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/70 dark:bg-slate-800/40">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Efectividad OCR (últimas validaciones)</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mb-3">
-            <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-2.5 py-2 bg-white/80 dark:bg-slate-900/30">
-              <p className="text-[9px] uppercase tracking-wider font-black text-slate-500">Total</p>
-              <p className="text-sm font-black text-slate-900 dark:text-white">{ocrEffectiveness.total}</p>
-            </div>
-            <div className="rounded-xl border border-emerald-200 px-2.5 py-2 bg-emerald-50/60">
-              <p className="text-[9px] uppercase tracking-wider font-black text-emerald-700">Aprobadas</p>
-              <p className="text-sm font-black text-emerald-700">{ocrEffectiveness.approved}</p>
-            </div>
-            <div className="rounded-xl border border-amber-200 px-2.5 py-2 bg-amber-50/60">
-              <p className="text-[9px] uppercase tracking-wider font-black text-amber-700">En revisión</p>
-              <p className="text-sm font-black text-amber-700">{ocrEffectiveness.review}</p>
-            </div>
-            <div className="rounded-xl border border-rose-200 px-2.5 py-2 bg-rose-50/60">
-              <p className="text-[9px] uppercase tracking-wider font-black text-rose-700">Rechazadas</p>
-              <p className="text-sm font-black text-rose-700">{ocrEffectiveness.rejected}</p>
-            </div>
-            <div className="rounded-xl border border-indigo-200 px-2.5 py-2 bg-indigo-50/60">
-              <p className="text-[9px] uppercase tracking-wider font-black text-indigo-700">Auto / Score</p>
-              <p className="text-sm font-black text-indigo-700">{ocrEffectiveness.autoApplied} / {ocrEffectiveness.avgScore}</p>
-            </div>
-          </div>
-
-          <div className="mb-2 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Presets OCR</span>
-              <button
-                type="button"
-                onClick={() => applyOcrPresetById('auditoria')}
-                className={cn(
-                  'px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border',
-                  ocrHistorySelectedPresetId === 'auditoria'
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
-                )}
-              >
-                Auditoría
-              </button>
-              <button
-                type="button"
-                onClick={() => applyOcrPresetById('operaciones')}
-                className={cn(
-                  'px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border',
-                  ocrHistorySelectedPresetId === 'operaciones'
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
-                )}
-              >
-                Operaciones
-              </button>
-              <button
-                type="button"
-                onClick={() => applyOcrPresetById('gerencia')}
-                className={cn(
-                  'px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border',
-                  ocrHistorySelectedPresetId === 'gerencia'
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
-                )}
-              >
-                Gerencia
-              </button>
-              <input
-                type="text"
-                value={ocrHistoryPresetSearchTerm}
-                onChange={(e) => setOcrHistoryPresetSearchTerm(e.target.value)}
-                placeholder="Buscar preset..."
-                className="px-2 py-1 rounded-md text-[10px] font-bold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
-              />
-              <select
-                value={ocrHistorySelectedPresetId.startsWith('custom_') ? ocrHistorySelectedPresetId : ''}
-                onChange={(e) => {
-                  if (!e.target.value) return;
-                  applyOcrPresetById(e.target.value);
-                }}
-                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
-              >
-                <option value="">Personalizados...</option>
-                {filteredCustomOcrPresets.map((preset) => (
-                  <option key={preset.id} value={preset.id}>{preset.name}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => moveSelectedCustomOcrPreset('up')}
-                disabled={!hasSelectedCustomPreset || selectedCustomPresetIndex === 0}
-                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 disabled:opacity-50"
-              >
-                Subir
-              </button>
-              <button
-                type="button"
-                onClick={() => moveSelectedCustomOcrPreset('down')}
-                disabled={!hasSelectedCustomPreset || selectedCustomPresetIndex === ocrHistoryCustomPresets.length - 1}
-                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 disabled:opacity-50"
-              >
-                Bajar
-              </button>
-              <input
-                type="text"
-                value={ocrHistoryPresetNameInput}
-                onChange={(e) => setOcrHistoryPresetNameInput(e.target.value)}
-                placeholder="Nombre preset"
-                className="px-2 py-1 rounded-md text-[10px] font-bold border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
-              />
-              <button
-                type="button"
-                onClick={saveCurrentAsCustomOcrPreset}
-                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-200 bg-emerald-50/70 dark:bg-emerald-900/20"
-              >
-                Guardar Actual
-              </button>
-              <button
-                type="button"
-                onClick={restoreBaseOcrPreset}
-                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-200 bg-amber-50/70 dark:bg-amber-900/20"
-              >
-                Restaurar Base
-              </button>
-              <button
-                type="button"
-                onClick={deleteSelectedCustomOcrPreset}
-                disabled={!hasSelectedCustomPreset}
-                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-200 bg-rose-50/70 dark:bg-rose-900/20"
-              >
-                Eliminar
-              </button>
-              <button
-                type="button"
-                onClick={exportCustomOcrPresetJson}
-                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-200 bg-sky-50/70 dark:bg-sky-900/20"
-              >
-                Exportar JSON
-              </button>
-              <button
-                type="button"
-                onClick={() => ocrPresetImportInputRef.current?.click()}
-                className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-200 bg-violet-50/70 dark:bg-violet-900/20"
-              >
-                Importar JSON
-              </button>
-              <input
-                ref={ocrPresetImportInputRef}
-                type="file"
-                accept="application/json,.json"
-                onChange={(e) => importCustomOcrPresetJson(e.target.files?.[0] || null)}
-                className="hidden"
-              />
-            </div>
-          </div>
-
-          <div className="mb-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-9 gap-2">
-            <div className="lg:col-span-2 flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 p-1 bg-white dark:bg-slate-900">
-              <button
-                type="button"
-                onClick={() => setOcrHistoryViewMode('cards')}
-                className={cn(
-                  'flex-1 px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors',
-                  ocrHistoryViewMode === 'cards'
-                    ? 'bg-primary text-white'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                )}
-              >
-                Tarjetas
-              </button>
-              <button
-                type="button"
-                onClick={() => setOcrHistoryViewMode('table')}
-                className={cn(
-                  'flex-1 px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors',
-                  ocrHistoryViewMode === 'table'
-                    ? 'bg-primary text-white'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                )}
-              >
-                Tabla
-              </button>
-            </div>
-
-            <select
-              value={ocrHistoryProjectFilter}
-              onChange={(e) => setOcrHistoryProjectFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
-            >
-              <option value="all">Todos los proyectos</option>
-              {ocrHistoryProjectOptions.map((project) => (
-                <option key={project.id} value={project.id}>{project.name}</option>
-              ))}
-            </select>
-
-            <select
-              value={ocrHistoryDecisionFilter}
-              onChange={(e) => setOcrHistoryDecisionFilter(e.target.value as 'all' | 'approved' | 'review' | 'rejected')}
-              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
-            >
-              <option value="all">Todas las decisiones</option>
-              <option value="approved">Aprobadas</option>
-              <option value="review">En revisión</option>
-              <option value="rejected">Rechazadas</option>
-            </select>
-
-            <select
-              value={ocrHistoryDateRange}
-              onChange={(e) => setOcrHistoryDateRange(e.target.value as '7' | '30' | '90' | 'all')}
-              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
-            >
-              <option value="7">Últimos 7 días</option>
-              <option value="30">Últimos 30 días</option>
-              <option value="90">Últimos 90 días</option>
-              <option value="all">Todo el historial</option>
-            </select>
-
-            <input
-              type="text"
-              value={ocrHistorySupplierFilter}
-              onChange={(e) => setOcrHistorySupplierFilter(e.target.value)}
-              placeholder="Proveedor (contiene...)"
-              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
-            />
-
-            <input
-              type="text"
-              value={ocrHistoryInvoiceFilter}
-              onChange={(e) => setOcrHistoryInvoiceFilter(e.target.value)}
-              placeholder="Factura (contiene...)"
-              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
-            />
-
-            <select
-              value={ocrHistorySortBy}
-              onChange={(e) => setOcrHistorySortBy(e.target.value as 'date' | 'score' | 'amount' | 'supplier' | 'invoiceNumber' | 'decision' | 'resultStatus')}
-              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
-            >
-              <option value="date">Ordenar por fecha</option>
-              <option value="score">Ordenar por score</option>
-              <option value="amount">Ordenar por monto</option>
-              <option value="supplier">Ordenar por proveedor</option>
-              <option value="invoiceNumber">Ordenar por factura</option>
-              <option value="decision">Ordenar por decisión</option>
-              <option value="resultStatus">Ordenar por resultado</option>
-            </select>
-
-            <select
-              value={ocrHistorySortDirection}
-              onChange={(e) => setOcrHistorySortDirection(e.target.value as 'asc' | 'desc')}
-              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"
-            >
-              <option value="desc">Descendente</option>
-              <option value="asc">Ascendente</option>
-            </select>
-
-            <button
-              onClick={exportVisibleOcrHistoryCsv}
-              className="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-            >
-              Exportar CSV
-            </button>
-
-            <button
-              onClick={exportVisibleOcrHistoryXlsx}
-              className="px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50/80 dark:bg-emerald-900/20 text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
-            >
-              Exportar XLSX
-            </button>
-          </div>
-
-          <div className="mb-3 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Columnas visibles y exportables</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-1.5">
-              {OCR_HISTORY_COLUMN_OPTIONS.map((column) => {
-                const checked = ocrHistorySelectedColumns.includes(column.key);
-                return (
-                  <label key={column.key} className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-700 dark:text-slate-200">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleOcrHistoryColumn(column.key)}
-                      className="accent-primary"
-                    />
-                    {column.label}
-                  </label>
-                );
-              })}
-            </div>
-            <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-              <label className="inline-flex items-center gap-2 text-[10px] font-bold text-slate-700 dark:text-slate-200">
-                <input
-                  type="checkbox"
-                  checked={ocrHistoryStickyColumnsEnabled}
-                  onChange={(e) => setOcrHistoryStickyColumnsEnabled(e.target.checked)}
-                  className="accent-primary"
-                />
-                Fijar columnas clave (Factura, Proveedor, Score) en vista tabla
-              </label>
-            </div>
-          </div>
-
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Trazabilidad OCR reciente</p>
-          {sortedVisibleOcrValidationHistory.length === 0 ? (
-            <p className="text-xs text-slate-500">Sin validaciones registradas todavía.</p>
-          ) : ocrHistoryViewMode === 'table' ? (
-            <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/30">
-              <table className="min-w-full text-[11px]">
-                <thead className="bg-slate-100/90 dark:bg-slate-800/80 sticky top-0">
-                  <tr>
-                    {ocrHistorySelectedColumns.map((columnKey) => {
-                      const sortableByColumn: Partial<Record<OcrHistoryColumnKey, string>> = {
-                        date: 'date',
-                        score: 'score',
-                        detectedTotal: 'amount',
-                        supplier: 'supplier',
-                        invoiceNumber: 'invoiceNumber',
-                        decision: 'decision',
-                        resultStatus: 'resultStatus',
-                      };
-                      const active = sortableByColumn[columnKey] === ocrHistorySortBy;
-                      const isSortable = Boolean(sortableByColumn[columnKey]);
-                      const stickyLeft = ocrStickyColumnLeftMap[columnKey];
-                      const isSticky = typeof stickyLeft === 'number';
-
-                      return (
-                        <th
-                          key={columnKey}
-                          className={cn(
-                            'px-2.5 py-2 text-left text-[10px] uppercase tracking-wider font-black text-slate-600 dark:text-slate-200 whitespace-nowrap',
-                            isSticky && 'sticky z-20 bg-slate-100/95 dark:bg-slate-800/95'
-                          )}
-                          style={isSticky ? { left: stickyLeft } : undefined}
-                        >
-                          <button
-                            type="button"
-                            disabled={!isSortable}
-                            onClick={() => handleOcrTableHeaderSort(columnKey)}
-                            className={cn(
-                              'inline-flex items-center gap-1',
-                              isSortable ? 'hover:text-slate-900 dark:hover:text-white' : 'cursor-default opacity-80'
-                            )}
-                          >
-                            {ocrHistoryColumnLabelMap[columnKey]}
-                            {active && (
-                              <span className="text-[9px]">{ocrHistorySortDirection === 'asc' ? '▲' : '▼'}</span>
-                            )}
-                          </button>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedVisibleOcrValidationHistory.map((row: any) => (
-                    <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800">
-                      {ocrHistorySelectedColumns.map((columnKey) => {
-                        const stickyLeft = ocrStickyColumnLeftMap[columnKey];
-                        const isSticky = typeof stickyLeft === 'number';
-                        return (
-                          <td
-                            key={`${row.id}_${columnKey}`}
-                            className={cn(
-                              'px-2.5 py-2 text-slate-700 dark:text-slate-200 whitespace-nowrap align-top',
-                              isSticky && 'sticky z-10 bg-white/95 dark:bg-slate-900/95'
-                            )}
-                            style={isSticky ? { left: stickyLeft } : undefined}
-                          >
-                            {getOcrColumnDisplayValue(row, columnKey)}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
-              {sortedVisibleOcrValidationHistory.map((row: any) => (
-                <div key={row.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 bg-white/80 dark:bg-slate-900/30">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-black text-slate-900 dark:text-white">
-                      {ocrHistorySelectedColumns.includes('invoiceNumber')
-                        ? (row.invoiceNumber || 'Documento sin número')
-                        : `Documento ${String(row.id || '').slice(0, 8) || 'N/A'}`}
-                    </p>
-                    <span className={cn(
-                      'px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border',
-                      row.decision === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : row.decision === 'review' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'
-                    )}>
-                      {row.decision}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {ocrHistorySelectedColumns
-                      .filter((columnKey) => columnKey !== 'decision')
-                      .map((columnKey) => {
-                        const value = getOcrColumnDisplayValue(row, columnKey);
-                        if (!value || value === 'N/A') return null;
-                        return (
-                          <span key={`${row.id}_${columnKey}`} className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-300">
-                            <span className="font-black">{ocrHistoryColumnLabelMap[columnKey]}:</span> {value}
-                          </span>
-                        );
-                      })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {ocrHistoryHasMore && (
-            <div className="mt-3 flex justify-end">
-              <button
-                type="button"
-                onClick={() => void loadMoreOcrHistory()}
-                disabled={isLoadingMoreOcrHistory}
-                className="px-3 py-1.5 rounded-full border border-slate-300 dark:border-slate-600 text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
-              >
-                {isLoadingMoreOcrHistory ? 'Cargando...' : 'Cargar más'}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:gap-5 min-w-0">
-        <div className="space-y-6 lg:space-y-5 min-w-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-5 min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
+        <div className="lg:col-span-2 space-y-8 min-w-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 min-w-0">
             <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all duration-300">
               <div className="mb-6 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Tendencia de Ganancia Global</h3>
@@ -3784,49 +815,44 @@ export default function Dashboard() {
                   ))}
                 </select>
               </div>
-              {isMobileChartView && projectHealthData.length > MOBILE_MAX_CHART_ITEMS && (
-                <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Mostrando top {MOBILE_MAX_CHART_ITEMS} obras por monto para evitar solapamiento.
-                </p>
-              )}
               <div className="h-64 min-w-0">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   {chartPreferences.projectHealth === 'line' ? (
-                    <LineChart data={projectHealthChartData} margin={{ top: 10, right: 10, left: 0, bottom: isMobileChartView ? 48 : 30 }}>
+                    <LineChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                      <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 9, fontWeight: 700 }} interval={0} minTickGap={isMobileChartView ? 24 : 10} angle={isMobileChartView ? -32 : -45} textAnchor="end" height={isMobileChartView ? 66 : 80} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
-                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [formatCurrency(value), '']} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                       <Line type="monotone" dataKey="presupuesto" stroke="#3b82f6" strokeWidth={2.5} name="Presupuesto" />
                       <Line type="monotone" dataKey="gastado" stroke="#ef4444" strokeWidth={2.5} name="Gastado" />
                     </LineChart>
                   ) : chartPreferences.projectHealth === 'area' ? (
-                    <AreaChart data={projectHealthChartData} margin={{ top: 10, right: 10, left: 0, bottom: isMobileChartView ? 48 : 30 }}>
+                    <AreaChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                      <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 9, fontWeight: 700 }} interval={0} minTickGap={isMobileChartView ? 24 : 10} angle={isMobileChartView ? -32 : -45} textAnchor="end" height={isMobileChartView ? 66 : 80} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
-                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [formatCurrency(value), '']} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                       <Area type="monotone" dataKey="presupuesto" stroke="#3b82f6" fill="#93c5fd" fillOpacity={0.3} name="Presupuesto" />
                       <Area type="monotone" dataKey="gastado" stroke="#ef4444" fill="#fda4af" fillOpacity={0.3} name="Gastado" />
                     </AreaChart>
                   ) : chartPreferences.projectHealth === 'composed' ? (
-                    <ComposedChart data={projectHealthChartData} margin={{ top: 10, right: 10, left: 0, bottom: isMobileChartView ? 48 : 30 }}>
+                    <ComposedChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                      <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 9, fontWeight: 700 }} interval={0} minTickGap={isMobileChartView ? 24 : 10} angle={isMobileChartView ? -32 : -45} textAnchor="end" height={isMobileChartView ? 66 : 80} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
-                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [formatCurrency(value), '']} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                       <Bar dataKey="gastado" fill="#ef4444" radius={[4, 4, 0, 0]} name="Gastado" barSize={16} />
                       <Line type="monotone" dataKey="presupuesto" stroke="#2563eb" strokeWidth={3} name="Presupuesto" />
                     </ComposedChart>
                   ) : (
-                    <BarChart data={projectHealthChartData} margin={{ top: 10, right: 10, left: 0, bottom: isMobileChartView ? 48 : 30 }}>
+                    <BarChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                      <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 9, fontWeight: 700 }} interval={0} minTickGap={isMobileChartView ? 24 : 10} angle={isMobileChartView ? -32 : -45} textAnchor="end" height={isMobileChartView ? 66 : 80} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
-                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [formatCurrency(value), '']} />
+                      <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                       <Bar dataKey="presupuesto" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Presupuesto" barSize={chartPreferences.projectHealth === 'stacked-bar' ? 22 : 20} stackId={chartPreferences.projectHealth === 'stacked-bar' ? 'health' : undefined} />
                       <Bar dataKey="gastado" fill="#ef4444" radius={[4, 4, 0, 0]} name="Gastado" barSize={chartPreferences.projectHealth === 'stacked-bar' ? 22 : 20} stackId={chartPreferences.projectHealth === 'stacked-bar' ? 'health' : undefined} />
@@ -3958,7 +984,7 @@ export default function Dashboard() {
           </div>
 
           {/* Stacked Bar Chart for Progress Comparison */}
-          <div className="bg-white dark:bg-slate-900 p-6 lg:p-7 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
             <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
                 <TrendingUp size={18} className="text-primary" />
@@ -3992,49 +1018,44 @@ export default function Dashboard() {
                 Seleccione un proyecto en "Actualización rápida de avance" para ver su comparativa individual.
               </p>
             )}
-            {isMobileChartView && progressChartScope !== 'selected' && progressComparisonChartData.length > MOBILE_MAX_CHART_ITEMS && (
-              <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Vista móvil resumida: top {MOBILE_MAX_CHART_ITEMS} obras con mayor avance.
-              </p>
-            )}
             <div className="h-80 min-w-0">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 {chartPreferences.progressComparison === 'line' ? (
-                  <LineChart data={progressComparisonDisplayData} margin={{ top: 20, right: 30, left: 20, bottom: isMobileChartView ? 52 : 60 }}>
+                  <LineChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                    <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 10, fontWeight: 700 }} angle={isMobileChartView ? -32 : -45} textAnchor="end" interval={0} minTickGap={isMobileChartView ? 24 : 10} height={isMobileChartView ? 56 : 62} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} angle={-45} textAnchor="end" interval={0} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `${value.toFixed(1)}%`} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
                     <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                     <Line type="monotone" dataKey="fisico" stroke="#3b82f6" name="Avance Físico" strokeWidth={3} />
                     <Line type="monotone" dataKey="financiero" stroke="#ef4444" name="Avance Financiero" strokeWidth={3} />
                   </LineChart>
                 ) : chartPreferences.progressComparison === 'area' ? (
-                  <AreaChart data={progressComparisonDisplayData} margin={{ top: 20, right: 30, left: 20, bottom: isMobileChartView ? 52 : 60 }}>
+                  <AreaChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                    <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 10, fontWeight: 700 }} angle={isMobileChartView ? -32 : -45} textAnchor="end" interval={0} minTickGap={isMobileChartView ? 24 : 10} height={isMobileChartView ? 56 : 62} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} angle={-45} textAnchor="end" interval={0} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `${value.toFixed(1)}%`} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
                     <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                     <Area type="monotone" dataKey="fisico" stroke="#3b82f6" fill="#93c5fd" fillOpacity={0.3} name="Avance Físico" />
                     <Area type="monotone" dataKey="financiero" stroke="#ef4444" fill="#fda4af" fillOpacity={0.3} name="Avance Financiero" />
                   </AreaChart>
                 ) : chartPreferences.progressComparison === 'radar' ? (
-                  <RadarChart data={progressComparisonDisplayData.slice(0, 8)} outerRadius={95}>
+                  <RadarChart data={progressComparisonChartData.slice(0, 8)} outerRadius={95}>
                     <PolarGrid stroke="#334155" strokeOpacity={0.3} />
-                    <PolarAngleAxis dataKey="chartName" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
+                    <PolarAngleAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
                     <PolarRadiusAxis domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 9 }} />
-                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [`${value.toFixed(1)}%`, '']} />
                     <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                     <Radar dataKey="fisico" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.25} name="Avance Físico" />
                     <Radar dataKey="financiero" stroke="#ef4444" fill="#ef4444" fillOpacity={0.2} name="Avance Financiero" />
                   </RadarChart>
                 ) : (
-                  <BarChart data={progressComparisonDisplayData} margin={{ top: 20, right: 30, left: 20, bottom: isMobileChartView ? 52 : 60 }}>
+                  <BarChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                    <XAxis dataKey="chartName" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: isMobileChartView ? 8 : 10, fontWeight: 700 }} angle={isMobileChartView ? -32 : -45} textAnchor="end" interval={0} minTickGap={isMobileChartView ? 24 : 10} height={isMobileChartView ? 56 : 62} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} angle={-45} textAnchor="end" interval={0} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `${value.toFixed(1)}%`} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ''} formatter={(value: number, name: string) => {
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number, name: string) => {
                       if (name.includes('Restante') || name.includes('Pendiente')) return null;
                       return [`${value.toFixed(1)}%`, name];
                     }} />
@@ -4050,7 +1071,7 @@ export default function Dashboard() {
           </div>
 
           {/* Gantt-style Progress Chart */}
-          <div className="bg-white dark:bg-slate-900 p-5 lg:p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-5">
               <div className="flex items-center gap-4">
                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
@@ -4275,37 +1296,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 lg:gap-5">
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Balance General</h3>
-            <div className="h-52 min-w-0">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
-                <PieChart>
-                  <Pie
-                    data={financialSplitData.length > 0 ? financialSplitData : [{ name: 'Sin datos', value: 1, color: '#94a3b8' }]}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="45%"
-                    innerRadius={55}
-                    outerRadius={78}
-                    paddingAngle={4}
-                  >
-                    {(financialSplitData.length > 0 ? financialSplitData : [{ name: 'Sin datos', value: 1, color: '#94a3b8' }]).map((entry, index) => (
-                      <Cell key={`financial-split-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }}
-                    itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }}
-                    formatter={(value: number) => [formatCurrency(value), '']}
-                  />
-                  <Legend verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingTop: '12px' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
+        <div className="space-y-8">
           <div className="bg-white dark:bg-slate-900 p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
               <AlertTriangle className="text-rose-600" size={20} />
@@ -4315,7 +1306,6 @@ export default function Dashboard() {
               {riskProjects.length > 0 && (
                 <div className="p-4 bg-amber-50 dark:bg-amber-500/10 rounded-xl border border-amber-100 dark:border-amber-500/20">
                   <p className="text-sm font-bold text-amber-700 dark:text-amber-400 mb-2">Desviación Financiera ({riskProjects.length})</p>
-                  <p className="text-[10px] uppercase tracking-wider font-black text-amber-600 dark:text-amber-400 mb-2">Umbral activo: {physicalFinancialDeviationThreshold}%</p>
                   <div className="space-y-2">
                     {riskProjects.slice(0, 3).map(p => {
                       const deviation = (p.spent / p.budget) * 100 - (p.physicalProgress || 0);
@@ -4434,6 +1424,60 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      {/* Floating Action Button for Mobile */}
+      <div className="lg:hidden fixed bottom-24 right-6 z-50">
+        <AnimatePresence>
+          {isFabOpen && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 20 }}
+              className="absolute bottom-16 right-0 w-64 space-y-3"
+            >
+              <QuickActionButton 
+                icon={ConstructionIcon} 
+                label="Nueva Obra" 
+                color="bg-primary"
+                onClick={() => {
+                  setIsFabOpen(false);
+                  navigate('/projects');
+                }}
+              />
+              <QuickActionButton 
+                icon={ShoppingBag} 
+                label="Nueva Compra" 
+                color="bg-amber-500"
+                onClick={() => {
+                  setIsFabOpen(false);
+                  navigate('/purchase-orders');
+                }}
+              />
+              <QuickActionButton 
+                icon={PackageIcon} 
+                label="Mover Inventario" 
+                color="bg-emerald-500"
+                onClick={() => {
+                  setIsFabOpen(false);
+                  navigate('/inventory');
+                }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        <button
+          title={isFabOpen ? 'Cerrar acciones rapidas' : 'Abrir acciones rapidas'}
+          aria-label={isFabOpen ? 'Cerrar acciones rapidas' : 'Abrir acciones rapidas'}
+          onClick={() => setIsFabOpen(!isFabOpen)}
+          className={cn(
+            "w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300",
+            isFabOpen ? "bg-slate-800 dark:bg-white text-white dark:text-slate-900 rotate-45" : "bg-primary text-white shadow-primary-shadow"
+          )}
+        >
+          <Plus size={24} />
+        </button>
+      </div>
+
       {/* Quick Progress Update Modal */}
       <AnimatePresence>
         {isQuickProgressModalOpen && (
@@ -4587,7 +1631,6 @@ export default function Dashboard() {
           </div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }
