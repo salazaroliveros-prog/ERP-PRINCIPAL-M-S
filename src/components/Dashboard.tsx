@@ -1,24 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { 
-  differenceInDays, 
-  parseISO, 
-  startOfDay, 
-  min as minDate, 
+import {
+  differenceInDays,
+  parseISO,
+  startOfDay,
+  min as minDate,
   max as maxDate,
   format as formatDateFns
 } from 'date-fns';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
-  PieChart, 
-  Pie, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
   Cell,
   LineChart,
   Line,
@@ -31,14 +31,14 @@ import {
   Radar,
   PolarGrid,
   PolarAngleAxis,
-  PolarRadiusAxis
+  PolarRadiusAxis,
 } from 'recharts';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Construction, 
-  Users, 
-  Package, 
+import {
+  TrendingUp,
+  TrendingDown,
+  Construction,
+  Users,
+  Package,
   HandCoins,
   AlertTriangle,
   CheckCircle2,
@@ -87,7 +87,11 @@ type DashboardChartKey =
   | 'projectStatus'
   | 'expenseCategory'
   | 'progressComparison'
-  | 'scheduleProgress';
+  | 'scheduleProgress'
+  | 'statsCard1'
+  | 'statsCard2'
+  | 'statsCard3'
+  | 'statsCard4';
 
 type DashboardChartPreferences = Record<DashboardChartKey, string>;
 
@@ -131,40 +135,72 @@ const CHART_TYPE_OPTIONS: Record<DashboardChartKey, Array<{ value: string; label
     { value: 'horizontal-bars', label: 'Barras horizontales' },
     { value: 'radar', label: 'Radar avance' },
   ],
+  statsCard1: [
+    { value: 'number', label: 'Número' },
+    { value: 'gauge', label: 'Acelerómetro' },
+  ],
+  statsCard2: [
+    { value: 'number', label: 'Número' },
+    { value: 'gauge', label: 'Acelerómetro' },
+  ],
+  statsCard3: [
+    { value: 'number', label: 'Número' },
+    { value: 'gauge', label: 'Acelerómetro' },
+  ],
+  statsCard4: [
+    { value: 'number', label: 'Número' },
+    { value: 'gauge', label: 'Acelerómetro' },
+  ],
 };
 
 const THEME_DEFAULT_CHARTS: Record<string, DashboardChartPreferences> = {
   sunset: {
-    profitTrend: 'area',
+    profitTrend: 'bar',
     projectHealth: 'grouped-bar',
     projectStatus: 'donut',
     expenseCategory: 'donut',
     progressComparison: 'stacked-bar',
     scheduleProgress: 'gantt',
+    statsCard1: 'gauge',
+    statsCard2: 'gauge',
+    statsCard3: 'gauge',
+    statsCard4: 'gauge',
   },
   ocean: {
-    profitTrend: 'line',
+    profitTrend: 'bar',
     projectHealth: 'composed',
     projectStatus: 'pie',
     expenseCategory: 'bar',
     progressComparison: 'line',
     scheduleProgress: 'horizontal-bars',
+    statsCard1: 'gauge',
+    statsCard2: 'gauge',
+    statsCard3: 'gauge',
+    statsCard4: 'gauge',
   },
   forest: {
-    profitTrend: 'composed',
+    profitTrend: 'bar',
     projectHealth: 'stacked-bar',
     projectStatus: 'radar',
     expenseCategory: 'radar',
     progressComparison: 'grouped-bar',
     scheduleProgress: 'gantt',
+    statsCard1: 'gauge',
+    statsCard2: 'gauge',
+    statsCard3: 'gauge',
+    statsCard4: 'gauge',
   },
   aurora: {
-    profitTrend: 'step',
+    profitTrend: 'bar',
     projectHealth: 'area',
     projectStatus: 'donut',
     expenseCategory: 'line',
     progressComparison: 'area',
     scheduleProgress: 'radar',
+    statsCard1: 'gauge',
+    statsCard2: 'gauge',
+    statsCard3: 'gauge',
+    statsCard4: 'gauge',
   },
   ember: {
     profitTrend: 'bar',
@@ -173,36 +209,105 @@ const THEME_DEFAULT_CHARTS: Record<string, DashboardChartPreferences> = {
     expenseCategory: 'bar',
     progressComparison: 'stacked-bar',
     scheduleProgress: 'horizontal-bars',
+    statsCard1: 'gauge',
+    statsCard2: 'gauge',
+    statsCard3: 'gauge',
+    statsCard4: 'gauge',
   },
 };
 
-const StatCard = ({ title, value, icon: Icon, trend, trendValue, color }: any) => (
-  <motion.div 
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    whileHover={{ y: -5 }}
-    className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 group"
-  >
-    <div className="flex items-start justify-between mb-3 sm:mb-6">
-      <div className={cn("p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-inner transition-transform group-hover:scale-110 duration-500", color)}>
-        <Icon size={20} className="text-white sm:w-6 sm:h-6" />
-      </div>
-      {trend && (
-        <div className={cn(
-          "flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full",
-          trend === 'up' ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400"
-        )}>
-          {trend === 'up' ? <TrendingUp size={10} className="sm:w-3 sm:h-3" /> : <TrendingDown size={10} className="sm:w-3 sm:h-3" />}
-          {trendValue}
+const StatCard = ({ title, value, icon: Icon, trend, trendValue, color, chartType, onChartTypeChange, gaugeData }: any) => {
+  const gaugeValue = Array.isArray(gaugeData) && gaugeData.length > 0 ? gaugeData[0].value : 0;
+
+  // Create gauge SVG
+  const createGaugeSVG = (percent: number) => {
+    const radius = 45;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashOffset = circumference - (percent / 100) * circumference;
+    
+    return (
+      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+        {/* Background circle */}
+        <circle
+          cx="60"
+          cy="60"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="8"
+          className="text-slate-200 dark:text-slate-700"
+        />
+        {/* Progress circle */}
+        <circle
+          cx="60"
+          cy="60"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="8"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashOffset}
+          strokeLinecap="round"
+          className="text-primary transition-all duration-500"
+        />
+        {/* Center text */}
+        <text x="60" y="60" textAnchor="middle" dy="0.3em" className="text-sm font-bold fill-slate-900 dark:fill-white">
+          {Math.round(percent)}%
+        </text>
+      </svg>
+    );
+  };
+  
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -5 }}
+      className="bg-white dark:bg-slate-900 rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 group h-full flex flex-col"
+    >
+      <div className="p-6 sm:p-8 flex-1 flex flex-col">
+        <div className="flex items-start justify-between mb-4 sm:mb-6">
+          <div>
+            <h3 className="text-slate-400 dark:text-slate-500 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em]">{title}</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            {trend && (
+              <div className={cn(
+                "flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full",
+                trend === 'up' ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400"
+              )}>
+                {trend === 'up' ? <TrendingUp size={10} className="sm:w-3 sm:h-3" /> : <TrendingDown size={10} className="sm:w-3 sm:h-3" />}
+                {trendValue}
+              </div>
+            )}
+            {onChartTypeChange && (
+              <select
+                value={chartType}
+                onChange={(e) => onChartTypeChange(e.target.value)}
+                className="px-2 py-1 text-[9px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
+              >
+                <option value="number">Número</option>
+                <option value="gauge">Acelerómetro</option>
+              </select>
+            )}
+          </div>
         </div>
-      )}
-    </div>
-    <div className="space-y-0.5 sm:space-y-1">
-      <h3 className="text-slate-400 dark:text-slate-500 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em]">{title}</h3>
-      <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">{value}</p>
-    </div>
-  </motion.div>
-);
+
+        {chartType === 'gauge' ? (
+          <div className="flex-1 flex items-center justify-center py-4">
+            <div className="w-32 h-32 sm:w-40 sm:h-40 flex items-center justify-center">
+              {createGaugeSVG(gaugeValue)}
+          <div className="flex-1 flex flex-col items-start justify-center gap-2">
+            <div className={cn("p-2 sm:p-3 rounded-xl sm:rounded-2xl shadow-inner transition-transform group-hover:scale-110 duration-500", color)}>
+              <Icon size={20} className="text-white sm:w-6 sm:h-6" />
+            </div>
+            <p className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">{value}</p>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
 
 const QuickActionButton = ({ icon: Icon, label, onClick, color }: any) => (
   <button
@@ -345,7 +450,7 @@ export default function Dashboard() {
 
   const handleQuickProgressUpdate = async (budgetItemId: string, newProgress: number) => {
     if (!selectedQuickProjectId) return;
-    
+
     // Validate progress
     if (newProgress < 0 || newProgress > 100) {
       toast.error('El avance debe estar entre 0 y 100');
@@ -358,12 +463,12 @@ export default function Dashboard() {
       });
 
       // Recalculate project physical progress
-      const updatedBudgetItems = quickBudgetItems.map(i => 
+      const updatedBudgetItems = quickBudgetItems.map(i =>
         i.id === budgetItemId ? { ...i, progress: clampPercent(newProgress) } : i
       );
 
       setQuickBudgetItems(updatedBudgetItems);
-      
+
       const totalBudget = updatedBudgetItems.reduce((acc, i) => acc + ((i.materialCost + i.laborCost + i.indirectCost) * (i.quantity || 1)), 0);
       const overallProgress = totalBudget > 0
         ? updatedBudgetItems.reduce((acc, i) => acc + (clampPercent(i.progress || 0) * ((i.materialCost + i.laborCost + i.indirectCost) * (i.quantity || 1))), 0) / totalBudget
@@ -467,12 +572,12 @@ export default function Dashboard() {
     // Check for expiring subcontracts (within 7 days)
     const sevenDaysFromNow = new Date();
     sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
-    
+
     subcontracts.forEach((sub: any) => {
       if (sub.endDate && sub.status !== 'Finished') {
         const endDate = new Date(sub.endDate);
         const subId = `sub_${sub.id}`;
-        
+
         if (endDate <= sevenDaysFromNow && endDate >= now && !notifiedItems[subId]) {
           sendNotification(
             'Subcontrato por Vencer',
@@ -563,7 +668,7 @@ export default function Dashboard() {
   }));
 
   const activeProjectsList = projects.filter(p => p.status === 'In Progress' || p.status === 'Active');
-  
+
   const progressComparisonData = projects
     .map(p => {
       const physicalProgress = clampPercent(p.physicalProgress || 0);
@@ -583,7 +688,7 @@ export default function Dashboard() {
   const progressComparisonChartData = progressChartScope === 'selected' && selectedQuickProjectId
     ? progressComparisonData.filter((p) => p.id === selectedQuickProjectId)
     : progressComparisonData;
-  
+
   const allProjectDates = activeProjectsList.flatMap(p => [
     p.startDate ? parseISO(p.startDate) : null,
     p.endDate ? parseISO(p.endDate) : null
@@ -598,10 +703,10 @@ export default function Dashboard() {
     const endDate = p.endDate ? parseISO(p.endDate) : startDate;
     const physicalProgress = clampPercent(p.physicalProgress || 0);
     const financialProgress = getFinancialProgress(p);
-    
+
     const startOffset = Math.max(0, differenceInDays(startDate, globalMinDate));
     const duration = Math.max(1, differenceInDays(endDate, startDate));
-    
+
     return {
       id: p.id,
       name: p.name,
@@ -666,11 +771,11 @@ export default function Dashboard() {
     const date = new Date();
     date.setDate(date.getDate() - (6 - i));
     const dateStr = date.toISOString().split('T')[0];
-    
+
     const spentUpToDate = transactions
       .filter(t => t.type === 'Expense' && t.date <= dateStr)
       .reduce((acc, t) => acc + (t.amount || 0), 0);
-      
+
     const incomeUpToDate = transactions
       .filter(t => t.type === 'Income' && t.date <= dateStr)
       .reduce((acc, t) => acc + (t.amount || 0), 0);
@@ -699,36 +804,48 @@ export default function Dashboard() {
         <p className="text-slate-500 dark:text-slate-400">Resumen ejecutivo y salud de proyectos</p>
       </header>
 
-      <div className="bento-grid">
-        <StatCard 
-          title="Presupuesto Total" 
-          value={formatCurrency(totalBudget)} 
-          icon={HandCoins} 
-          trend="up" 
-          trendValue="+12.0%" 
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 auto-rows-max min-w-0">
+        <StatCard
+          title="Presupuesto Total"
+          value={formatCurrency(totalBudget)}
+          icon={HandCoins}
+          trend="up"
+          trendValue="+12.0%"
           color="bg-primary shadow-primary/20"
+          chartType={chartPreferences.statsCard1}
+          onChartTypeChange={(value: string) => updateChartPreference('statsCard1', value)}
+          gaugeData={[{ value: Math.min(100, (totalSpent / totalBudget) * 100) || 0 }]}
         />
-        <StatCard 
-          title="Total Gastado" 
-          value={formatCurrency(totalSpent)} 
-          icon={TrendingDown} 
-          trend="up" 
-          trendValue="+8.0%" 
+        <StatCard
+          title="Total Gastado"
+          value={formatCurrency(totalSpent)}
+          icon={TrendingDown}
+          trend="up"
+          trendValue="+8.0%"
           color="bg-blue-600 shadow-blue-600/20"
+          chartType={chartPreferences.statsCard2}
+          onChartTypeChange={(value: string) => updateChartPreference('statsCard2', value)}
+          gaugeData={[{ value: totalBudget > 0 ? Math.min(100, (totalSpent / totalBudget) * 100) : 0 }]}
         />
-        <StatCard 
-          title="Ganancia Estimada" 
-          value={formatCurrency(globalProfit)} 
-          icon={TrendingUp} 
-          trend="up" 
-          trendValue="+15.0%" 
+        <StatCard
+          title="Ganancia Estimada"
+          value={formatCurrency(globalProfit)}
+          icon={TrendingUp}
+          trend="up"
+          trendValue="+15.0%"
           color="bg-emerald-600 shadow-emerald-600/20"
+          chartType={chartPreferences.statsCard3}
+          onChartTypeChange={(value: string) => updateChartPreference('statsCard3', value)}
+          gaugeData={[{ value: totalIncome > 0 ? Math.min(100, (globalProfit / totalIncome) * 100) : 0 }]}
         />
-        <StatCard 
-          title="Obras Activas" 
-          value={activeProjects} 
-          icon={Construction} 
+        <StatCard
+          title="Obras Activas"
+          value={activeProjects}
+          icon={Construction}
           color="bg-purple-600 shadow-purple-600/20"
+          chartType={chartPreferences.statsCard4}
+          onChartTypeChange={(value: string) => updateChartPreference('statsCard4', value)}
+          gaugeData={[{ value: projects.length > 0 ? Math.min(100, (activeProjects / projects.length) * 100) : 0 }]}
         />
       </div>
 
@@ -754,7 +871,7 @@ export default function Dashboard() {
                     <LineChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                       <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
                       <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), 'Ganancia']} />
                       <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={3} dot={{ r: 2 }} activeDot={{ r: 6 }} />
                     </LineChart>
@@ -762,7 +879,7 @@ export default function Dashboard() {
                     <BarChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                       <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
                       <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), 'Ganancia']} />
                       <Bar dataKey="profit" fill="#10b981" radius={[6, 6, 0, 0]} />
                     </BarChart>
@@ -770,7 +887,7 @@ export default function Dashboard() {
                     <ComposedChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                       <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
                       <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), 'Ganancia']} />
                       <Bar dataKey="profit" fill="#34d399" radius={[6, 6, 0, 0]} opacity={0.55} />
                       <Line type="monotone" dataKey="profit" stroke="#059669" strokeWidth={3} dot={false} />
@@ -779,7 +896,7 @@ export default function Dashboard() {
                     <LineChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                       <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
                       <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), 'Ganancia']} />
                       <Line type="stepAfter" dataKey="profit" stroke="#10b981" strokeWidth={3} dot={{ r: 2 }} />
                     </LineChart>
@@ -787,13 +904,13 @@ export default function Dashboard() {
                     <AreaChart data={profitTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                       <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
                       <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), 'Ganancia']} />
                       <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorProfit)" dot={{ r: 0 }} activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} name="Ganancia" />
                     </AreaChart>
@@ -821,7 +938,7 @@ export default function Dashboard() {
                     <LineChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
                       <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                       <Line type="monotone" dataKey="presupuesto" stroke="#3b82f6" strokeWidth={2.5} name="Presupuesto" />
@@ -831,7 +948,7 @@ export default function Dashboard() {
                     <AreaChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
                       <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                       <Area type="monotone" dataKey="presupuesto" stroke="#3b82f6" fill="#93c5fd" fillOpacity={0.3} name="Presupuesto" />
@@ -841,7 +958,7 @@ export default function Dashboard() {
                     <ComposedChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
                       <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                       <Bar dataKey="gastado" fill="#ef4444" radius={[4, 4, 0, 0]} name="Gastado" barSize={16} />
@@ -851,7 +968,7 @@ export default function Dashboard() {
                     <BarChart data={projectHealthData} margin={{ top: 10, right: 10, left: 0, bottom: 30 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} minTickGap={10} angle={-45} textAnchor="end" height={80} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
                       <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} labelStyle={{ color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }} formatter={(value: number) => [formatCurrency(value), '']} />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
                       <Bar dataKey="presupuesto" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Presupuesto" barSize={chartPreferences.projectHealth === 'stacked-bar' ? 22 : 20} stackId={chartPreferences.projectHealth === 'stacked-bar' ? 'health' : undefined} />
@@ -937,7 +1054,7 @@ export default function Dashboard() {
                     <BarChart data={expenseByCategoryData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} angle={-30} textAnchor="end" height={70} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
                       <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
                       <Bar dataKey="value" radius={[8, 8, 0, 0]}>
                         {expenseByCategoryData.map((entry, index) => <Cell key={`expense-bar-${index}`} fill={COLORS[index % COLORS.length]} />)}
@@ -955,7 +1072,7 @@ export default function Dashboard() {
                     <LineChart data={expenseByCategoryData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} interval={0} angle={-30} textAnchor="end" height={70} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`} />
                       <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} formatter={(value: number) => [formatCurrency(value), 'Total']} />
                       <Line type="monotone" dataKey="value" stroke="#f97316" strokeWidth={3} />
                     </LineChart>
@@ -1434,27 +1551,27 @@ export default function Dashboard() {
               exit={{ opacity: 0, scale: 0.8, y: 20 }}
               className="absolute bottom-16 right-0 w-64 space-y-3"
             >
-              <QuickActionButton 
-                icon={ConstructionIcon} 
-                label="Nueva Obra" 
+              <QuickActionButton
+                icon={ConstructionIcon}
+                label="Nueva Obra"
                 color="bg-primary"
                 onClick={() => {
                   setIsFabOpen(false);
                   navigate('/projects');
                 }}
               />
-              <QuickActionButton 
-                icon={ShoppingBag} 
-                label="Nueva Compra" 
+              <QuickActionButton
+                icon={ShoppingBag}
+                label="Nueva Compra"
                 color="bg-amber-500"
                 onClick={() => {
                   setIsFabOpen(false);
                   navigate('/purchase-orders');
                 }}
               />
-              <QuickActionButton 
-                icon={PackageIcon} 
-                label="Mover Inventario" 
+              <QuickActionButton
+                icon={PackageIcon}
+                label="Mover Inventario"
                 color="bg-emerald-500"
                 onClick={() => {
                   setIsFabOpen(false);
@@ -1464,7 +1581,7 @@ export default function Dashboard() {
             </motion.div>
           )}
         </AnimatePresence>
-        
+
         <button
           title={isFabOpen ? 'Cerrar acciones rapidas' : 'Abrir acciones rapidas'}
           aria-label={isFabOpen ? 'Cerrar acciones rapidas' : 'Abrir acciones rapidas'}
@@ -1523,9 +1640,9 @@ export default function Dashboard() {
 
                     <div className="grid grid-cols-1 gap-3">
                       {projects
-                        .filter(p => 
-                          (String(p.name || '').toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
-                           String(p.location || '').toLowerCase().includes(quickSearchTerm.toLowerCase()))
+                        .filter(p =>
+                        (String(p.name || '').toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
+                          String(p.location || '').toLowerCase().includes(quickSearchTerm.toLowerCase()))
                         )
                         .map(project => (
                           <button
