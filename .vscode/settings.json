@@ -1,3 +1,29 @@
 {
-  "vscode-edge-devtools.webhint": false
+  "vscode-edge-devtools.webhint": false,
+  "workbench.editor.alwaysShowEditorActions": true,
+  "workbench.editor.autoLockGroups": {
+    "workbench.editor.chatSession": true,
+    "default": true,
+    "workbench.editorinputs.searchEditorInput": true,
+    "workbench.editor.browser": true,
+    "jupyter-notebook": true,
+    "vscode.audioPreview": true,
+    "vscode.videoPreview": true,
+    "imagePreview.previewEditor": true,
+    "migrate.java.formulaEditor": true,
+    "gitlens.rebase": true,
+    "mssql.executionPlanView": true,
+    "ai-mlstudio.dataEditor": true,
+    "chatgpt.conversationEditor": true,
+    "msg.notebook": true,
+    "decompiled.javaClass": true,
+    "workbench.input.interactive": true,
+    "mainThreadWebview-markdown.preview": true,
+    "sql-book": true,
+    "sql-query-book": true,
+    "repl": true,
+    "jsProfileVisualizer.heapprofile.table": true,
+    "jsProfileVisualizer.cpuprofile.table": true
+  },
+  "workbench.editor.centeredLayoutFixedWidth": true
 }
