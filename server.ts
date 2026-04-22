@@ -9,6 +9,7 @@ import multer from "multer";
 import fs from "fs/promises";
 import { randomUUID } from "crypto";
 import { GoogleGenAI } from "@google/genai";
+import { put } from "@vercel/blob";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
