@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import 'dotenv/config';
+
 const apiBaseUrl = (process.env.API_BASE_URL || process.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
 const frontendOrigin = (process.env.FRONTEND_ORIGIN || 'https://salazaroliveros-prog.github.io').trim();
 const verifyUserEmail = (process.env.VERIFY_USER_EMAIL || 'ci-check@local.test').trim().toLowerCase();

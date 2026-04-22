@@ -5,14 +5,14 @@ const appUrl = (cliUrl || process.env.APP_URL || process.env.FRONTEND_URL || 'ht
 
 const expectedManifestPath = '/manifest.webmanifest';
 const expectedManifestIcons = [
-  '/icon-192.png',
-  '/icon-512.png',
+  '/icon-round-192.png',
+  '/icon-round-512.png',
   '/icon-512-maskable.png',
   '/logo.svg',
 ];
 const expectedHtmlAssets = [
   { rel: 'manifest', href: '/manifest.webmanifest' },
-  { rel: 'icon', href: '/icon-192.png' },
+  { rel: 'icon', href: '/icon-round-192.png' },
   { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
   { rel: 'mask-icon', href: '/logo.svg' },
 ];
@@ -81,8 +81,8 @@ async function checkAsset(pathname) {
     const validType = pathname.endsWith('.png')
       ? contentType.includes('image/png')
       : pathname.endsWith('.svg')
-      ? contentType.includes('image/svg+xml') || contentType.includes('text/plain')
-      : true;
+        ? contentType.includes('image/svg+xml') || contentType.includes('text/plain')
+        : true;
 
     if (!validType) {
       logFail(`asset ${pathname} -> content-type inesperado: ${contentType || 'missing'}`);
