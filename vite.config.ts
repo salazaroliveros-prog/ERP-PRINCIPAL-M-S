@@ -1,33 +1,63 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig, loadEnv} from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig(({mode}) => {
+export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+  
   return {
     // Dynamic base path for GitHub Pages or Vercel
     base: env.GITHUB_ACTIONS ? '/ERP-PRINCIPAL-M-S/' : '/',
+    
     plugins: [
-      react(), 
+      react(),
       tailwindcss(),
       VitePWA({
         injectRegister: 'script',
         registerType: 'autoUpdate',
-        manifest: false,
+        // Cambiado de 'false' a configuración básica para evitar errores de validación
+        manifest: {
+          name: 'CONSTRUCTORA WM/M&S',
+          short_name: 'ConstructoraWM',
+          description: 'CONSTRUYENDO EL FUTURO',
+          theme_color: '#ffffff',
+          background_color: '#ffffff',
+          display: 'standalone',
+          scope: '/',
+          start_url: '/',
+          icons: [
+            {
+              src: 'pwa-192x192.png',
+              sizes: '192x192',
+              type: 'image/png'
+            },
+            {
+              src: 'pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png'
+            }
+          ]
+        },
         workbox: {
           cleanupOutdatedCaches: true,
           clientsClaim: true,
-          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
           skipWaiting: true,
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
+          // SOLUCIÓN AL ERROR DE BUILD: Define qué archivos debe cachear el Service Worker
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,json,vue,txt}'],
+          // Previene errores si no se encuentran archivos para ciertos patrones
+          globIgnores: ['**/node_modules/**/*'] 
         }
       })
     ],
+    
     define: {
       // Backward-compatible alias used across the app source files.
       'process.env.GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
     },
+    
     build: {
       rollupOptions: {
         output: {
@@ -59,19 +89,20 @@ export default defineConfig(({mode}) => {
         },
       },
     },
+    
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify - file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       headers: {
         'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
       },
     },
+    
     preview: {
       headers: {
         'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
