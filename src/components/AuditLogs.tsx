@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   History, 
   Search, 
@@ -91,14 +91,16 @@ const AuditLogs = () => {
     }
   };
 
-  const filteredLogs = logs.filter(log => {
-    const matchesType = filterType === 'all' || log.type === filterType;
-    const matchesSearch = 
-      log.userName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.module.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesType && matchesSearch;
-  });
+  const filteredLogs = useMemo(() => 
+    logs.filter(log => {
+      const matchesType = filterType === 'all' || log.type === filterType;
+      const matchesSearch = 
+        log.userName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        log.module.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesType && matchesSearch;
+    }), [logs, filterType, searchTerm]
+  );
 
   const getActionIcon = (type: string) => {
     switch (type) {
