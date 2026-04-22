@@ -449,18 +449,29 @@
 
   .glass-card {
     background: var(--theme-card-surface);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    backdrop-filter: blur(16px) saturate(180%);
     border: 1px solid var(--theme-card-border-strong);
-    box-shadow: 0 10px 30px -16px rgba(15, 23, 42, 0.35);
-    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+    box-shadow: 0 10px 30px -16px rgba(15, 23, 42, 0.25);
+    transition: transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 240ms ease, border-color 240ms ease;
     will-change: transform;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .glass-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.05) 100%);
+    pointer-events: none;
+    z-index: 1;
   }
 
   .glass-card:hover {
     transform: var(--theme-card-hover-transform);
-    box-shadow: 0 16px 36px -20px rgba(15, 23, 42, 0.45);
-    border-color: var(--theme-card-hover-border);
+    box-shadow: 0 20px 40px -20px rgba(15, 23, 42, 0.4);
+    border-color: var(--primary-color);
   }
 
   .dark .glass-card {
@@ -669,10 +680,72 @@
   }
 
   /* Bento Grid */
-  .bento-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 1.5rem;
+  /* Global Responsive Blindage - Prevents all overflow/text mounting */
+  html, body, #root {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  * {
+    box-sizing: border-box;
+    min-width: 0; /* Critical for flex/grid containers to not overflow */
+  }
+
+  .module-grid, .chart-grid, .bento-grid {
+    min-width: 0;
+  }
+
+  .truncate-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  td, th {
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Force mobile text wrapping instead of overflow */
+  @media (max-width: 640px) {
+    .text-sm { font-size: 0.85rem; }
+    .text-xs { font-size: 0.75rem; }
+    
+    .overflow-hidden-mobile {
+      overflow: hidden;
+    }
+  }
+
+  /* High-Density Tables & Modules */
+  .table-compact {
+    font-size: 0.75rem;
+  }
+  
+  .table-compact td, .table-compact th {
+    padding: 0.25rem 0.5rem !important;
+  }
+
+  .inventory-card {
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+  }
+
+  /* Compact everything for inventory modules */
+  .module-density-high .p-6 { padding: 0.75rem !important; }
+  .module-density-high .gap-6 { gap: 0.5rem !important; }
+  .module-density-high h1, .module-density-high h2 { font-size: 1rem !important; }
+
+  /* Mobile Synthesis */
+  @media (max-width: 640px) {
+    .module-grid { grid-template-columns: 1fr; gap: 0.5rem; padding: 0.5rem; }
+    .chart-card-compact { height: 200px; padding: 0.5rem; }
+    .text-xs { font-size: 0.7rem; }
+    .p-6 { padding: 0.5rem !important; }
+    .gap-8 { gap: 0.5rem !important; }
   }
 
   /* Typography Enhancements */
