@@ -67,6 +67,33 @@ import { listInventory } from '../lib/operationsApi';
 import { listSubcontracts } from '../lib/subcontractsApi';
 import { listWorkflows } from '../lib/workflowsApi';
 import { useTheme } from '../contexts/ThemeContext';
+import 'react-day-picker/dist/style.css';
+import { DayPicker } from 'react-day-picker';
+import { ParallaxCard } from './ParallaxCard';
+
+const DatePicker = ({ selected, onChange, placeholderText }: any) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button 
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="px-3 py-1.5 w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
+      >
+        {selected ? formatDateFns(selected, 'dd/MM/yyyy') : placeholderText}
+      </button>
+      {isOpen && (
+        <div className="absolute top-full mt-2 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-2">
+          <DayPicker
+            mode="single"
+            selected={selected}
+            onSelect={(date) => { onChange(date); setIsOpen(false); }}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
 
 const COLORS = [
   '#3b82f6', // Blue
@@ -235,6 +262,9 @@ export default function Dashboard() {
   const [chartPreferences, setChartPreferences] = useState<DashboardChartPreferences>(
     THEME_DEFAULT_CHARTS.sunset
   );
+  const [cardStyle, setCardStyle] = useState<'default' | '3d-tilt' | 'glassmorphism'>('default');
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
   const navigate = useNavigate();
 
   const updateChartPreference = (chartKey: DashboardChartKey, value: string) => {
@@ -693,45 +723,62 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-8 min-w-0 overflow-x-hidden">
-      <header>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Tablero de Control</h1>
-        <p className="text-slate-500 dark:text-slate-400">Resumen ejecutivo y salud de proyectos</p>
+    <div className="space-y-4 min-w-0 overflow-x-hidden p-4">
+      <header className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white">Tablero de Control</h1>
+        </div>
+        <div className="flex items-center gap-6 flex-wrap">
+          <div className="flex items-center gap-2">
+            <label htmlFor="card-style-select" className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Estilo Tarjetas</label>
+            <select
+              id="card-style-select"
+              value={cardStyle}
+              onChange={(e) => setCardStyle(e.target.value as 'default' | '3d-tilt' | 'glassmorphism')}
+              className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
+            >
+              <option value="default">Predeterminado</option>
+              <option value="3d-tilt">3D Inclinación</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Filtrar por Fecha</label>
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                onChange={(e) => setStartDate(e.target.value ? new Date(e.target.value) : null)}
+                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
+              />
+              <span className="text-sm text-slate-400">-</span>
+              <input
+                type="date"
+                onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value) : null)}
+                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
+              />
+            </div>
+          </div>
+        </div>
       </header>
 
-      <div className="bento-grid">
-        <StatCard 
-          title="Presupuesto Total" 
-          value={formatCurrency(totalBudget)} 
-          icon={HandCoins} 
-          trend="up" 
-          trendValue="+12.0%" 
-          color="bg-primary shadow-primary/20"
-        />
-        <StatCard 
-          title="Total Gastado" 
-          value={formatCurrency(totalSpent)} 
-          icon={TrendingDown} 
-          trend="up" 
-          trendValue="+8.0%" 
-          color="bg-blue-600 shadow-blue-600/20"
-        />
-        <StatCard 
-          title="Ganancia Estimada" 
-          value={formatCurrency(globalProfit)} 
-          icon={TrendingUp} 
-          trend="up" 
-          trendValue="+15.0%" 
-          color="bg-emerald-600 shadow-emerald-600/20"
-        />
-        <StatCard 
-          title="Obras Activas" 
-          value={activeProjects} 
-          icon={Construction} 
-          color="bg-purple-600 shadow-purple-600/20"
-        />
+      {/* Tarjetas KPI Horizontales y Compactas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        {[
+          { title: "Presupuesto", value: formatCurrency(totalBudget), icon: HandCoins, color: "bg-primary" },
+          { title: "Gastos", value: formatCurrency(totalSpent), icon: TrendingDown, color: "bg-blue-600" },
+          { title: "Ganancia", value: formatCurrency(globalProfit), icon: TrendingUp, color: "bg-emerald-600" },
+          { title: "Obras", value: activeProjects, icon: Construction, color: "bg-purple-600" }
+        ].map((stat, i) => (
+          <div key={i} className="flex items-center gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className={`p-2 rounded-lg ${stat.color} text-white`}>
+              <stat.icon size={14} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">{stat.title}</p>
+              <p className="text-sm font-black text-slate-900 dark:text-white truncate">{stat.value}</p>
+            </div>
+          </div>
+        ))}
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
         <div className="lg:col-span-2 space-y-8 min-w-0">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 min-w-0">

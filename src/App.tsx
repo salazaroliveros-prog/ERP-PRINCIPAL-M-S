@@ -95,7 +95,8 @@ const Sidebar = lazy(() =>
 const SyncStatus = lazy(() =>
   import('./components/SyncStatus').then((module) => ({ default: module.SyncStatus }))
 );
-const NavMetricsPanel = lazy(() => import('./components/NavMetricsPanel'));
+import NavMetricsPanel from './components/NavMetricsPanel';
+import MeshBackground from './components/MeshBackground';
 
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -1182,6 +1183,7 @@ function AppContent({
   return (
       <div className="h-screen h-[100dvh] min-h-0 bg-slate-50 dark:bg-slate-950 flex flex-col lg:flex-row overflow-hidden transition-colors duration-300">
         <Toaster position="top-right" richColors closeButton />
+        <MeshBackground />
 
         <header
           className={cn(
