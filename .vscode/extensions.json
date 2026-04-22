@@ -1,6 +1,7 @@
 {
     "recommendations": [
         "vbrocket.cursor-ai",
-        "agentstudioia.agent-studio-ia"
+        "agentstudioia.agent-studio-ia",
+        "oracle.mysql-shell-for-vs-code"
     ]
 }

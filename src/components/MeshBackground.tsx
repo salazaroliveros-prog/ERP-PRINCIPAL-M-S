@@ -3,12 +3,12 @@ import { motion } from 'motion/react';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function MeshBackground() {
-  const { theme, isDarkMode } = useTheme();
+  const { currentTheme, isDarkMode } = useTheme();
 
   // Define colors based on the current theme
   const getColors = () => {
     if (isDarkMode) {
-      switch (theme) {
+      switch (currentTheme.id) {
         case 'sunset': return ['rgba(249, 115, 22, 0.15)', 'rgba(30, 41, 59, 0)'];
         case 'ocean': return ['rgba(37, 99, 235, 0.15)', 'rgba(15, 23, 42, 0)'];
         case 'forest': return ['rgba(16, 185, 129, 0.15)', 'rgba(2, 44, 34, 0)'];
@@ -17,7 +17,7 @@ export default function MeshBackground() {
         default: return ['rgba(59, 130, 246, 0.1)', 'rgba(15, 23, 42, 0)'];
       }
     } else {
-      switch (theme) {
+      switch (currentTheme.id) {
         case 'sunset': return ['rgba(255, 237, 213, 0.8)', 'rgba(255, 255, 255, 0)'];
         case 'ocean': return ['rgba(219, 234, 254, 0.8)', 'rgba(255, 255, 255, 0)'];
         case 'forest': return ['rgba(209, 250, 229, 0.8)', 'rgba(255, 255, 255, 0)'];

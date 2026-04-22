@@ -9,3 +9,7 @@ coverage/
 .vercel
 playwright-report/
 test-results/
+# Agent development artifacts
+agent/venv/
+.gemini/
+.geminiignore

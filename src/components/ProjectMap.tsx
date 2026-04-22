@@ -100,6 +100,7 @@ export default function ProjectMap({ isOpen, onClose, project, projects, onSelec
   }, [project, projects]);
 
   const pois = useMemo(() => project?.pois || [], [project?.pois]);
+  const center = mapCenter.center;
 
   return (
     <AnimatePresence>
