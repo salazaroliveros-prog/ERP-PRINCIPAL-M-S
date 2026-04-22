@@ -15,60 +15,60 @@ export default defineConfig(({ mode }) => {
       tailwindcss()
     ],
 
-define: {
-  // Backward-compatible alias used across the app source files.
-  'process.env.GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
+    define: {
+      // Backward-compatible alias used across the app source files.
+      'process.env.GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
     },
 
-build: {
-  rollupOptions: {
-    output: {
-      manualChunks(id) {
-        if (!id.includes('node_modules')) return;
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return;
 
-        if (id.includes('recharts') || id.includes('d3-')) {
-          return 'charts-vendor';
-        }
-        if (id.includes('leaflet') || id.includes('react-leaflet')) {
-          return 'maps-vendor';
-        }
-        if (id.includes('html2canvas')) {
-          return 'html2canvas-vendor';
-        }
-        if (id.includes('jspdf') || id.includes('jspdf-autotable')) {
-          return 'jspdf-vendor';
-        }
-        if (id.includes('react-router') || id.includes('@remix-run/router')) {
-          return 'router-vendor';
-        }
-        if (id.includes('lucide-react')) {
-          return 'icons-vendor';
-        }
-        if (id.includes('/motion/') || id.includes('framer-motion')) {
-          return 'motion-vendor';
-        }
+            if (id.includes('recharts') || id.includes('d3-')) {
+              return 'charts-vendor';
+            }
+            if (id.includes('leaflet') || id.includes('react-leaflet')) {
+              return 'maps-vendor';
+            }
+            if (id.includes('html2canvas')) {
+              return 'html2canvas-vendor';
+            }
+            if (id.includes('jspdf') || id.includes('jspdf-autotable')) {
+              return 'jspdf-vendor';
+            }
+            if (id.includes('react-router') || id.includes('@remix-run/router')) {
+              return 'router-vendor';
+            }
+            if (id.includes('lucide-react')) {
+              return 'icons-vendor';
+            }
+            if (id.includes('/motion/') || id.includes('framer-motion')) {
+              return 'motion-vendor';
+            }
+          },
+        },
       },
     },
-  },
-},
 
-resolve: {
-  alias: {
-    '@': path.resolve(__dirname, '.'),
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
       },
-},
+    },
 
-server: {
-  hmr: process.env.DISABLE_HMR !== 'true',
-    headers: {
-    'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    server: {
+      hmr: process.env.DISABLE_HMR !== 'true',
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
       },
-},
+    },
 
-preview: {
-  headers: {
-    'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    preview: {
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
       },
-},
+    },
   };
 });
