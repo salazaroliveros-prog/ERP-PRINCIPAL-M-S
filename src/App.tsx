@@ -312,7 +312,7 @@ const Login = () => {
         <div className="mb-8">
           <div className="w-24 h-24 bg-primary-light dark:bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-4 p-3">
             <img
-              src="/logo.svg"
+              src={`${import.meta.env.BASE_URL}logo.svg`}
               alt="Constructora WM/M&S"
               className="w-full h-full object-contain"
               loading="eager"
@@ -1229,7 +1229,7 @@ function AppContent({
                     )}
                   >
                     <img
-                      src="/logo.svg"
+                      src={`${import.meta.env.BASE_URL}logo.svg`}
                       alt="Constructora WM/M&S"
                       className="w-full h-full object-contain"
                       loading="eager"

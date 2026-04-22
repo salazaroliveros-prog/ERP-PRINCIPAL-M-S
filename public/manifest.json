@@ -3,8 +3,8 @@
   "short_name": "WM_M&S",
   "description": "Gestión de obras y presupuestos en tiempo real",
   "id": "/erp-constructora-wmms",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "launch_handler": {
     "client_mode": "focus-existing"
   },
@@ -13,13 +13,13 @@
   "theme_color": "#2563eb",
   "icons": [
     {
-      "src": "/icon-round-192.png",
+      "src": "icon-round-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-round-512.png",
+      "src": "icon-round-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
@@ -30,36 +30,36 @@
       "name": "Ingreso rápido",
       "short_name": "Ingreso",
       "description": "Registrar ingreso rápido",
-      "url": "/#/financials?quickAction=new-income",
+      "url": "./#/financials?quickAction=new-income",
       "icons": [
-        { "src": "/icon-round-192.png", "sizes": "192x192", "type": "image/png" }
+        { "src": "icon-round-192.png", "sizes": "192x192", "type": "image/png" }
       ]
     },
     {
       "name": "Gasto rápido",
       "short_name": "Gasto",
       "description": "Registrar gasto rápido",
-      "url": "/#/financials?quickAction=new-expense",
+      "url": "./#/financials?quickAction=new-expense",
       "icons": [
-        { "src": "/icon-round-192.png", "sizes": "192x192", "type": "image/png" }
+        { "src": "icon-round-192.png", "sizes": "192x192", "type": "image/png" }
       ]
     },
     {
       "name": "Acciones rápidas",
       "short_name": "Atajos",
       "description": "Abrir panel de formularios rápidos",
-      "url": "/#/?quickPanel=1",
+      "url": "./#/?quickPanel=1",
       "icons": [
-        { "src": "/icon-round-192.png", "sizes": "192x192", "type": "image/png" }
+        { "src": "icon-round-192.png", "sizes": "192x192", "type": "image/png" }
       ]
     },
     {
       "name": "Copilot IA",
       "short_name": "Copilot",
       "description": "Abrir asistente IA directamente",
-      "url": "/#/?copilot=1",
+      "url": "./#/?copilot=1",
       "icons": [
-        { "src": "/icon-round-192.png", "sizes": "192x192", "type": "image/png" }
+        { "src": "icon-round-192.png", "sizes": "192x192", "type": "image/png" }
       ]
     }
   ]
