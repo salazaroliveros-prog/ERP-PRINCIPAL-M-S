@@ -720,6 +720,25 @@
     }
   }
 
+  /* Universal Table Optimizer */
+  table.w-full {
+    font-size: 0.75rem;
+    border-collapse: collapse;
+  }
+  
+  table.w-full th, table.w-full td {
+    padding: 0.5rem 0.75rem;
+  }
+
+  @media (max-width: 768px) {
+    table.w-full {
+      font-size: 0.7rem;
+    }
+    table.w-full th, table.w-full td {
+      padding: 0.35rem 0.5rem;
+    }
+  }
+
   /* High-Density Tables & Modules */
   .table-compact {
     font-size: 0.75rem;
