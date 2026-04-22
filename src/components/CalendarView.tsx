@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, isWithinInterval, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, MapPin, Clock } from 'lucide-react';
@@ -12,27 +12,34 @@ interface CalendarViewProps {
 export default function CalendarView({ projects }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = React.useState(new Date());
 
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(monthStart);
-  const startDate = startOfWeek(monthStart);
-  const endDate = endOfWeek(monthEnd);
+  const calendarData = useMemo(() => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(monthStart);
+    const startDate = startOfWeek(monthStart);
+    const endDate = endOfWeek(monthEnd);
 
-  const calendarDays = eachDayOfInterval({
-    start: startDate,
-    end: endDate,
-  });
+    const calendarDays = eachDayOfInterval({
+      start: startDate,
+      end: endDate,
+    });
+
+    return { calendarDays, monthStart, monthEnd };
+  }, [currentDate]);
 
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
 
-  const getProjectsForDay = (day: Date) => {
-    return projects.filter(p => {
-      if (!p.startDate || !p.endDate) return false;
-      const start = parseISO(p.startDate);
-      const end = parseISO(p.endDate);
-      return isWithinInterval(day, { start, end });
-    });
-  };
+  const getProjectsForDay = useMemo(() => 
+    (day: Date) => {
+      return projects.filter(p => {
+        if (!p.startDate || !p.endDate) return false;
+        const start = parseISO(p.startDate);
+        const end = parseISO(p.endDate);
+        return isWithinInterval(day, { start, end });
+      });
+    },
+    [projects]
+  );
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
@@ -82,10 +89,10 @@ export default function CalendarView({ projects }: CalendarViewProps) {
       </div>
 
       <div className="grid grid-cols-7 auto-rows-[120px]">
-        {calendarDays.map((day, idx) => {
+        {calendarData.calendarDays.map((day, idx) => {
           const dayProjects = getProjectsForDay(day);
           const isToday = isSameDay(day, new Date());
-          const isCurrentMonth = isSameMonth(day, monthStart);
+          const isCurrentMonth = isSameMonth(day, calendarData.monthStart);
 
           return (
             <div 

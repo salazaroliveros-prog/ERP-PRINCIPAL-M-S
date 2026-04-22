@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { X, Navigation, MapPin, Layers, Check } from 'lucide-react';
@@ -73,29 +73,33 @@ export default function ProjectMap({ isOpen, onClose, project, projects, onSelec
     return () => window.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
-  const isGlobal = !!projects;
-  const displayProjects = isGlobal ? projects : (project ? [project] : []);
-  const pois = project?.pois || [];
-
-  // Default to Guatemala City if no coordinates
-  const defaultCenter: [number, number] = [14.6349, -90.5069];
+  const isGlobal = useMemo(() => !!projects, [projects]);
   
-  let center = defaultCenter;
-  let zoom = isGlobal ? 12 : 15;
+  const displayProjects = useMemo(() => 
+    isGlobal ? projects : (project ? [project] : []), 
+    [isGlobal, projects, project]
+  );
 
-  if (project) {
-    const lat = typeof project.latitude === 'string' ? parseFloat(project.latitude) : project.latitude;
-    const lng = typeof project.longitude === 'string' ? parseFloat(project.longitude) : project.longitude;
-    if (lat && lng) center = [lat, lng];
-  } else if (isGlobal && projects.length > 0) {
-    // Find first project with valid coordinates
-    const firstWithCoords = projects.find(p => p.latitude && p.longitude);
-    if (firstWithCoords) {
-      const lat = typeof firstWithCoords.latitude === 'string' ? parseFloat(firstWithCoords.latitude) : firstWithCoords.latitude;
-      const lng = typeof firstWithCoords.longitude === 'string' ? parseFloat(firstWithCoords.longitude) : firstWithCoords.longitude;
-      if (lat && lng) center = [lat, lng];
+  const mapCenter = useMemo(() => {
+    const defaultCenter: [number, number] = [14.6349, -90.5069];
+    const isGlobalVal = !!projects;
+    
+    if (project) {
+      const lat = typeof project.latitude === 'string' ? parseFloat(project.latitude) : project.latitude;
+      const lng = typeof project.longitude === 'string' ? parseFloat(project.longitude) : project.longitude;
+      if (lat && lng) return { center: [lat, lng] as [number, number], zoom: 15 };
+    } else if (isGlobalVal && projects && projects.length > 0) {
+      const firstWithCoords = projects.find(p => p.latitude && p.longitude);
+      if (firstWithCoords) {
+        const lat = typeof firstWithCoords.latitude === 'string' ? parseFloat(firstWithCoords.latitude) : firstWithCoords.latitude;
+        const lng = typeof firstWithCoords.longitude === 'string' ? parseFloat(firstWithCoords.longitude) : firstWithCoords.longitude;
+        if (lat && lng) return { center: [lat, lng] as [number, number], zoom: 12 };
+      }
     }
-  }
+    return { center: defaultCenter, zoom: isGlobalVal ? 12 : 15 };
+  }, [project, projects]);
+
+  const pois = useMemo(() => project?.pois || [], [project?.pois]);
 
   return (
     <AnimatePresence>
@@ -194,8 +198,8 @@ export default function ProjectMap({ isOpen, onClose, project, projects, onSelec
 
             <div className="flex-1 relative z-0">
               <MapContainer 
-                center={center} 
-                zoom={zoom} 
+                center={mapCenter.center} 
+                zoom={mapCenter.zoom} 
                 className="h-full w-full"
                 scrollWheelZoom={true}
               >
@@ -280,7 +284,7 @@ export default function ProjectMap({ isOpen, onClose, project, projects, onSelec
                   </Marker>
                 ))}
                 
-                <ChangeView center={center} zoom={zoom} />
+                <ChangeView center={mapCenter.center} zoom={mapCenter.zoom} />
                 {isSelectionMode && (
                   <MapEvents onSelect={(lat, lng) => {
                     setSelectedPos([lat, lng]);

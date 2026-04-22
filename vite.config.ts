@@ -7,8 +7,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    // Absolute base path keeps a stable origin/path behavior on Vercel.
-    base: '/',
+    // Dynamic base path for GitHub Pages or Vercel
+    base: env.GITHUB_ACTIONS ? '/ERP-PRINCIPAL-M-S/' : '/',
     plugins: [
       react(), 
       tailwindcss(),

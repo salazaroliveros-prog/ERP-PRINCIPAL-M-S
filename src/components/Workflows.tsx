@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { 
   CheckSquare, 
   Clock, 
@@ -158,18 +158,21 @@ const Workflows = () => {
     setIsModalOpen(true);
   };
 
-  const filteredTasks = tasks.filter(task => {
-    const matchesFilter = filter === 'all' || task.status === filter;
-    const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         task.referenceId.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  const filteredTasks = useMemo(() => 
+    tasks.filter(task => {
+      const matchesFilter = filter === 'all' || task.status === filter;
+      const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           task.referenceId.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesFilter && matchesSearch;
+    }), 
+    [tasks, filter, searchTerm]
+  );
 
-  const stats = {
+  const stats = useMemo(() => ({
     pending: tasks.filter(t => t.status === 'pending').length,
     approved: tasks.filter(t => t.status === 'approved').length,
     rejected: tasks.filter(t => t.status === 'rejected').length
-  };
+  }), [tasks]);
 
   return (
     <div className="space-y-8">

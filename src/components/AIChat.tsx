@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Bot, Send, X, MessageSquare, Sparkles, AlertTriangle, TrendingUp, Wrench, Loader2, MoreVertical, History, Construction, DollarSign, Mic, MicOff, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, handleApiError, OperationType } from '../lib/utils';
@@ -137,6 +137,11 @@ export default function AIChat() {
     toast.info('Chat reiniciado');
   };
 
+  const messageHistory = useMemo(() => 
+    messages.map(m => ({ role: m.role, text: m.text })), 
+    [messages]
+  );
+
   const fetchReportData = async () => {
     try {
       const [projects, transactionsResponse, inventoryResponse, risks] = await Promise.all([
@@ -148,15 +153,17 @@ export default function AIChat() {
 
       const transactions = transactionsResponse.items;
       
-      const totalIncome = transactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0);
-      const totalExpense = transactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0);
+      const financialData = {
+        totalIncome: transactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0),
+        totalExpense: transactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0)
+      };
 
       const inventoryAlerts = inventoryResponse.items
         .filter((item: any) => item.stock <= (item.minStock || 0));
 
       return {
         projects,
-        financials: { totalIncome, totalExpense },
+        financials: financialData,
         inventoryAlerts,
         risks
       };
@@ -214,7 +221,7 @@ export default function AIChat() {
         setIsLoading(true);
         
         try {
-          const response = await getAIResponse(prompt, messages.map(m => ({ role: m.role, text: m.text })));
+          const response = await getAIResponse(prompt, messageHistory);
           setMessages(prev => [...prev, { role: 'assistant', text: response || "Error en el análisis.", timestamp: new Date() }]);
         } catch (err) {
           setError("Error al procesar el análisis de riesgos.");
@@ -328,7 +335,7 @@ export default function AIChat() {
       setMessages(prev => [...prev, assistantMessage]);
       
       // We let the normal AI flow handle this but with a more specific prompt to trigger the tool
-      const response = await getAIResponse("Realiza un análisis de riesgos exhaustivo de todos los proyectos activos. Identifica desviaciones, predice sobrecostos futuros y sugiere acciones correctivas inmediatas.", messages.map(m => ({ role: m.role, text: m.text })));
+      const response = await getAIResponse("Realiza un análisis de riesgos exhaustivo de todos los proyectos activos. Identifica desviaciones, predice sobrecostos futuros y sugiere acciones correctivas inmediatas.", messageHistory);
       
       const aiMessage: Message = {
         role: 'assistant',
@@ -368,8 +375,7 @@ export default function AIChat() {
     }
 
     try {
-      const history = messages.map(m => ({ role: m.role, text: m.text }));
-      const response = await getAIResponse(trimmedInput, history);
+      const response = await getAIResponse(trimmedInput, messageHistory);
 
       if (!response) {
         throw new Error('EMPTY_RESPONSE');
