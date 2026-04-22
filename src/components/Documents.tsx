@@ -38,7 +38,7 @@ import {
 } from '../lib/documentsApi';
 
 export default function Documents() {
-  const projectCardEffectClass = 'rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] border border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-primary/30 transition-all duration-500';
+  const projectCardEffectClass = 'rounded-theme shadow-(--shadow-theme) border border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-primary/30 transition-all duration-500';
   const getFolderHoverClass = (folderColor: string) => {
     if (folderColor.includes('blue')) return 'hover:border-blue-300 dark:hover:border-blue-500/40';
     if (folderColor.includes('emerald')) return 'hover:border-emerald-300 dark:hover:border-emerald-500/40';
@@ -617,7 +617,7 @@ export default function Documents() {
                         <div className="flex items-center gap-3">
                           {getFileIcon(doc.type)}
                           <div>
-                            <p className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-[200px]">{doc.name}</p>
+                            <p className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-50">{doc.name}</p>
                             <p className="text-[10px] text-slate-400 dark:text-slate-300 font-medium tracking-tighter">Por: {doc.author}</p>
                           </div>
                         </div>
@@ -757,7 +757,7 @@ export default function Documents() {
               resetForm();
               setIsModalOpen(true);
             }}
-            className="bg-slate-900 glass-card rounded-[var(--radius-theme)] shadow-[var(--shadow-theme)] p-8 text-white border-2 border-dashed border-white/10 flex flex-col items-center justify-center text-center group cursor-pointer hover:border-primary hover:shadow-lg transition-all duration-500"
+            className="bg-slate-900 glass-card rounded-theme shadow-(--shadow-theme) p-8 text-white border-2 border-dashed border-white/10 flex flex-col items-center justify-center text-center group cursor-pointer hover:border-primary hover:shadow-lg transition-all duration-500"
           >
             <div className="p-4 bg-white/5 rounded-2xl mb-4 group-hover:bg-primary/20 group-hover:scale-105 sm:group-hover:scale-110 group-hover:shadow-md sm:group-hover:shadow-lg group-hover:shadow-primary/20 transition-all duration-200 sm:duration-300">
               <Upload size={32} className="text-primary" />
