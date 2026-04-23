@@ -51,11 +51,12 @@ import {
   Search,
   Loader2,
   Save,
-  Plus,
   X,
-  Construction as ConstructionIcon,
-  ShoppingBag,
-  Package as PackageIcon
+  ArrowLeft,
+  SlidersHorizontal,
+  LayoutGrid,
+  RotateCcw,
+  Sparkles,
 } from 'lucide-react';
 import { formatCurrency, cn, handleApiError, OperationType, getMitigationSuggestions } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -66,34 +67,9 @@ import { listTransactions } from '../lib/financialsApi';
 import { listInventory } from '../lib/operationsApi';
 import { listSubcontracts } from '../lib/subcontractsApi';
 import { listWorkflows } from '../lib/workflowsApi';
+import { listQuotes } from '../lib/quotesApi';
 import { useTheme } from '../contexts/ThemeContext';
-import 'react-day-picker/dist/style.css';
-import { DayPicker } from 'react-day-picker';
 import { ParallaxCard } from './ParallaxCard';
-
-const DatePicker = ({ selected, onChange, placeholderText }: any) => {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button 
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="px-3 py-1.5 w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
-      >
-        {selected ? formatDateFns(selected, 'dd/MM/yyyy') : placeholderText}
-      </button>
-      {isOpen && (
-        <div className="absolute top-full mt-2 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-2">
-          <DayPicker
-            mode="single"
-            selected={selected}
-            onSelect={(date) => { onChange(date); setIsOpen(false); }}
-          />
-        </div>
-      )}
-    </div>
-  );
-};
 
 const COLORS = [
   '#3b82f6', // Blue
@@ -243,6 +219,136 @@ const THEME_DEFAULT_CHARTS: Record<string, DashboardChartPreferences> = {
   },
 };
 
+const normalizeProjectStatus = (status: string) =>
+  String(status || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const isEvaluationStatus = (status: string) => {
+  const normalized = normalizeProjectStatus(status);
+  return normalized === 'evaluation' || normalized === 'planning' || normalized === 'en evaluacion' || normalized === 'en planeacion';
+};
+
+const isExecutionStatus = (status: string) => {
+  const normalized = normalizeProjectStatus(status);
+  return normalized === 'in progress' || normalized === 'inprogress' || normalized === 'active' || normalized === 'execution' || normalized === 'en ejecucion';
+};
+
+type DashboardWidgetId =
+  | 'executionRevenue'
+  | 'executionExpense'
+  | 'executionProfit'
+  | 'activeProjects'
+  | 'pipelineSnapshot'
+  | 'executionTrend';
+
+type DashboardWidgetSize = 'compact' | 'wide' | 'tall';
+
+type DashboardWidgetConfig = {
+  id: DashboardWidgetId;
+  size: DashboardWidgetSize;
+  chartType: string;
+};
+
+const DASHBOARD_WIDGET_STORAGE_KEY = 'dashboard-widget-layout-v1';
+
+const DASHBOARD_WIDGET_DEFAULTS: DashboardWidgetConfig[] = [
+  { id: 'executionRevenue', size: 'compact', chartType: 'number' },
+  { id: 'executionExpense', size: 'compact', chartType: 'number' },
+  { id: 'executionProfit', size: 'compact', chartType: 'gauge' },
+  { id: 'activeProjects', size: 'compact', chartType: 'gauge' },
+  { id: 'executionTrend', size: 'wide', chartType: 'area' },
+  { id: 'pipelineSnapshot', size: 'wide', chartType: 'bar' },
+];
+
+const DASHBOARD_WIDGET_CHART_OPTIONS: Record<DashboardWidgetId, Array<{ value: string; label: string }>> = {
+  executionRevenue: [
+    { value: 'number', label: 'Número' },
+    { value: 'gauge', label: 'Cobertura' },
+  ],
+  executionExpense: [
+    { value: 'number', label: 'Número' },
+    { value: 'gauge', label: 'Consumo' },
+  ],
+  executionProfit: [
+    { value: 'number', label: 'Número' },
+    { value: 'gauge', label: 'Margen' },
+  ],
+  activeProjects: [
+    { value: 'number', label: 'Número' },
+    { value: 'gauge', label: 'Promedio' },
+  ],
+  executionTrend: [
+    { value: 'area', label: 'Área' },
+    { value: 'line', label: 'Línea' },
+    { value: 'bar', label: 'Barras' },
+  ],
+  pipelineSnapshot: [
+    { value: 'bar', label: 'Barras' },
+    { value: 'donut', label: 'Donut' },
+  ],
+};
+
+const sanitizeDashboardWidgetLayout = (layout: DashboardWidgetConfig[] | null | undefined) => {
+  const fallback = DASHBOARD_WIDGET_DEFAULTS;
+  if (!Array.isArray(layout) || layout.length === 0) return fallback;
+
+  const map = new Map(layout.map((widget) => [widget.id, widget]));
+  return fallback.map((widget) => {
+    const saved = map.get(widget.id);
+    return saved
+      ? {
+          ...widget,
+          size: saved.size || widget.size,
+          chartType: saved.chartType || widget.chartType,
+        }
+      : widget;
+  });
+};
+
+const RadialMetric = ({
+  value,
+  accent,
+  valueLabel,
+  helperLabel,
+}: {
+  value: number;
+  accent: string;
+  valueLabel: string;
+  helperLabel: string;
+}) => {
+  const normalized = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+  const radius = 52;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (normalized / 100) * circumference;
+
+  return (
+    <div className="relative flex h-40 w-40 items-center justify-center">
+      <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90">
+        <circle cx="70" cy="70" r={radius} fill="none" stroke="rgba(148, 163, 184, 0.16)" strokeWidth="12" />
+        <circle
+          cx="70"
+          cy="70"
+          r={radius}
+          fill="none"
+          stroke={accent}
+          strokeWidth="12"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-3xl font-black text-slate-900 dark:text-white">{normalized.toFixed(0)}%</span>
+        <span className="mt-1 text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">{helperLabel}</span>
+        <span className="mt-2 text-xs font-bold text-slate-500 dark:text-slate-400">{valueLabel}</span>
+      </div>
+    </div>
+  );
+};
+
 const StatCard = ({ title, value, icon: Icon, trend, trendValue, color, chartType, onChartTypeChange, gaugeData }: any) => {
   const gaugeValue = Array.isArray(gaugeData) && gaugeData.length > 0 ? gaugeData[0].value : 0;
 
@@ -339,28 +445,16 @@ const StatCard = ({ title, value, icon: Icon, trend, trendValue, color, chartTyp
   );
 };
 
-const QuickActionButton = ({ icon: Icon, label, onClick, color }: any) => (
-  <button
-    onClick={onClick}
-    className="flex items-center gap-2 sm:gap-3 w-full p-3 sm:p-4 bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-all active:scale-95"
-  >
-    <div className={cn("p-1.5 sm:p-2 rounded-lg sm:rounded-xl", color)}>
-      <Icon size={16} className="text-white sm:w-5 sm:h-5" />
-    </div>
-    <span className="font-bold text-xs sm:text-sm text-slate-700 dark:text-slate-300">{label}</span>
-  </button>
-);
-
 export default function Dashboard() {
   const { currentTheme } = useTheme();
   const [projects, setProjects] = useState<any[]>([]);
+  const [quotes, setQuotes] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [subcontracts, setSubcontracts] = useState<any[]>([]);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [pendingWorkflows, setPendingWorkflows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isFabOpen, setIsFabOpen] = useState(false);
   const [isQuickProgressModalOpen, setIsQuickProgressModalOpen] = useState(false);
   const [selectedQuickProjectId, setSelectedQuickProjectId] = useState<string | null>(null);
   const [quickBudgetItems, setQuickBudgetItems] = useState<any[]>([]);
@@ -371,6 +465,8 @@ export default function Dashboard() {
     THEME_DEFAULT_CHARTS.sunset
   );
   const [cardStyle, setCardStyle] = useState<'default' | '3d-tilt' | 'glassmorphism'>('default');
+  const [isWidgetEditMode, setIsWidgetEditMode] = useState(false);
+  const [dashboardWidgets, setDashboardWidgets] = useState<DashboardWidgetConfig[]>(DASHBOARD_WIDGET_DEFAULTS);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const navigate = useNavigate();
@@ -407,6 +503,48 @@ export default function Dashboard() {
       // Ignore persistence errors and keep runtime preferences.
     }
   }, [chartPreferences, currentTheme.id]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DASHBOARD_WIDGET_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      setDashboardWidgets(sanitizeDashboardWidgetLayout(parsed));
+    } catch {
+      setDashboardWidgets(DASHBOARD_WIDGET_DEFAULTS);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DASHBOARD_WIDGET_STORAGE_KEY, JSON.stringify(dashboardWidgets));
+    } catch {
+      // Ignore persistence errors and keep runtime preferences.
+    }
+  }, [dashboardWidgets]);
+
+  const updateWidgetLayout = (widgetId: DashboardWidgetId, patch: Partial<DashboardWidgetConfig>) => {
+    setDashboardWidgets((prev) =>
+      prev.map((widget) => (widget.id === widgetId ? { ...widget, ...patch } : widget))
+    );
+  };
+
+  const moveWidget = (widgetId: DashboardWidgetId, direction: 'left' | 'right') => {
+    setDashboardWidgets((prev) => {
+      const currentIndex = prev.findIndex((widget) => widget.id === widgetId);
+      if (currentIndex === -1) return prev;
+
+      const targetIndex = direction === 'left' ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+
+      const next = [...prev];
+      [next[currentIndex], next[targetIndex]] = [next[targetIndex], next[currentIndex]];
+      return next;
+    });
+  };
+
+  const resetDashboardWidgets = () => {
+    setDashboardWidgets(DASHBOARD_WIDGET_DEFAULTS);
+  };
 
   const clampPercent = (value: any) => {
     const numericValue = Number(value);
@@ -537,8 +675,9 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        const [projectsItems, transactionsResult, inventoryResult, subcontractsItems, workflowsItems] = await Promise.all([
+        const [projectsItems, quotesItems, transactionsResult, inventoryResult, subcontractsItems, workflowsItems] = await Promise.all([
           listProjects(),
+          listQuotes(),
           listTransactions({ limit: 100, offset: 0 }),
           listInventory({ limit: 500, offset: 0 }),
           listSubcontracts({ status: 'Active' }),
@@ -572,6 +711,7 @@ export default function Dashboard() {
         });
 
         setProjects(normalizedProjects);
+        setQuotes(quotesItems);
         setTransactions(transactionsResult.items);
         setInventory(inventoryResult.items);
         setSubcontracts(subcontractsItems);
@@ -647,17 +787,55 @@ export default function Dashboard() {
     }
   }, [projects, subcontracts, loading]);
 
-  const totalBudget = projects.reduce((acc, p) => acc + (p.budget || 0), 0);
-  const totalSpent = transactions.filter(t => t.type === 'Expense').reduce((acc, t) => acc + (t.amount || 0), 0);
-  const totalIncome = transactions.filter(t => t.type === 'Income').reduce((acc, t) => acc + (t.amount || 0), 0);
-  const globalProfit = totalIncome - totalSpent;
-  const activeProjects = projects.filter(p => p.status === 'In Progress').length;
+  const executionProjects = useMemo(
+    () => projects.filter((project) => isExecutionStatus(project.status)),
+    [projects]
+  );
 
-  const projectHealthData = projects.map(p => {
-    const projectExpenses = transactions
+  const evaluationProjects = useMemo(
+    () => projects.filter((project) => isEvaluationStatus(project.status)),
+    [projects]
+  );
+
+  const executionProjectIds = useMemo(
+    () => new Set(executionProjects.map((project) => String(project.id))),
+    [executionProjects]
+  );
+
+  const executionTransactions = useMemo(
+    () => transactions.filter((transaction) => executionProjectIds.has(String(transaction.projectId || ''))),
+    [transactions, executionProjectIds]
+  );
+
+  const executionBudget = executionProjects.reduce((acc, project) => acc + Number(project.budget || 0), 0);
+  const executionSpent = executionTransactions
+    .filter((transaction) => transaction.type === 'Expense')
+    .reduce((acc, transaction) => acc + Number(transaction.amount || 0), 0);
+  const executionIncome = executionTransactions
+    .filter((transaction) => transaction.type === 'Income')
+    .reduce((acc, transaction) => acc + Number(transaction.amount || 0), 0);
+  const executionProfit = executionIncome - executionSpent;
+  const executionMargin = executionIncome > 0 ? (executionProfit / executionIncome) * 100 : 0;
+  const budgetConsumption = executionBudget > 0 ? (executionSpent / executionBudget) * 100 : 0;
+  const activeProjects = executionProjects.length;
+  const averageExecutionProgress = activeProjects > 0
+    ? executionProjects.reduce((acc, project) => acc + clampPercent(project.physicalProgress || 0), 0) / activeProjects
+    : 0;
+
+  const quotationQuotes = quotes.filter((quote) => {
+    const normalized = String(quote.status || '').trim().toLowerCase();
+    return normalized === 'pending' || normalized === 'sent';
+  });
+  const quotationValue = quotationQuotes.reduce((acc, quote) => acc + Number(quote.total || 0), 0);
+  const evaluationBudget = evaluationProjects.reduce((acc, project) => acc + Number(project.budget || 0), 0);
+  const evaluationSpent = evaluationProjects.reduce((acc, project) => acc + Number(project.spent || 0), 0);
+  const activeExecutionCoverage = executionBudget > 0 ? (executionIncome / executionBudget) * 100 : 0;
+
+  const projectHealthData = executionProjects.map(p => {
+    const projectExpenses = executionTransactions
       .filter(t => t.projectId === p.id && t.type === 'Expense')
       .reduce((acc, t) => acc + (t.amount || 0), 0);
-    const projectIncome = transactions
+    const projectIncome = executionTransactions
       .filter(t => t.projectId === p.id && t.type === 'Income')
       .reduce((acc, t) => acc + (t.amount || 0), 0);
 
@@ -671,7 +849,7 @@ export default function Dashboard() {
   });
 
   const expenseByCategory = transactions
-    .filter(t => t.type === 'Expense')
+    .filter(t => t.type === 'Expense' && executionProjectIds.has(String(t.projectId || '')))
     .reduce((acc: any, t) => {
       const category = t.category || 'Otros';
       acc[category] = (acc[category] || 0) + (t.amount || 0);
@@ -684,8 +862,9 @@ export default function Dashboard() {
   })).sort((a, b) => b.value - a.value);
 
   const statusData = [
+    { name: 'Evaluación', value: evaluationProjects.length },
     { name: 'En Planeación', value: projects.filter(p => p.status === 'Planning').length },
-    { name: 'En Ejecución', value: projects.filter(p => p.status === 'In Progress').length },
+    { name: 'En Ejecución', value: executionProjects.length },
     { name: 'Completadas', value: projects.filter(p => p.status === 'Completed').length },
     { name: 'En Pausa', value: projects.filter(p => p.status === 'On Hold').length },
   ].filter(d => d.value > 0);
@@ -700,7 +879,7 @@ export default function Dashboard() {
     value: item.value,
   }));
 
-  const activeProjectsList = projects.filter(p => p.status === 'In Progress' || p.status === 'Active');
+  const activeProjectsList = executionProjects;
 
   const progressComparisonData = projects
     .map(p => {
@@ -805,11 +984,11 @@ export default function Dashboard() {
     date.setDate(date.getDate() - (6 - i));
     const dateStr = date.toISOString().split('T')[0];
 
-    const spentUpToDate = transactions
+    const spentUpToDate = executionTransactions
       .filter(t => t.type === 'Expense' && t.date <= dateStr)
       .reduce((acc, t) => acc + (t.amount || 0), 0);
 
-    const incomeUpToDate = transactions
+    const incomeUpToDate = executionTransactions
       .filter(t => t.type === 'Income' && t.date <= dateStr)
       .reduce((acc, t) => acc + (t.amount || 0), 0);
 
@@ -826,8 +1005,274 @@ export default function Dashboard() {
   });
 
   const financialSummary = {
-    totalIncome,
-    totalExpense: totalSpent,
+    totalIncome: executionIncome,
+    totalExpense: executionSpent,
+  };
+
+  const pipelineData = [
+    { name: 'Cotización', value: quotationValue, count: quotationQuotes.length, fill: '#6366f1' },
+    { name: 'Evaluación', value: evaluationBudget, count: evaluationProjects.length, fill: '#8b5cf6' },
+    { name: 'Ejecución', value: executionBudget, count: executionProjects.length, fill: '#0ea5e9' },
+  ].filter((item) => item.value > 0 || item.count > 0);
+
+  const widgetSurfaceClass = cn(
+    'relative h-full overflow-hidden rounded-[28px] border px-5 py-5 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] transition-all duration-300',
+    cardStyle === 'glassmorphism'
+      ? 'bg-white/60 dark:bg-slate-900/45 border-white/40 dark:border-slate-700/40 backdrop-blur-2xl'
+      : 'bg-white dark:bg-slate-900 border-slate-200/70 dark:border-slate-800'
+  );
+
+  const getWidgetGridClass = (size: DashboardWidgetSize) => {
+    if (size === 'wide') return 'col-span-1 md:col-span-2 xl:col-span-6';
+    if (size === 'tall') return 'col-span-1 md:col-span-1 xl:col-span-4 xl:row-span-2';
+    return 'col-span-1 md:col-span-1 xl:col-span-3';
+  };
+
+  const renderMetricWidget = ({
+    headline,
+    valueLabel,
+    accentClass,
+    accentColor,
+    helper,
+    chartType,
+    gaugeValue,
+    icon: Icon,
+  }: {
+    headline: string;
+    valueLabel: string;
+    accentClass: string;
+    accentColor: string;
+    helper: string;
+    chartType: string;
+    gaugeValue: number;
+    icon: any;
+  }) => (
+    <div className="flex h-full flex-col justify-between gap-6">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/80 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+            <Sparkles size={11} />
+            Solo ejecución
+          </div>
+          <p className="text-[11px] font-black uppercase tracking-[0.32em] text-slate-400">{headline}</p>
+          <p className="max-w-[18rem] text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">{helper}</p>
+        </div>
+        <div className={cn('rounded-2xl p-3 text-white shadow-lg', accentClass)}>
+          <Icon size={18} />
+        </div>
+      </div>
+
+      {chartType === 'gauge' ? (
+        <div className="flex items-center justify-center">
+          <RadialMetric
+            value={gaugeValue}
+            accent={accentColor}
+            valueLabel={valueLabel}
+            helperLabel="avance"
+          />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-4xl font-black tracking-tight text-slate-950 dark:text-white">{valueLabel}</p>
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500 shadow-sm dark:border-slate-700/80 dark:bg-slate-800/70 dark:text-slate-300">
+            <Sparkles size={12} />
+            {helper}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderWidgetBody = (widget: DashboardWidgetConfig) => {
+    switch (widget.id) {
+      case 'executionRevenue':
+        return renderMetricWidget({
+          headline: 'Ingresos en ejecución',
+          valueLabel: formatCurrency(executionIncome),
+          accentClass: 'bg-linear-to-br from-emerald-500 via-emerald-500 to-teal-500',
+          accentColor: '#10b981',
+          helper: `${activeProjects} obra(s) activas con cobertura ${activeExecutionCoverage.toFixed(0)}% del presupuesto`,
+          chartType: widget.chartType,
+          gaugeValue: activeExecutionCoverage,
+          icon: TrendingUp,
+        });
+      case 'executionExpense':
+        return renderMetricWidget({
+          headline: 'Gasto operativo activo',
+          valueLabel: formatCurrency(executionSpent),
+          accentClass: 'bg-linear-to-br from-rose-500 via-rose-500 to-orange-500',
+          accentColor: '#ef4444',
+          helper: `${formatCurrency(executionBudget)} presupuestados para las obras en marcha`,
+          chartType: widget.chartType,
+          gaugeValue: budgetConsumption,
+          icon: HandCoins,
+        });
+      case 'executionProfit':
+        return renderMetricWidget({
+          headline: 'Ganancia neta activa',
+          valueLabel: formatCurrency(executionProfit),
+          accentClass: executionProfit >= 0
+            ? 'bg-linear-to-br from-sky-500 via-cyan-500 to-blue-600'
+            : 'bg-linear-to-br from-rose-600 via-rose-500 to-red-600',
+          accentColor: executionProfit >= 0 ? '#0284c7' : '#dc2626',
+          helper: `Margen ${executionMargin.toFixed(1)}% solo en proyectos en ejecución`,
+          chartType: widget.chartType,
+          gaugeValue: Math.max(0, Math.min(100, executionMargin)),
+          icon: executionProfit >= 0 ? TrendingUp : TrendingDown,
+        });
+      case 'activeProjects':
+        return renderMetricWidget({
+          headline: 'Capacidad operativa',
+          valueLabel: `${activeProjects} activas`,
+          accentClass: 'bg-linear-to-br from-indigo-500 via-violet-500 to-fuchsia-500',
+          accentColor: '#6366f1',
+          helper: `Avance físico promedio ${averageExecutionProgress.toFixed(1)}%`,
+          chartType: widget.chartType,
+          gaugeValue: averageExecutionProgress,
+          icon: Construction,
+        });
+      case 'executionTrend':
+        return (
+          <div className="flex h-full flex-col gap-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/80 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  <Sparkles size={11} />
+                  Solo ejecución
+                </div>
+                <p className="text-[11px] font-black uppercase tracking-[0.32em] text-slate-400">Pulso financiero activo</p>
+                <p className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  Tendencia diaria de ganancia de las obras en ejecución. Cotización y evaluación quedan fuera del neto.
+                </p>
+              </div>
+              <div className="rounded-2xl bg-linear-to-br from-emerald-500 to-sky-500 p-3 text-white shadow-lg">
+                <TrendingUp size={18} />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-500">Ingreso activo</p>
+                <p className="mt-2 text-lg font-black text-emerald-700 dark:text-emerald-300">{formatCurrency(executionIncome)}</p>
+              </div>
+              <div className="rounded-2xl border border-rose-100 bg-rose-50/80 px-4 py-3 dark:border-rose-500/20 dark:bg-rose-500/10">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-rose-500">Gasto activo</p>
+                <p className="mt-2 text-lg font-black text-rose-700 dark:text-rose-300">{formatCurrency(executionSpent)}</p>
+              </div>
+              <div className="rounded-2xl border border-sky-100 bg-sky-50/80 px-4 py-3 dark:border-sky-500/20 dark:bg-sky-500/10">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-sky-500">Utilidad</p>
+                <p className="mt-2 text-lg font-black text-sky-700 dark:text-sky-300">{formatCurrency(executionProfit)}</p>
+              </div>
+            </div>
+            <div className="min-h-[220px] flex-1">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
+                {widget.chartType === 'line' ? (
+                  <LineChart data={profitTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? `${Math.round(value / 1000)}k` : value}`} />
+                    <Tooltip formatter={(value: any) => [formatCurrency(value), 'Ganancia']} />
+                    <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={3} dot={{ r: 2 }} />
+                  </LineChart>
+                ) : widget.chartType === 'bar' ? (
+                  <BarChart data={profitTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? `${Math.round(value / 1000)}k` : value}`} />
+                    <Tooltip formatter={(value: any) => [formatCurrency(value), 'Ganancia']} />
+                    <Bar dataKey="profit" fill="#0ea5e9" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                ) : (
+                  <AreaChart data={profitTrendData}>
+                    <defs>
+                      <linearGradient id="executionTrendFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.36} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? `${Math.round(value / 1000)}k` : value}`} />
+                    <Tooltip formatter={(value: any) => [formatCurrency(value), 'Ganancia']} />
+                    <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={3} fill="url(#executionTrendFill)" />
+                  </AreaChart>
+                )}
+              </ResponsiveContainer>
+            </div>
+          </div>
+        );
+      case 'pipelineSnapshot':
+        return (
+          <div className="flex h-full flex-col gap-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.32em] text-slate-400">Embudo comercial y operativo</p>
+                <p className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  Visibilidad separada entre cotización, evaluación y ejecución para que el neto no mezcle etapas.
+                </p>
+              </div>
+              <div className="rounded-2xl bg-linear-to-br from-violet-500 via-indigo-500 to-sky-500 p-3 text-white shadow-lg">
+                <LayoutGrid size={18} />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-violet-100 bg-violet-50/80 px-4 py-3 dark:border-violet-500/20 dark:bg-violet-500/10">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-violet-500">Cotizaciones</p>
+                <p className="mt-2 text-lg font-black text-violet-700 dark:text-violet-300">{quotationQuotes.length}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{formatCurrency(quotationValue)}</p>
+              </div>
+              <div className="rounded-2xl border border-fuchsia-100 bg-fuchsia-50/80 px-4 py-3 dark:border-fuchsia-500/20 dark:bg-fuchsia-500/10">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-fuchsia-500">Evaluación</p>
+                <p className="mt-2 text-lg font-black text-fuchsia-700 dark:text-fuchsia-300">{evaluationProjects.length}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{formatCurrency(evaluationBudget)}</p>
+              </div>
+              <div className="rounded-2xl border border-sky-100 bg-sky-50/80 px-4 py-3 dark:border-sky-500/20 dark:bg-sky-500/10">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-sky-500">Ejecución</p>
+                <p className="mt-2 text-lg font-black text-sky-700 dark:text-sky-300">{executionProjects.length}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{formatCurrency(executionBudget)}</p>
+              </div>
+            </div>
+            <div className="min-h-[220px] flex-1">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
+                {widget.chartType === 'donut' ? (
+                  <PieChart>
+                    <Pie data={pipelineData} dataKey="value" nameKey="name" innerRadius={65} outerRadius={92} paddingAngle={4}>
+                      {pipelineData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: any, _name: any, item: any) => [formatCurrency(value), item?.payload?.name || 'Valor']} />
+                    <Legend />
+                  </PieChart>
+                ) : (
+                  <BarChart data={pipelineData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? `${Math.round(value / 1000)}k` : value}`} />
+                    <Tooltip formatter={(value: any) => [formatCurrency(value), 'Monto']} />
+                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                      {pipelineData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                )}
+              </ResponsiveContainer>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Gasto de evaluación</p>
+                <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{formatCurrency(evaluationSpent)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Cobertura activa</p>
+                <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{activeExecutionCoverage.toFixed(1)}%</p>
+              </div>
+            </div>
+          </div>
+        );
+      default:
+        return null;
+    }
   };
 
   return (
@@ -847,6 +1292,7 @@ export default function Dashboard() {
             >
               <option value="default">Predeterminado</option>
               <option value="3d-tilt">3D Inclinación</option>
+              <option value="glassmorphism">Vidrio líquido</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
@@ -867,6 +1313,119 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+      <section className="space-y-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200/70 bg-sky-50/80 px-3 py-1 text-[11px] font-black uppercase tracking-[0.28em] text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300">
+              <SlidersHorizontal size={12} />
+              Panel ejecutivo configurable
+            </div>
+            <h2 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white">Métricas clave para la constructora</h2>
+            <p className="max-w-3xl text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">
+              Esta franja superior vuelve a separar lo que ya está en obra de lo que sigue en cotización o evaluación.
+              Puedes reordenar tarjetas, cambiar tamaño y alternar su visualización sin perder la configuración.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsWidgetEditMode((prev) => !prev)}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-xs font-black uppercase tracking-[0.24em] transition-colors',
+                isWidgetEditMode
+                  ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
+              )}
+            >
+              <LayoutGrid size={14} />
+              {isWidgetEditMode ? 'Cerrar personalización' : 'Personalizar tablero'}
+            </button>
+            <button
+              type="button"
+              onClick={resetDashboardWidgets}
+              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.24em] text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <RotateCcw size={14} />
+              Restablecer
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-12 xl:auto-rows-[minmax(260px,auto)]">
+          {dashboardWidgets.map((widget, index) => {
+            const content = (
+              <div className={widgetSurfaceClass}>
+                <div className="pointer-events-none absolute inset-0">
+                  <div className="absolute -right-16 top-0 h-32 w-32 rounded-full bg-linear-to-br from-sky-400/20 via-cyan-300/10 to-transparent blur-3xl" />
+                  <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full bg-linear-to-br from-violet-400/15 via-fuchsia-300/10 to-transparent blur-3xl" />
+                </div>
+                <div className="relative z-10 flex h-full flex-col gap-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                      Widget {String(index + 1).padStart(2, '0')}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={widget.size}
+                        onChange={(e) => updateWidgetLayout(widget.id, { size: e.target.value as DashboardWidgetSize })}
+                        className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-200"
+                      >
+                        <option value="compact">Compacta</option>
+                        <option value="wide">Ancha</option>
+                        <option value="tall">Alta</option>
+                      </select>
+                      <select
+                        value={widget.chartType}
+                        onChange={(e) => updateWidgetLayout(widget.id, { chartType: e.target.value })}
+                        className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-200"
+                      >
+                        {DASHBOARD_WIDGET_CHART_OPTIONS[widget.id].map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                      {isWidgetEditMode && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => moveWidget(widget.id, 'left')}
+                            className="rounded-xl border border-slate-200 bg-white/90 p-2 text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-200 dark:hover:bg-slate-800"
+                            title="Mover a la izquierda"
+                            aria-label="Mover a la izquierda"
+                          >
+                            <ArrowLeft size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveWidget(widget.id, 'right')}
+                            className="rounded-xl border border-slate-200 bg-white/90 p-2 text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-200 dark:hover:bg-slate-800"
+                            title="Mover a la derecha"
+                            aria-label="Mover a la derecha"
+                          >
+                            <ArrowRight size={14} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    {renderWidgetBody(widget)}
+                  </div>
+                </div>
+              </div>
+            );
+
+            return (
+              <div key={widget.id} className={getWidgetGridClass(widget.size)}>
+                {cardStyle === '3d-tilt' ? (
+                  <ParallaxCard className="h-full">{content}</ParallaxCard>
+                ) : (
+                  content
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
         <div className="lg:col-span-2 space-y-8 min-w-0">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 min-w-0">
@@ -1559,60 +2118,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-      {/* Floating Action Button for Mobile */}
-      <div className="lg:hidden fixed bottom-24 right-6 z-50">
-        <AnimatePresence>
-          {isFabOpen && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 20 }}
-              className="absolute bottom-16 right-0 w-64 space-y-3"
-            >
-              <QuickActionButton
-                icon={ConstructionIcon}
-                label="Nueva Obra"
-                color="bg-primary"
-                onClick={() => {
-                  setIsFabOpen(false);
-                  navigate('/projects');
-                }}
-              />
-              <QuickActionButton
-                icon={ShoppingBag}
-                label="Nueva Compra"
-                color="bg-amber-500"
-                onClick={() => {
-                  setIsFabOpen(false);
-                  navigate('/purchase-orders');
-                }}
-              />
-              <QuickActionButton
-                icon={PackageIcon}
-                label="Mover Inventario"
-                color="bg-emerald-500"
-                onClick={() => {
-                  setIsFabOpen(false);
-                  navigate('/inventory');
-                }}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <button
-          title={isFabOpen ? 'Cerrar acciones rapidas' : 'Abrir acciones rapidas'}
-          aria-label={isFabOpen ? 'Cerrar acciones rapidas' : 'Abrir acciones rapidas'}
-          onClick={() => setIsFabOpen(!isFabOpen)}
-          className={cn(
-            "w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300",
-            isFabOpen ? "bg-slate-800 dark:bg-white text-white dark:text-slate-900 rotate-45" : "bg-primary text-white shadow-primary-shadow"
-          )}
-        >
-          <Plus size={24} />
-        </button>
-      </div>
-
       {/* Quick Progress Update Modal */}
       <AnimatePresence>
         {isQuickProgressModalOpen && (

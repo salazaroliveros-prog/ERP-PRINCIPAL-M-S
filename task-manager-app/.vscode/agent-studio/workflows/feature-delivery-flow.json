@@ -1,0 +1,46 @@
+{
+  "id": "feature-delivery-flow",
+  "name": "Feature Delivery Flow",
+  "description": "Plan -> Implement -> Review handoff workflow",
+  "nodes": [
+    {
+      "id": "n1",
+      "agentId": "planner",
+      "position": {
+        "x": 100,
+        "y": 120
+      },
+      "isEntry": true
+    },
+    {
+      "id": "n2",
+      "agentId": "backend-implementer",
+      "position": {
+        "x": 360,
+        "y": 120
+      }
+    },
+    {
+      "id": "n3",
+      "agentId": "reviewer",
+      "position": {
+        "x": 620,
+        "y": 120
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "n1",
+      "target": "n2",
+      "label": "handoff"
+    },
+    {
+      "id": "e2",
+      "source": "n2",
+      "target": "n3",
+      "label": "handoff"
+    }
+  ]
+}

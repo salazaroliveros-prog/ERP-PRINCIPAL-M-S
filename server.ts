@@ -1695,10 +1695,34 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
     scheduledAlertsTimer.unref?.();
   }
 
-  const corsOrigins = (process.env.CORS_ORIGINS || "")
+  const configuredCorsOrigins = (process.env.CORS_ORIGINS || "")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+  const derivedCorsOrigins = [process.env.FRONTEND_ORIGIN, process.env.APP_URL]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .map((value) => {
+      try {
+        return new URL(value).origin;
+      } catch {
+        return '';
+      }
+    })
+    .filter(Boolean);
+  const localDevOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:4173',
+    'http://127.0.0.1:4173',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ];
+  const corsOrigins = Array.from(new Set([
+    ...configuredCorsOrigins,
+    ...derivedCorsOrigins,
+    ...localDevOrigins,
+  ]));
 
   app.use(
     cors({

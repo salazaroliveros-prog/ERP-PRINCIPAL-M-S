@@ -23,9 +23,23 @@ function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.replace(/\/+$/, '');
 }
 
+function getRuntimeApiBaseUrl() {
+  if (typeof window === 'undefined') {
+    return normalizeBaseUrl(configuredBase);
+  }
+
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+  if (import.meta.env.DEV && isLocalhost) {
+    return window.location.origin;
+  }
+
+  return normalizeBaseUrl(configuredBase);
+}
+
 export function buildApiUrl(pathname: string) {
   const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
-  const baseUrl = normalizeBaseUrl(configuredBase);
+  const baseUrl = getRuntimeApiBaseUrl();
   return `${baseUrl}${normalizedPath}`;
 }
 
