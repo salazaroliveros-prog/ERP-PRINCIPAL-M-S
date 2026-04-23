@@ -1726,8 +1726,20 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
 
   app.use(
     cors({
-      origin: corsOrigins.length > 0 ? corsOrigins : true,
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const isAllowed = corsOrigins.includes(origin) || 
+                         origin.endsWith('.vercel.app') || 
+                         origin.endsWith('.github.io');
+        if (isAllowed) {
+          callback(null, true);
+        } else {
+          callback(null, false);
+        }
+      },
       credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "x-user-email"],
     })
   );
   app.use((_req, res, next) => {
