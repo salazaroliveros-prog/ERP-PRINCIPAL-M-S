@@ -32,6 +32,12 @@ import {
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
+  ScatterChart,
+  Scatter,
+  ZAxis,
+  FunnelChart,
+  Funnel,
+  LabelList,
 } from 'recharts';
 import {
   TrendingUp,
@@ -50,13 +56,18 @@ import {
   ChevronRight,
   Search,
   Loader2,
-  Save,
   X,
   ArrowLeft,
   SlidersHorizontal,
   LayoutGrid,
   RotateCcw,
   Sparkles,
+  ShieldAlert,
+  HardHat,
+  Wrench,
+  Activity,
+  Target,
+  Flame,
 } from 'lucide-react';
 import { formatCurrency, cn, handleApiError, OperationType, getMitigationSuggestions } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -68,6 +79,12 @@ import { listInventory } from '../lib/operationsApi';
 import { listSubcontracts } from '../lib/subcontractsApi';
 import { listWorkflows } from '../lib/workflowsApi';
 import { listQuotes } from '../lib/quotesApi';
+import { listEmployees } from '../lib/hrApi';
+import { listRisks } from '../lib/risksApi';
+import { listSafetyIncidents } from '../lib/safetyApi';
+import { listEquipment } from '../lib/equipmentApi';
+import { fetchTasks, updateTask } from '../lib/tasksApi';
+import type { Task } from '../lib/tasksApi';
 import { useTheme } from '../contexts/ThemeContext';
 import { ParallaxCard } from './ParallaxCard';
 
@@ -415,6 +432,7 @@ const StatCard = ({ title, value, icon: Icon, trend, trendValue, color, chartTyp
             )}
             {onChartTypeChange && (
               <select
+                aria-label="Tipo de visualización de tarjeta"
                 value={chartType}
                 onChange={(e) => onChartTypeChange(e.target.value)}
                 className="px-2 py-1 text-[9px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
@@ -445,6 +463,14 @@ const StatCard = ({ title, value, icon: Icon, trend, trendValue, color, chartTyp
   );
 };
 
+const TOOLTIP_STYLE = {
+  contentStyle: { backgroundColor: 'rgba(15,23,42,0.92)', borderRadius: '14px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0/0.2)', backdropFilter: 'blur(8px)' },
+  itemStyle: { color: '#fff', fontSize: '12px', fontWeight: 700 },
+  labelStyle: { color: '#94a3b8', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' as const, marginBottom: '4px' },
+};
+
+const CHART_CARD = 'bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:shadow-lg';
+
 export default function Dashboard() {
   const { currentTheme } = useTheme();
   const [projects, setProjects] = useState<any[]>([]);
@@ -454,7 +480,13 @@ export default function Dashboard() {
   const [subcontracts, setSubcontracts] = useState<any[]>([]);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [pendingWorkflows, setPendingWorkflows] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [risks, setRisks] = useState<any[]>([]);
+  const [safetyIncidents, setSafetyIncidents] = useState<any[]>([]);
+  const [equipment, setEquipment] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activePage, setActivePage] = useState(0);
   const [isQuickProgressModalOpen, setIsQuickProgressModalOpen] = useState(false);
   const [selectedQuickProjectId, setSelectedQuickProjectId] = useState<string | null>(null);
   const [quickBudgetItems, setQuickBudgetItems] = useState<any[]>([]);
@@ -675,13 +707,18 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        const [projectsItems, quotesItems, transactionsResult, inventoryResult, subcontractsItems, workflowsItems] = await Promise.all([
+        const [projectsItems, quotesItems, transactionsResult, inventoryResult, subcontractsItems, workflowsItems, employeesItems, risksItems, safetyItems, equipmentItems, tasksResult] = await Promise.all([
           listProjects(),
           listQuotes(),
           listTransactions({ limit: 100, offset: 0 }),
           listInventory({ limit: 500, offset: 0 }),
           listSubcontracts({ status: 'Active' }),
           listWorkflows({ status: 'pending' }),
+          listEmployees().catch(() => []),
+          listRisks().catch(() => []),
+          listSafetyIncidents().catch(() => []),
+          listEquipment().catch(() => []),
+          fetchTasks().catch(() => ({ items: [] })),
         ]);
 
         if (cancelled) return;
@@ -716,6 +753,11 @@ export default function Dashboard() {
         setInventory(inventoryResult.items);
         setSubcontracts(subcontractsItems);
         setPendingWorkflows(workflowsItems.slice(0, 5));
+        setEmployees(employeesItems);
+        setRisks(risksItems);
+        setSafetyIncidents(safetyItems);
+        setEquipment(equipmentItems);
+        setTasks(tasksResult.items);
         setRecentLogs([]);
       } catch (error) {
         if (!cancelled) {
@@ -763,6 +805,23 @@ export default function Dashboard() {
       }
     });
 
+    // Check for overdue tasks
+    const today = new Date().toISOString().split('T')[0];
+    tasks.forEach((task) => {
+      if (task.dueDate && task.status !== 'done' && task.status !== 'cancelled' && task.dueDate < today) {
+        const taskKey = `task_overdue_${task.id}`;
+        if (!notifiedItems[taskKey]) {
+          sendNotification(
+            'Tarea Vencida',
+            `La tarea "${task.title}" venció el ${new Date(task.dueDate + 'T00:00:00').toLocaleDateString('es-GT')}.`,
+            'project'
+          );
+          notifiedItems[taskKey] = true;
+          hasNewNotifications = true;
+        }
+      }
+    });
+
     // Check for financial deviations in active projects
     projects.forEach((p: any) => {
       if (p.status === 'In Progress') {
@@ -785,7 +844,7 @@ export default function Dashboard() {
     if (hasNewNotifications) {
       localStorage.setItem(notifiedKey, JSON.stringify(notifiedItems));
     }
-  }, [projects, subcontracts, loading]);
+  }, [projects, subcontracts, tasks, loading]);
 
   const executionProjects = useMemo(
     () => projects.filter((project) => isExecutionStatus(project.status)),
@@ -1009,6 +1068,144 @@ export default function Dashboard() {
     totalExpense: executionSpent,
   };
 
+  // ── Datos nuevas gráficas avanzadas ──────────────────────────────────────
+
+  // Scatter: desviación físico vs financiero por proyecto
+  const deviationScatterData = projects.map(p => ({
+    name: p.name,
+    fisico: clampPercent(p.physicalProgress || 0),
+    financiero: getFinancialProgress(p),
+    desviacion: getFinancialProgress(p) - clampPercent(p.physicalProgress || 0),
+    budget: Number(p.budget || 0),
+  }));
+
+  // Burndown: presupuesto restante por semana (últimas 8 semanas)
+  const burndownData = Array.from({ length: 8 }).map((_, i) => {
+    const weekDate = new Date();
+    weekDate.setDate(weekDate.getDate() - (7 - i) * 7);
+    const dateStr = weekDate.toISOString().split('T')[0];
+    const spentUpTo = transactions
+      .filter(t => t.type === 'Expense' && t.date <= dateStr)
+      .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+    const totalBudget = projects.reduce((acc, p) => acc + Number(p.budget || 0), 0);
+    return {
+      semana: `S${i + 1}`,
+      restante: Math.max(0, totalBudget - spentUpTo),
+      gastado: spentUpTo,
+      ideal: totalBudget * (1 - (i / 7) * 0.8),
+    };
+  });
+
+  // HR: empleados por departamento y masa salarial
+  const employeesByDept = employees.reduce((acc: any, e) => {
+    const dept = e.department || 'Sin depto';
+    acc[dept] = (acc[dept] || 0) + 1;
+    return acc;
+  }, {});
+  const employeesByDeptData = Object.entries(employeesByDept)
+    .map(([name, value]) => ({ name, value: value as number }))
+    .sort((a, b) => b.value - a.value);
+  const salaryByDept = employees.reduce((acc: any, e) => {
+    const dept = e.department || 'Sin depto';
+    acc[dept] = (acc[dept] || 0) + Number(e.salary || 0);
+    return acc;
+  }, {});
+  const salaryByDeptData = Object.entries(salaryByDept)
+    .map(([name, value]) => ({ name, value: value as number }))
+    .sort((a, b) => b.value - a.value);
+  const activeEmployees = employees.filter(e => String(e.status || '').toLowerCase() === 'active').length;
+  const totalSalaryMass = employees.reduce((acc, e) => acc + Number(e.salary || 0), 0);
+
+  // Riesgos: por categoría y estado
+  const riskByCategory = risks.reduce((acc: any, r) => {
+    const cat = r.category || 'General';
+    acc[cat] = (acc[cat] || 0) + 1;
+    return acc;
+  }, {});
+  const riskByCategoryData = Object.entries(riskByCategory)
+    .map(([name, value]) => ({ name, value: value as number }))
+    .sort((a, b) => b.value - a.value);
+  const riskByStatus = risks.reduce((acc: any, r) => {
+    const s = r.status || 'Open';
+    acc[s] = (acc[s] || 0) + 1;
+    return acc;
+  }, {});
+  const riskByStatusData = Object.entries(riskByStatus)
+    .map(([name, value]) => ({ name, value: value as number }));
+  const highRisks = risks.filter(r =>
+    ['high', 'critical'].includes(String(r.impact || '').toLowerCase())
+  ).length;
+
+  // Seguridad: incidentes por severidad y tipo
+  const incidentsBySeverity = safetyIncidents.reduce((acc: any, i) => {
+    const sev = i.severity || 'Low';
+    acc[sev] = (acc[sev] || 0) + 1;
+    return acc;
+  }, {});
+  const incidentsBySeverityData = Object.entries(incidentsBySeverity)
+    .map(([name, value]) => ({ name, value: value as number }));
+  const incidentsByType = safetyIncidents.reduce((acc: any, i) => {
+    const t = i.type || 'General';
+    acc[t] = (acc[t] || 0) + 1;
+    return acc;
+  }, {});
+  const incidentsByTypeData = Object.entries(incidentsByType)
+    .map(([name, value]) => ({ name, value: value as number }))
+    .sort((a, b) => b.value - a.value);
+  const openIncidents = safetyIncidents.filter(i =>
+    String(i.status || '').toLowerCase() !== 'closed'
+  ).length;
+
+  // Equipos: por estado y costo diario top 8
+  const equipmentByStatus = equipment.reduce((acc: any, e) => {
+    const s = e.status || 'Available';
+    acc[s] = (acc[s] || 0) + 1;
+    return acc;
+  }, {});
+  const equipmentByStatusData = Object.entries(equipmentByStatus)
+    .map(([name, value]) => ({ name, value: value as number }));
+  const equipmentCostData = equipment
+    .filter(e => Number(e.dailyRate || 0) > 0)
+    .sort((a, b) => Number(b.dailyRate) - Number(a.dailyRate))
+    .slice(0, 8)
+    .map(e => ({
+      name: e.name.length > 18 ? e.name.slice(0, 16) + '…' : e.name,
+      costo: Number(e.dailyRate),
+      dias: Number(e.estimatedDays || 0),
+    }));
+  const totalEquipmentCost = equipment.reduce(
+    (acc, e) => acc + Number(e.dailyRate || 0) * Number(e.estimatedDays || 0), 0
+  );
+
+  // Ingresos vs Gastos por mes (últimos 6 meses)
+  const monthlyFinancialData = Array.from({ length: 6 }).map((_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - (5 - i));
+    const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const ingresos = transactions
+      .filter(t => t.type === 'Income' && String(t.date || '').startsWith(monthStr))
+      .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+    const gastos = transactions
+      .filter(t => t.type === 'Expense' && String(t.date || '').startsWith(monthStr))
+      .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+    return {
+      mes: d.toLocaleDateString('es-GT', { month: 'short', year: '2-digit' }),
+      ingresos,
+      gastos,
+      utilidad: ingresos - gastos,
+    };
+  });
+
+  // Funnel pipeline
+  const funnelData = [
+    { name: 'Cotizaciones', value: quotationQuotes.length, fill: '#8b5cf6' },
+    { name: 'Evaluación', value: evaluationProjects.length, fill: '#6366f1' },
+    { name: 'Ejecución', value: executionProjects.length, fill: '#0ea5e9' },
+    { name: 'Completadas', value: projects.filter(p => p.status === 'Completed').length, fill: '#10b981' },
+  ].filter(d => d.value > 0);
+
+  const PAGES = ['Resumen Ejecutivo', 'Análisis Financiero', 'RRHH · Riesgos · Seguridad', 'Equipos · Pipeline'];
+
   const pipelineData = [
     { name: 'Cotización', value: quotationValue, count: quotationQuotes.length, fill: '#6366f1' },
     { name: 'Evaluación', value: evaluationBudget, count: evaluationProjects.length, fill: '#8b5cf6' },
@@ -1163,7 +1360,7 @@ export default function Dashboard() {
                 <p className="mt-2 text-lg font-black text-sky-700 dark:text-sky-300">{formatCurrency(executionProfit)}</p>
               </div>
             </div>
-            <div className="min-h-[220px] flex-1">
+            <div className="min-h-55 flex-1">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 {widget.chartType === 'line' ? (
                   <LineChart data={profitTrendData}>
@@ -1231,7 +1428,7 @@ export default function Dashboard() {
                 <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{formatCurrency(executionBudget)}</p>
               </div>
             </div>
-            <div className="min-h-[220px] flex-1">
+            <div className="min-h-55 flex-1">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                 {widget.chartType === 'donut' ? (
                   <PieChart>
@@ -1277,7 +1474,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-4 min-w-0 overflow-x-hidden p-4">
-      <header className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+      <header className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-white">Tablero de Control</h1>
         </div>
@@ -1296,16 +1493,20 @@ export default function Dashboard() {
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Filtrar por Fecha</label>
+            <label htmlFor="date-start" className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Filtrar por Fecha</label>
             <div className="flex items-center gap-1">
               <input
+                id="date-start"
                 type="date"
+                aria-label="Fecha de inicio del filtro"
                 onChange={(e) => setStartDate(e.target.value ? new Date(e.target.value) : null)}
                 className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
               />
               <span className="text-sm text-slate-400">-</span>
               <input
+                id="date-end"
                 type="date"
+                aria-label="Fecha de fin del filtro"
                 onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value) : null)}
                 className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
               />
@@ -1313,6 +1514,29 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+
+      {/* ── Navegación de páginas ── */}
+      <nav className="flex items-center gap-2 flex-wrap">
+        {PAGES.map((label, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => setActivePage(idx)}
+            className={cn(
+              'px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border',
+              activePage === idx
+                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white shadow-md'
+                : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400'
+            )}
+          >
+            <span className="mr-1.5 opacity-50">{String(idx + 1).padStart(2, '0')}</span>{label}
+          </button>
+        ))}
+      </nav>
+      {/* ── PÁGINA 0: Resumen Ejecutivo ── */}
+      <AnimatePresence mode="wait">
+      {activePage === 0 && (
+      <motion.div key="page0" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.25 }}>
       <section className="space-y-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="space-y-2">
@@ -1366,6 +1590,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <select
+                        aria-label="Tamaño del widget"
                         value={widget.size}
                         onChange={(e) => updateWidgetLayout(widget.id, { size: e.target.value as DashboardWidgetSize })}
                         className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-200"
@@ -1375,6 +1600,7 @@ export default function Dashboard() {
                         <option value="tall">Alta</option>
                       </select>
                       <select
+                        aria-label="Tipo de gráfica del widget"
                         value={widget.chartType}
                         onChange={(e) => updateWidgetLayout(widget.id, { chartType: e.target.value })}
                         className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-600 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-200"
@@ -1433,6 +1659,7 @@ export default function Dashboard() {
               <div className="mb-6 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Tendencia de Ganancia Global</h3>
                 <select
+                  aria-label="Tipo de gráfica: Tendencia de Ganancia"
                   value={chartPreferences.profitTrend}
                   onChange={(e) => updateChartPreference('profitTrend', e.target.value)}
                   className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
@@ -1500,6 +1727,7 @@ export default function Dashboard() {
               <div className="mb-6 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Salud Financiera por Proyecto</h3>
                 <select
+                  aria-label="Tipo de gráfica: Salud Financiera"
                   value={chartPreferences.projectHealth}
                   onChange={(e) => updateChartPreference('projectHealth', e.target.value)}
                   className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
@@ -1560,6 +1788,7 @@ export default function Dashboard() {
               <div className="mb-6 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Estado de los Proyectos</h3>
                 <select
+                  aria-label="Tipo de gráfica: Estado de Proyectos"
                   value={chartPreferences.projectStatus}
                   onChange={(e) => updateChartPreference('projectStatus', e.target.value)}
                   className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
@@ -1616,6 +1845,7 @@ export default function Dashboard() {
               <div className="mb-6 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Gastos por Categoría</h3>
                 <select
+                  aria-label="Tipo de gráfica: Gastos por Categoría"
                   value={chartPreferences.expenseCategory}
                   onChange={(e) => updateChartPreference('expenseCategory', e.target.value)}
                   className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
@@ -1687,6 +1917,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Vista</label>
                 <select
+                  aria-label="Vista de comparativa de avance"
                   value={progressChartScope}
                   onChange={(e) => setProgressChartScope(e.target.value as 'all' | 'selected')}
                   className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
@@ -1697,6 +1928,7 @@ export default function Dashboard() {
                   </option>
                 </select>
                 <select
+                  aria-label="Tipo de gráfica: Comparativa de Avance"
                   value={chartPreferences.progressComparison}
                   onChange={(e) => updateChartPreference('progressComparison', e.target.value)}
                   className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
@@ -1782,6 +2014,7 @@ export default function Dashboard() {
               </div>
               <div className="flex items-center gap-3">
                 <select
+                  aria-label="Tipo de gráfica: Cronograma de Avance"
                   value={chartPreferences.scheduleProgress}
                   onChange={(e) => updateChartPreference('scheduleProgress', e.target.value)}
                   className="px-3 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-primary outline-none"
@@ -2091,6 +2324,85 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Widget Tareas */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors duration-300">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <CheckCircle2 className="text-primary" size={20} />
+                Tareas
+              </h3>
+              <button
+                onClick={() => navigate('/tasks')}
+                className="text-[10px] font-black uppercase tracking-widest text-primary hover:text-primary-hover transition-colors"
+              >
+                Ver todas →
+              </button>
+            </div>
+            <div className="flex gap-3 mb-4">
+              {(['pending','in_progress','done'] as const).map((s) => {
+                const count = tasks.filter(t => t.status === s).length;
+                const label = s === 'pending' ? 'Pendientes' : s === 'in_progress' ? 'En Progreso' : 'Completadas';
+                const color = s === 'pending' ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' : s === 'in_progress' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
+                return (
+                  <div key={s} className={`flex-1 rounded-xl px-3 py-2 text-center ${color}`}>
+                    <p className="text-lg font-black">{count}</p>
+                    <p className="text-[9px] font-black uppercase tracking-wider">{label}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="space-y-2">
+              {tasks
+                .filter(t => t.status !== 'done' && t.status !== 'cancelled')
+                .sort((a, b) => {
+                  if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+                  if (a.dueDate) return -1;
+                  if (b.dueDate) return 1;
+                  return 0;
+                })
+                .slice(0, 5)
+                .map(task => {
+                  const isOverdue = task.dueDate && new Date(task.dueDate + 'T00:00:00') < new Date();
+                  return (
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-slate-100 dark:hover:border-slate-700"
+                      onClick={() => navigate('/tasks')}
+                    >
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const updated = await updateTask(task.id, { status: task.status === 'done' ? 'pending' : 'done' });
+                          setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+                        }}
+                        className="shrink-0 text-slate-300 hover:text-primary transition-colors"
+                      >
+                        {task.status === 'in_progress'
+                          ? <Clock size={16} className="text-blue-500" />
+                          : <CheckCircle2 size={16} />}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-black text-slate-900 dark:text-white truncate">{task.title}</p>
+                        {task.dueDate && (
+                          <p className={`text-[10px] font-bold ${isOverdue ? 'text-rose-500' : 'text-slate-400'}`}>
+                            📅 {new Date(task.dueDate + 'T00:00:00').toLocaleDateString('es-GT')}{isOverdue ? ' · Vencida' : ''}
+                          </p>
+                        )}
+                      </div>
+                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                        task.priority === 'high' ? 'bg-rose-100 text-rose-600' :
+                        task.priority === 'medium' ? 'bg-amber-100 text-amber-600' :
+                        'bg-slate-100 text-slate-500'
+                      }`}>{task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}</span>
+                    </div>
+                  );
+                })}
+              {tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled').length === 0 && (
+                <p className="text-sm text-slate-400 dark:text-slate-500 italic text-center py-4">No hay tareas pendientes.</p>
+              )}
+            </div>
+          </div>
+
           <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors duration-300">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
               <Clock className="text-primary" size={20} />
@@ -2118,6 +2430,324 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      </motion.div>
+      )}
+
+      {/* ── PÁGINA 1: Análisis Financiero Avanzado ── */}
+      {activePage === 1 && (
+      <motion.div key="page1" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.25 }} className="space-y-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className={cn(CHART_CARD, 'xl:col-span-2')}>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-5 flex items-center gap-2"><Activity size={16} className="text-emerald-500" />Ingresos vs Gastos — Últimos 6 meses</h3>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={monthlyFinancialData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="ingGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={v => `Q${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} />
+                  <Tooltip {...TOOLTIP_STYLE} formatter={(v: any, n: any) => [formatCurrency(v), n]} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' }} />
+                  <Bar dataKey="gastos" name="Gastos" fill="#ef4444" radius={[6,6,0,0]} barSize={18} opacity={0.85} />
+                  <Area type="monotone" dataKey="ingresos" name="Ingresos" stroke="#10b981" strokeWidth={3} fill="url(#ingGrad)" />
+                  <Line type="monotone" dataKey="utilidad" name="Utilidad" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 3 }} strokeDasharray="5 3" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className={CHART_CARD}>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-5 flex items-center gap-2"><Flame size={16} className="text-orange-500" />Burndown de Presupuesto</h3>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={burndownData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="burnGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f97316" stopOpacity={0.35}/><stop offset="95%" stopColor="#f97316" stopOpacity={0}/></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="semana" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={v => `Q${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} />
+                  <Tooltip {...TOOLTIP_STYLE} formatter={(v: any, n: any) => [formatCurrency(v), n]} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' }} />
+                  <Area type="monotone" dataKey="restante" name="Restante" stroke="#f97316" strokeWidth={3} fill="url(#burnGrad)" />
+                  <Line type="monotone" dataKey="ideal" name="Ideal" stroke="#94a3b8" strokeWidth={2} strokeDasharray="6 3" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        <div className={CHART_CARD}>
+          <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-2 flex items-center gap-2"><Target size={16} className="text-violet-500" />Scatter — Desviación Físico vs Financiero por Proyecto</h3>
+          <p className="text-xs text-slate-400 mb-5">Cada punto es un proyecto. Eje X = avance físico, Eje Y = avance financiero. Puntos sobre la diagonal = gasto adelantado al avance.</p>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <ScatterChart margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis type="number" dataKey="fisico" name="Avance Físico" domain={[0,100]} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} label={{ value: 'Avance Físico %', position: 'insideBottom', offset: -10, fill: '#94a3b8', fontSize: 10 }} />
+                <YAxis type="number" dataKey="financiero" name="Avance Financiero" domain={[0,100]} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} label={{ value: 'Financiero %', angle: -90, position: 'insideLeft', fill: '#94a3b8', fontSize: 10 }} />
+                <ZAxis type="number" dataKey="budget" range={[60, 400]} name="Presupuesto" />
+                <Tooltip {...TOOLTIP_STYLE} cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0].payload;
+                  return (
+                    <div className="bg-slate-900/95 p-3 rounded-xl border border-slate-700 text-xs">
+                      <p className="font-black text-white mb-1">{d.name}</p>
+                      <p className="text-emerald-300">Físico: {d.fisico.toFixed(1)}%</p>
+                      <p className="text-rose-300">Financiero: {d.financiero.toFixed(1)}%</p>
+                      <p className={cn('font-bold mt-1', d.desviacion > 10 ? 'text-amber-400' : 'text-slate-400')}>Desviación: {d.desviacion > 0 ? '+' : ''}{d.desviacion.toFixed(1)}%</p>
+                    </div>
+                  );
+                }} />
+                <ReferenceLine segment={[{x:0,y:0},{x:100,y:100}]} stroke="#94a3b8" strokeDasharray="4 4" />
+                <Scatter data={deviationScatterData} name="Proyectos">
+                  {deviationScatterData.map((entry, i) => (
+                    <Cell key={i} fill={entry.desviacion > 15 ? '#ef4444' : entry.desviacion > 5 ? '#f59e0b' : '#10b981'} fillOpacity={0.8} />
+                  ))}
+                </Scatter>
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex items-center gap-6 mt-3">
+            {[['#10b981','Alineado (≤5%)'],['#f59e0b','Atención (5-15%)'],['#ef4444','Riesgo (>15%)']].map(([color, label]) => (
+              <div key={label} className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full scatter-legend-dot"
+                  style={{ ['--dot-color' as string]: color } as React.CSSProperties}
+                />
+                <span className="text-[10px] font-bold text-slate-500 uppercase">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+      )}
+
+      {/* ── PÁGINA 2: RRHH · Riesgos · Seguridad ── */}
+      {activePage === 2 && (
+      <motion.div key="page2" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.25 }} className="space-y-8">
+        {/* KPIs RRHH */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[{ label: 'Total Empleados', value: employees.length, color: 'bg-blue-500', icon: Users },
+            { label: 'Activos', value: activeEmployees, color: 'bg-emerald-500', icon: CheckCircle2 },
+            { label: 'Masa Salarial', value: formatCurrency(totalSalaryMass), color: 'bg-violet-500', icon: HandCoins },
+            { label: 'Riesgos Altos', value: highRisks, color: 'bg-rose-500', icon: ShieldAlert },
+          ].map(({ label, value, color, icon: Icon }) => (
+            <div key={label} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
+              <div className={cn('p-3 rounded-xl text-white', color)}><Icon size={18} /></div>
+              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p><p className="text-xl font-black text-slate-900 dark:text-white mt-0.5">{value}</p></div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {/* Empleados por departamento */}
+          <div className={CHART_CARD}>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-5 flex items-center gap-2"><Users size={15} className="text-blue-500" />Empleados por Departamento</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={employeesByDeptData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} allowDecimals={false} />
+                  <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 9, fontWeight: 800 }} />
+                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Bar dataKey="value" name="Empleados" radius={[0,6,6,0]} barSize={14}>
+                    {employeesByDeptData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Masa salarial por departamento */}
+          <div className={CHART_CARD}>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-5 flex items-center gap-2"><HandCoins size={15} className="text-violet-500" />Masa Salarial por Departamento</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={salaryByDeptData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={4}>
+                    {salaryByDeptData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip {...TOOLTIP_STYLE} formatter={(v: any) => [formatCurrency(v), 'Salario']} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Riesgos por categoría */}
+          <div className={CHART_CARD}>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-5 flex items-center gap-2"><ShieldAlert size={15} className="text-rose-500" />Riesgos por Categoría</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={riskByCategoryData.slice(0,8).map(d => ({ subject: d.name, value: d.value }))} outerRadius={85}>
+                  <PolarGrid stroke="#334155" strokeOpacity={0.25} />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
+                  <PolarRadiusAxis tick={{ fill: '#94a3b8', fontSize: 8 }} allowDecimals={false} />
+                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Radar dataKey="value" stroke="#ef4444" fill="#ef4444" fillOpacity={0.3} name="Riesgos" />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Riesgos por estado */}
+          <div className={CHART_CARD}>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-5 flex items-center gap-2"><AlertTriangle size={15} className="text-amber-500" />Estado de Riesgos</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={riskByStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={5}>
+                    {riskByStatusData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Incidentes por severidad */}
+          <div className={CHART_CARD}>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-1 flex items-center gap-2"><HardHat size={15} className="text-orange-500" />Incidentes por Severidad</h3>
+            <p className="text-[10px] text-slate-400 mb-4">{openIncidents} incidente(s) abierto(s)</p>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={incidentsBySeverityData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} allowDecimals={false} />
+                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Bar dataKey="value" name="Incidentes" radius={[6,6,0,0]}>
+                    {incidentsBySeverityData.map((_, i) => <Cell key={i} fill={['#10b981','#f59e0b','#ef4444','#7c3aed'][i % 4]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Incidentes por tipo */}
+          <div className={CHART_CARD}>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-5 flex items-center gap-2"><HardHat size={15} className="text-cyan-500" />Incidentes por Tipo</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={incidentsByTypeData.slice(0,6)} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} allowDecimals={false} />
+                  <YAxis dataKey="name" type="category" width={110} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 9, fontWeight: 800 }} />
+                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Bar dataKey="value" name="Incidentes" radius={[0,6,6,0]} barSize={14}>
+                    {incidentsByTypeData.slice(0,6).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+      )}
+
+      {/* ── PÁGINA 3: Equipos · Pipeline ── */}
+      {activePage === 3 && (
+      <motion.div key="page3" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.25 }} className="space-y-8">
+        {/* KPIs Equipos */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[{ label: 'Total Equipos', value: equipment.length, color: 'bg-cyan-500', icon: Wrench },
+            { label: 'Costo Total Est.', value: formatCurrency(totalEquipmentCost), color: 'bg-orange-500', icon: HandCoins },
+            { label: 'Cotizaciones Activas', value: quotationQuotes.length, color: 'bg-violet-500', icon: Package },
+            { label: 'Proyectos Completados', value: projects.filter(p => p.status === 'Completed').length, color: 'bg-emerald-500', icon: CheckCircle2 },
+          ].map(({ label, value, color, icon: Icon }) => (
+            <div key={label} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4">
+              <div className={cn('p-3 rounded-xl text-white', color)}><Icon size={18} /></div>
+              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p><p className="text-xl font-black text-slate-900 dark:text-white mt-0.5">{value}</p></div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {/* Equipos por estado */}
+          <div className={CHART_CARD}>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-5 flex items-center gap-2"><Wrench size={15} className="text-cyan-500" />Equipos por Estado</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={equipmentByStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={5}>
+                    {equipmentByStatusData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Top equipos por costo diario */}
+          <div className={cn(CHART_CARD, 'xl:col-span-2')}>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-5 flex items-center gap-2"><Wrench size={15} className="text-orange-500" />Top Equipos por Costo Diario</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={equipmentCostData} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={v => `Q${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`} />
+                  <YAxis dataKey="name" type="category" width={120} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 9, fontWeight: 800 }} />
+                  <Tooltip {...TOOLTIP_STYLE} formatter={(v: any, n: any) => [n === 'costo' ? formatCurrency(v) : `${v} días`, n]} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }} />
+                  <Bar dataKey="costo" name="Costo/día" radius={[0,6,6,0]} barSize={12}>
+                    {equipmentCostData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Funnel pipeline */}
+          <div className={cn(CHART_CARD, 'xl:col-span-2')}>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-2 flex items-center gap-2"><Target size={15} className="text-indigo-500" />Embudo de Proyectos — Pipeline Completo</h3>
+            <p className="text-xs text-slate-400 mb-5">Cantidad de proyectos en cada etapa del ciclo de vida.</p>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <FunnelChart>
+                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Funnel dataKey="value" data={funnelData} isAnimationActive>
+                    {funnelData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                    <LabelList position="center" fill="#fff" fontSize={12} fontWeight={800} formatter={(v: any) => v} />
+                  </Funnel>
+                </FunnelChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Radar multi-dimensión proyectos */}
+          <div className={CHART_CARD}>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-5 flex items-center gap-2"><Activity size={15} className="text-fuchsia-500" />Radar Multi-Dimensión</h3>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={[
+                  { subject: 'Ejecución', value: executionProjects.length },
+                  { subject: 'Evaluación', value: evaluationProjects.length },
+                  { subject: 'Cotizaciones', value: quotationQuotes.length },
+                  { subject: 'Subcontratos', value: subcontracts.length },
+                  { subject: 'Empleados', value: employees.length },
+                  { subject: 'Equipos', value: equipment.length },
+                  { subject: 'Riesgos', value: risks.length },
+                  { subject: 'Incidentes', value: safetyIncidents.length },
+                ]} outerRadius={100}>
+                  <PolarGrid stroke="#334155" strokeOpacity={0.25} />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
+                  <PolarRadiusAxis tick={{ fill: '#94a3b8', fontSize: 8 }} allowDecimals={false} />
+                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Radar dataKey="value" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.3} name="Cantidad" />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+      )}
+      </AnimatePresence>
+
       {/* Quick Progress Update Modal */}
       <AnimatePresence>
         {isQuickProgressModalOpen && (

@@ -897,6 +897,10 @@
     }
   }
 
+  .scatter-legend-dot {
+    background-color: var(--dot-color);
+  }
+
   .recharts-responsive-container {
     min-width: 0;
     min-height: 220px;

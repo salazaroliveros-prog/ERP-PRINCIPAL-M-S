@@ -19,6 +19,8 @@ import {
   listProjectPois,
   updateProjectPoi,
 } from '../lib/projectDetailsApi';
+import { fetchTasks, createTask, updateTask, deleteTask } from '../lib/tasksApi';
+import type { Task, TaskStatus } from '../lib/tasksApi';
 import { listAuditLogs } from '../lib/auditApi';
 import ConfirmModal from './ConfirmModal';
 import ProjectBudget from './ProjectBudget';
@@ -71,7 +73,9 @@ import {
   Check,
   ShieldCheck,
   ShieldAlert,
-  Lightbulb
+  Lightbulb,
+  ListTodo,
+  Circle
 } from 'lucide-react';
 import { formatCurrency, formatDate, cn, handleApiError, OperationType, getMitigationSuggestions } from '../lib/utils';
 import { MARKET_DATA } from '../constants/apuData';
@@ -242,7 +246,11 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
     };
   }, [project, budgetItems]);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'budget' | 'financials' | 'audit' | 'map' | 'risk' | 'logbook'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'budget' | 'financials' | 'audit' | 'map' | 'risk' | 'logbook' | 'tasks'>('overview');
+  const [projectTasks, setProjectTasks] = useState<Task[]>([]);
+  const [taskForm, setTaskForm] = useState({ title: '', priority: 'medium' as Task['priority'], dueDate: '', assigneeName: '' });
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [savingTask, setSavingTask] = useState(false);
   const [logbookEntries, setLogbookEntries] = useState<any[]>([]);
   const [isLogbookModalOpen, setIsLogbookModalOpen] = useState(false);
   const [newLogEntry, setNewLogEntry] = useState({
@@ -306,6 +314,9 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
         if (selectedProject?.coordinates) {
           setMapCenter([selectedProject.coordinates.lat, selectedProject.coordinates.lng]);
         }
+
+        const tasksRes = await fetchTasks({ projectId }).catch(() => ({ items: [] }));
+        if (isMounted) setProjectTasks(tasksRes.items);
       } catch (error) {
         console.error('Error loading project details:', error);
         toast.error('No se pudieron cargar todos los detalles del proyecto');
@@ -1430,6 +1441,7 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
             { id: 'budget', label: 'Presupuesto', icon: Calculator },
             { id: 'financials', label: 'Finanzas', icon: DollarSign },
             { id: 'logbook', label: 'Bitácora', icon: History },
+            { id: 'tasks', label: 'Tareas', icon: ListTodo },
             { id: 'risk', label: 'Riesgos', icon: AlertCircle },
             { id: 'map', label: 'Mapa', icon: MapIcon },
             { id: 'audit', label: 'Auditoría', icon: ShieldCheck },
@@ -3034,6 +3046,163 @@ export default function ProjectDetails({ projectId, onBack }: ProjectDetailsProp
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {activeTab === 'tasks' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <ListTodo className="text-primary" size={20} />
+                  Tareas del Proyecto
+                </h3>
+                <button
+                  onClick={() => setShowTaskForm(true)}
+                  className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl font-bold hover:bg-primary-hover transition-all shadow-md text-xs uppercase tracking-widest"
+                >
+                  <Plus size={16} /> Nueva Tarea
+                </button>
+              </div>
+
+              <AnimatePresence>
+                {showTaskForm && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="bg-slate-50 dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4"
+                  >
+                    <input
+                      value={taskForm.title}
+                      onChange={e => setTaskForm(f => ({ ...f, title: e.target.value }))}
+                      placeholder="Título de la tarea *"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <select
+                        value={taskForm.priority}
+                        onChange={e => setTaskForm(f => ({ ...f, priority: e.target.value as Task['priority'] }))}
+                        className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none"
+                      >
+                        <option value="low">Prioridad Baja</option>
+                        <option value="medium">Prioridad Media</option>
+                        <option value="high">Prioridad Alta</option>
+                      </select>
+                      <input
+                        type="date"
+                        value={taskForm.dueDate}
+                        onChange={e => setTaskForm(f => ({ ...f, dueDate: e.target.value }))}
+                        className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none"
+                      />
+                    </div>
+                    <input
+                      value={taskForm.assigneeName}
+                      onChange={e => setTaskForm(f => ({ ...f, assigneeName: e.target.value }))}
+                      placeholder="Responsable (nombre)"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => { setShowTaskForm(false); setTaskForm({ title: '', priority: 'medium', dueDate: '', assigneeName: '' }); }}
+                        className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        disabled={savingTask}
+                        onClick={async () => {
+                          if (!taskForm.title.trim()) { toast.error('El título es obligatorio'); return; }
+                          setSavingTask(true);
+                          try {
+                            const created = await createTask({
+                              title: taskForm.title.trim(),
+                              priority: taskForm.priority,
+                              projectId,
+                              dueDate: taskForm.dueDate || undefined,
+                              assigneeName: taskForm.assigneeName.trim() || undefined,
+                            });
+                            setProjectTasks(prev => [created, ...prev]);
+                            setShowTaskForm(false);
+                            setTaskForm({ title: '', priority: 'medium', dueDate: '', assigneeName: '' });
+                            toast.success('Tarea creada');
+                          } catch { toast.error('No se pudo crear la tarea'); }
+                          finally { setSavingTask(false); }
+                        }}
+                        className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-wider hover:bg-primary-hover disabled:opacity-50"
+                      >
+                        {savingTask ? 'Guardando...' : 'Crear'}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {projectTasks.length === 0 ? (
+                <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+                  <ListTodo className="mx-auto text-slate-300 mb-3" size={40} />
+                  <p className="text-sm text-slate-400 font-medium">No hay tareas para este proyecto</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {projectTasks.map(task => {
+                    const isOverdue = task.dueDate && task.status !== 'done' && task.status !== 'cancelled' && new Date(task.dueDate + 'T00:00:00') < new Date();
+                    const STATUS_COLORS: Record<TaskStatus, string> = {
+                      pending: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+                      in_progress: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+                      done: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+                      cancelled: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+                    };
+                    const STATUS_LABELS: Record<TaskStatus, string> = { pending: 'Pendiente', in_progress: 'En Progreso', done: 'Completada', cancelled: 'Cancelada' };
+                    return (
+                      <div key={task.id} className={cn('flex items-start gap-3 p-4 rounded-2xl border bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-primary/30 transition-all group', task.status === 'done' && 'opacity-60')}>
+                        <button
+                          onClick={async () => {
+                            const next: TaskStatus = task.status === 'done' ? 'pending' : 'done';
+                            const updated = await updateTask(task.id, { status: next });
+                            setProjectTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+                          }}
+                          className="mt-0.5 shrink-0 text-slate-300 hover:text-primary dark:text-slate-600 dark:hover:text-primary transition-colors"
+                        >
+                          {task.status === 'done' ? <CheckCircle2 size={20} className="text-emerald-500" /> : task.status === 'in_progress' ? <Clock size={20} className="text-blue-500" /> : <Circle size={20} />}
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <p className={cn('text-sm font-black text-slate-900 dark:text-white truncate', task.status === 'done' && 'line-through')}>{task.title}</p>
+                            <span className={cn('text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full', STATUS_COLORS[task.status as TaskStatus])}>{STATUS_LABELS[task.status as TaskStatus]}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-3 text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
+                            {task.assigneeName && <span>👤 {task.assigneeName}</span>}
+                            {task.dueDate && <span className={cn(isOverdue && 'text-rose-500 font-black')}>📅 {new Date(task.dueDate + 'T00:00:00').toLocaleDateString('es-GT')}{isOverdue ? ' · Vencida' : ''}</span>}
+                          </div>
+                        </div>
+                        <select
+                          value={task.status}
+                          onChange={async e => {
+                            const updated = await updateTask(task.id, { status: e.target.value as TaskStatus });
+                            setProjectTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+                          }}
+                          className="shrink-0 text-[10px] font-black px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none"
+                        >
+                          <option value="pending">Pendiente</option>
+                          <option value="in_progress">En Progreso</option>
+                          <option value="done">Completada</option>
+                          <option value="cancelled">Cancelada</option>
+                        </select>
+                        <button
+                          onClick={async () => {
+                            await deleteTask(task.id);
+                            setProjectTasks(prev => prev.filter(t => t.id !== task.id));
+                            toast.success('Tarea eliminada');
+                          }}
+                          className="shrink-0 p-1.5 text-slate-300 hover:text-rose-500 dark:text-slate-600 dark:hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 

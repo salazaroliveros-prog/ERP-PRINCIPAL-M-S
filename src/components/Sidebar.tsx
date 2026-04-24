@@ -30,7 +30,8 @@ import {
   BarChart3,
   CheckSquare,
   History,
-  Download
+  Download,
+  ListTodo
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -174,7 +175,7 @@ export const Sidebar = ({
     setPanelOpen(isNotificationsOpen);
   }, [isNotificationsOpen, setPanelOpen]);
 
-  const isOperacionesActive = ["/projects", "/quotes", "/clients", "/safety", "/workflows", "/risks"].some(path => location.pathname.startsWith(path));
+  const isOperacionesActive = ["/projects", "/tasks", "/quotes", "/clients", "/safety", "/workflows", "/risks"].some(path => location.pathname.startsWith(path));
   const isLogisticaActive = ["/inventory", "/equipment", "/purchase-orders", "/suppliers"].some(path => location.pathname.startsWith(path));
   const isAdministracionActive = ["/financials", "/subcontracts", "/hr", "/documents", "/audit-logs"].some(path => location.pathname.startsWith(path));
   const isAnalyticsActive = location.pathname.startsWith("/analytics");
@@ -367,6 +368,16 @@ export const Sidebar = ({
                 icon={Construction} 
                 label="Proyectos" 
                 active={location.pathname === "/projects"} 
+                isCollapsed={isCollapsed}
+                onPrefetchRoute={onPrefetchRoute}
+                onNavigateIntent={onNavigateIntent}
+                onClick={onClose}
+              />
+              <NavItem 
+                to="/tasks" 
+                icon={ListTodo} 
+                label="Tareas" 
+                active={location.pathname === "/tasks"} 
                 isCollapsed={isCollapsed}
                 onPrefetchRoute={onPrefetchRoute}
                 onNavigateIntent={onNavigateIntent}

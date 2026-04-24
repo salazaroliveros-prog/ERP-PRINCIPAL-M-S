@@ -13,3 +13,5 @@ test-results/
 agent/venv/
 .gemini/
 .geminiignore
+
+gha-creds-*.json

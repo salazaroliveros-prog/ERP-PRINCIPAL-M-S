@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "tsx server.ts",
+    "frontend": "vite",
     "start": "tsx server.ts",
     "build": "vite build",
     "db:migrate": "tsx scripts/migrate.ts",

@@ -1301,6 +1301,9 @@ function serveFallbackRead(req: Request, res: Response) {
   if (req.path === '/subcontracts') {
     return res.json({ items: [] });
   }
+  if (req.path === '/tasks') {
+    return res.json({ items: [] });
+  }
   if (req.path === '/workflows') {
     return res.json({ items: [] });
   }
@@ -3887,6 +3890,153 @@ export async function createApp(options?: { includeFrontend?: boolean }) {
       return res.status(204).send();
     } catch (error: any) {
       return res.status(500).json({ error: error?.message || 'No se pudo eliminar entrada de bitacora' });
+    }
+  });
+
+  // ── Tasks ──────────────────────────────────────────────────────────────
+  interface TaskRow {
+    id: string;
+    title: string;
+    description: string | null;
+    status: string;
+    priority: string;
+    project_id: string | null;
+    assignee_id: string | null;
+    assignee_name: string | null;
+    due_date: string | null;
+    completed_at: string | null;
+    created_by: string | null;
+    created_at: string;
+    updated_at: string;
+  }
+
+  function mapTask(row: TaskRow) {
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description || '',
+      status: row.status,
+      priority: row.priority,
+      projectId: row.project_id || null,
+      assigneeId: row.assignee_id || null,
+      assigneeName: row.assignee_name || null,
+      dueDate: row.due_date || null,
+      completedAt: row.completed_at || null,
+      createdBy: row.created_by || null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  app.get('/api/tasks', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const projectId = String(req.query.projectId || '').trim();
+      const status = String(req.query.status || '').trim();
+      const assigneeId = String(req.query.assigneeId || '').trim();
+
+      const where: string[] = [];
+      const values: any[] = [];
+      if (projectId) { values.push(projectId); where.push(`project_id = $${values.length}`); }
+      if (status) { values.push(status); where.push(`status = $${values.length}`); }
+      if (assigneeId) { values.push(assigneeId); where.push(`assignee_id = $${values.length}`); }
+
+      const whereClause = where.length > 0 ? `where ${where.join(' and ')}` : '';
+      const result = await db.query<TaskRow>(
+        `select id, title, description, status, priority, project_id, assignee_id, assignee_name,
+                due_date::text, completed_at, created_by, created_at, updated_at
+         from tasks ${whereClause} order by created_at desc`,
+        values
+      );
+      return res.json({ items: result.rows.map(mapTask) });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudieron obtener tareas' });
+    }
+  });
+
+  app.post('/api/tasks', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const title = String(req.body?.title || '').trim();
+      if (!title) return res.status(400).json({ error: 'title es obligatorio' });
+
+      const description = String(req.body?.description || '').trim() || null;
+      const status = String(req.body?.status || 'pending').trim();
+      const priority = String(req.body?.priority || 'medium').trim();
+      const projectId = String(req.body?.projectId || '').trim() || null;
+      const assigneeId = String(req.body?.assigneeId || '').trim() || null;
+      const assigneeName = String(req.body?.assigneeName || '').trim() || null;
+      const dueDate = String(req.body?.dueDate || '').trim() || null;
+      const createdBy = getRequesterUserId(req) || null;
+
+      const result = await db.query<TaskRow>(
+        `insert into tasks (title, description, status, priority, project_id, assignee_id, assignee_name, due_date, created_by)
+         values ($1,$2,$3,$4,$5,$6,$7,$8::date,$9)
+         returning id, title, description, status, priority, project_id, assignee_id, assignee_name,
+                   due_date::text, completed_at, created_by, created_at, updated_at`,
+        [title, description, status, priority, projectId, assigneeId, assigneeName, dueDate, createdBy]
+      );
+      return res.status(201).json(mapTask(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo crear la tarea' });
+    }
+  });
+
+  app.patch('/api/tasks/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const sets: string[] = [];
+      const values: any[] = [];
+      const addSet = (col: string, val: any) => { values.push(val); sets.push(`${col} = $${values.length}`); };
+
+      if (req.body?.title !== undefined) addSet('title', String(req.body.title || '').trim());
+      if (req.body?.description !== undefined) addSet('description', String(req.body.description || '').trim() || null);
+      if (req.body?.status !== undefined) {
+        const nextStatus = String(req.body.status || '').trim();
+        addSet('status', nextStatus);
+        if (nextStatus === 'done') addSet('completed_at', new Date().toISOString());
+        else addSet('completed_at', null);
+      }
+      if (req.body?.priority !== undefined) addSet('priority', String(req.body.priority || 'medium').trim());
+      if (req.body?.projectId !== undefined) addSet('project_id', String(req.body.projectId || '').trim() || null);
+      if (req.body?.assigneeId !== undefined) addSet('assignee_id', String(req.body.assigneeId || '').trim() || null);
+      if (req.body?.assigneeName !== undefined) addSet('assignee_name', String(req.body.assigneeName || '').trim() || null);
+      if (req.body?.dueDate !== undefined) {
+        values.push(req.body.dueDate ? String(req.body.dueDate) : null);
+        sets.push(`due_date = $${values.length}::date`);
+      }
+
+      if (sets.length === 0) return res.status(400).json({ error: 'No hay campos para actualizar' });
+      sets.push('updated_at = now()');
+      values.push(id);
+
+      const result = await db.query<TaskRow>(
+        `update tasks set ${sets.join(', ')} where id = $${values.length}
+         returning id, title, description, status, priority, project_id, assignee_id, assignee_name,
+                   due_date::text, completed_at, created_by, created_at, updated_at`,
+        values
+      );
+      if (!result.rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+      return res.json(mapTask(result.rows[0]));
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo actualizar la tarea' });
+    }
+  });
+
+  app.delete('/api/tasks/:id', async (req, res) => {
+    try {
+      const db = requireDatabase();
+      const id = String(req.params.id || '').trim();
+      if (!id) return res.status(400).json({ error: 'id requerido' });
+
+      const deleted = await db.query('delete from tasks where id = $1', [id]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Tarea no encontrada' });
+      return res.status(204).send();
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'No se pudo eliminar la tarea' });
     }
   });
 

@@ -62,6 +62,7 @@ const Projects = lazy(loadProjects);
 const Clients = lazy(() => import('./components/Clients'));
 const Inventory = lazy(loadInventory);
 const Financials = lazy(loadFinancials);
+const Tasks = lazy(() => import('./components/Tasks'));
 const Quotes = lazy(() => import('./components/Quotes'));
 const Equipment = lazy(() => import('./components/Equipment'));
 const Subcontracts = lazy(() => import('./components/Subcontracts'));
@@ -1043,6 +1044,9 @@ function AppContent({
       case '/':
         preload = loadDashboard();
         break;
+      case '/tasks':
+        preload = import('./components/Tasks');
+        break;
       case '/projects':
         preload = loadProjects();
         break;
@@ -1397,6 +1401,7 @@ function AppContent({
             <AnimatePresence mode="wait">
               <Routes>
                 <Route path="/" element={<PageTransition reduceMotion={reduceMotion}><Dashboard /></PageTransition>} />
+                <Route path="/tasks" element={<PageTransition reduceMotion={reduceMotion}><Tasks /></PageTransition>} />
                 <Route path="/projects" element={<PageTransition reduceMotion={reduceMotion}><Projects /></PageTransition>} />
                 <Route path="/clients" element={<PageTransition reduceMotion={reduceMotion}><Clients /></PageTransition>} />
                 <Route path="/inventory" element={<PageTransition reduceMotion={reduceMotion}><Inventory /></PageTransition>} />
