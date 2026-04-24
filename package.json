@@ -24,6 +24,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@github/copilot-sdk": "^0.3.0",
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/leaflet": "^1.9.21",

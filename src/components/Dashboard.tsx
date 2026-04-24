@@ -501,6 +501,7 @@ export default function Dashboard() {
   const [dashboardWidgets, setDashboardWidgets] = useState<DashboardWidgetConfig[]>(DASHBOARD_WIDGET_DEFAULTS);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
   const navigate = useNavigate();
 
   const updateChartPreference = (chartKey: DashboardChartKey, value: string) => {
@@ -702,15 +703,20 @@ export default function Dashboard() {
     }
   };
 
+  // Formato ISO date string para pasar al backend
+  const fromParam = startDate ? startDate.toISOString().split('T')[0] : undefined;
+  const toParam = endDate ? endDate.toISOString().split('T')[0] : undefined;
+
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        const [projectsItems, quotesItems, transactionsResult, inventoryResult, subcontractsItems, workflowsItems, employeesItems, risksItems, safetyItems, equipmentItems, tasksResult] = await Promise.all([
+        setLoading(true);
+        // Carga estática (no depende de fechas)
+        const [projectsItems, quotesItems, inventoryResult, subcontractsItems, workflowsItems, employeesItems, risksItems, safetyItems, equipmentItems, tasksResult] = await Promise.all([
           listProjects(),
           listQuotes(),
-          listTransactions({ limit: 100, offset: 0 }),
           listInventory({ limit: 500, offset: 0 }),
           listSubcontracts({ status: 'Active' }),
           listWorkflows({ status: 'pending' }),
@@ -720,6 +726,27 @@ export default function Dashboard() {
           listEquipment().catch(() => []),
           fetchTasks().catch(() => ({ items: [] })),
         ]);
+
+        if (cancelled) return;
+
+        setQuotes(quotesItems);
+        setInventory(inventoryResult.items);
+        setSubcontracts(subcontractsItems);
+        setPendingWorkflows(workflowsItems.slice(0, 5));
+        setEmployees(employeesItems);
+        setRisks(risksItems);
+        setSafetyIncidents(safetyItems);
+        setEquipment(equipmentItems);
+        setTasks(tasksResult.items);
+        setRecentLogs([]);
+
+        // Transacciones con filtro de fecha al backend
+        const transactionsResult = await listTransactions({
+          limit: 200,
+          offset: 0,
+          from: fromParam,
+          to: toParam,
+        });
 
         if (cancelled) return;
 
@@ -748,17 +775,8 @@ export default function Dashboard() {
         });
 
         setProjects(normalizedProjects);
-        setQuotes(quotesItems);
         setTransactions(transactionsResult.items);
-        setInventory(inventoryResult.items);
-        setSubcontracts(subcontractsItems);
-        setPendingWorkflows(workflowsItems.slice(0, 5));
-        setEmployees(employeesItems);
-        setRisks(risksItems);
-        setSafetyIncidents(safetyItems);
-        setEquipment(equipmentItems);
-        setTasks(tasksResult.items);
-        setRecentLogs([]);
+        setLastLoadedAt(new Date());
       } catch (error) {
         if (!cancelled) {
           handleApiError(error, OperationType.GET, 'dashboard');
@@ -773,7 +791,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [fromParam, toParam]); // Re-ejecuta cuando cambia el filtro de fechas
 
   useEffect(() => {
     if (loading) return;
@@ -861,9 +879,13 @@ export default function Dashboard() {
     [executionProjects]
   );
 
+  // Las transacciones ya vienen filtradas por fecha desde el backend.
+  // filteredTransactions es un alias para mantener compatibilidad con los cálculos derivados.
+  const filteredTransactions = transactions;
+
   const executionTransactions = useMemo(
-    () => transactions.filter((transaction) => executionProjectIds.has(String(transaction.projectId || ''))),
-    [transactions, executionProjectIds]
+    () => filteredTransactions.filter((transaction) => executionProjectIds.has(String(transaction.projectId || ''))),
+    [filteredTransactions, executionProjectIds]
   );
 
   const executionBudget = executionProjects.reduce((acc, project) => acc + Number(project.budget || 0), 0);
@@ -907,7 +929,7 @@ export default function Dashboard() {
     };
   });
 
-  const expenseByCategory = transactions
+  const expenseByCategory = filteredTransactions
     .filter(t => t.type === 'Expense' && executionProjectIds.has(String(t.projectId || '')))
     .reduce((acc: any, t) => {
       const category = t.category || 'Otros';
@@ -1043,12 +1065,12 @@ export default function Dashboard() {
     date.setDate(date.getDate() - (6 - i));
     const dateStr = date.toISOString().split('T')[0];
 
-    const spentUpToDate = executionTransactions
-      .filter(t => t.type === 'Expense' && t.date <= dateStr)
+    const spentUpToDate = filteredTransactions
+      .filter(t => executionProjectIds.has(String(t.projectId || '')) && t.type === 'Expense' && t.date <= dateStr)
       .reduce((acc, t) => acc + (t.amount || 0), 0);
 
-    const incomeUpToDate = executionTransactions
-      .filter(t => t.type === 'Income' && t.date <= dateStr)
+    const incomeUpToDate = filteredTransactions
+      .filter(t => executionProjectIds.has(String(t.projectId || '')) && t.type === 'Income' && t.date <= dateStr)
       .reduce((acc, t) => acc + (t.amount || 0), 0);
 
     return {
@@ -1084,7 +1106,7 @@ export default function Dashboard() {
     const weekDate = new Date();
     weekDate.setDate(weekDate.getDate() - (7 - i) * 7);
     const dateStr = weekDate.toISOString().split('T')[0];
-    const spentUpTo = transactions
+    const spentUpTo = filteredTransactions
       .filter(t => t.type === 'Expense' && t.date <= dateStr)
       .reduce((acc, t) => acc + Number(t.amount || 0), 0);
     const totalBudget = projects.reduce((acc, p) => acc + Number(p.budget || 0), 0);
@@ -1182,10 +1204,10 @@ export default function Dashboard() {
     const d = new Date();
     d.setMonth(d.getMonth() - (5 - i));
     const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const ingresos = transactions
+    const ingresos = filteredTransactions
       .filter(t => t.type === 'Income' && String(t.date || '').startsWith(monthStr))
       .reduce((acc, t) => acc + Number(t.amount || 0), 0);
-    const gastos = transactions
+    const gastos = filteredTransactions
       .filter(t => t.type === 'Expense' && String(t.date || '').startsWith(monthStr))
       .reduce((acc, t) => acc + Number(t.amount || 0), 0);
     return {
@@ -1477,6 +1499,16 @@ export default function Dashboard() {
       <header className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-white">Tablero de Control</h1>
+          {lastLoadedAt && (
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+              Actualizado: {lastLoadedAt.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })}
+              {(startDate || endDate) && (
+                <span className="ml-2 text-primary">
+                  · Filtro activo{startDate ? ` desde ${startDate.toLocaleDateString('es-GT')}` : ''}{endDate ? ` hasta ${endDate.toLocaleDateString('es-GT')}` : ''}
+                </span>
+              )}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-6 flex-wrap">
           <div className="flex items-center gap-2">
@@ -2338,6 +2370,37 @@ export default function Dashboard() {
                 Ver todas →
               </button>
             </div>
+            {/* Mini gráfica de distribución por prioridad */}
+            {tasks.length > 0 && (() => {
+              const priorityData = [
+                { name: 'Crítica', value: tasks.filter(t => (t.priority as string) === 'critical' && t.status !== 'done' && t.status !== 'cancelled').length, fill: '#ef4444' },
+                { name: 'Alta', value: tasks.filter(t => t.priority === 'high' && t.status !== 'done' && t.status !== 'cancelled').length, fill: '#f97316' },
+                { name: 'Media', value: tasks.filter(t => t.priority === 'medium' && t.status !== 'done' && t.status !== 'cancelled').length, fill: '#f59e0b' },
+                { name: 'Baja', value: tasks.filter(t => t.priority === 'low' && t.status !== 'done' && t.status !== 'cancelled').length, fill: '#10b981' },
+              ].filter(d => d.value > 0);
+              if (priorityData.length === 0) return null;
+              return (
+                <div className="flex items-center gap-4 mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                  <div className="w-16 h-16 shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={priorityData} dataKey="value" cx="50%" cy="50%" innerRadius={18} outerRadius={30} paddingAngle={3}>
+                          {priorityData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1">
+                    {priorityData.map(d => (
+                      <div key={d.name} className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.fill }} />
+                        <span className="text-[10px] font-black text-slate-500 uppercase">{d.name}: {d.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             <div className="flex gap-3 mb-4">
               {(['pending','in_progress','done'] as const).map((s) => {
                 const count = tasks.filter(t => t.status === s).length;

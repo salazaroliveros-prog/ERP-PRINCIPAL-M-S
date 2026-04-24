@@ -22,6 +22,7 @@ export const DashboardFilters = ({ startDate, setStartDate, endDate, setEndDate,
       >
         <option value="default">Predeterminado</option>
         <option value="3d-tilt">3D Inclinación</option>
+        <option value="glassmorphism">Vidrio líquido</option>
       </select>
     </div>
     <div className="flex items-center gap-2">
