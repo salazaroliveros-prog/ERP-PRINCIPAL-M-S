@@ -1,0 +1,8 @@
+"contributes": {
+    "commands": [
+        {
+            "command": "agent.generateImage",
+            "title": "Agent: Generar Imagen Personalizada"
+        }
+    ]
+},
