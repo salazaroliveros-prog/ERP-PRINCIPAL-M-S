@@ -1,7 +1,7 @@
 import { requestJson } from './api';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'done' | 'cancelled';
-export type TaskPriority = 'low' | 'medium' | 'high';
+export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 
 export interface Task {
   id: string;
@@ -46,10 +46,11 @@ export interface UpdateTaskInput {
   dueDate?: string;
 }
 
-export function fetchTasks(params?: { projectId?: string; status?: TaskStatus; assigneeId?: string }) {
+export function fetchTasks(params?: { projectId?: string; status?: TaskStatus; priority?: TaskPriority; assigneeId?: string }) {
   const query = new URLSearchParams();
   if (params?.projectId) query.set('projectId', params.projectId);
   if (params?.status) query.set('status', params.status);
+  if (params?.priority) query.set('priority', params.priority);
   if (params?.assigneeId) query.set('assigneeId', params.assigneeId);
   const qs = query.toString();
   return requestJson<TasksResponse>(`/api/tasks${qs ? `?${qs}` : ''}`);

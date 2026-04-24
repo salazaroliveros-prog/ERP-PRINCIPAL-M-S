@@ -1226,6 +1226,11 @@ export default function Dashboard() {
     { name: 'Completadas', value: projects.filter(p => p.status === 'Completed').length, fill: '#10b981' },
   ].filter(d => d.value > 0);
 
+  const overdueTasksCount = tasks.filter(t => {
+    const today = new Date().toISOString().split('T')[0];
+    return t.dueDate && t.status !== 'done' && t.status !== 'cancelled' && t.dueDate < today;
+  }).length;
+
   const PAGES = ['Resumen Ejecutivo', 'Análisis Financiero', 'RRHH · Riesgos · Seguridad', 'Equipos · Pipeline'];
 
   const pipelineData = [
@@ -1555,13 +1560,18 @@ export default function Dashboard() {
             type="button"
             onClick={() => setActivePage(idx)}
             className={cn(
-              'px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border',
+              'relative px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border',
               activePage === idx
                 ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white shadow-md'
                 : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400'
             )}
           >
             <span className="mr-1.5 opacity-50">{String(idx + 1).padStart(2, '0')}</span>{label}
+            {idx === 0 && overdueTasksCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-black px-1">
+                {overdueTasksCount}
+              </span>
+            )}
           </button>
         ))}
       </nav>
@@ -2302,7 +2312,23 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
-              {inactiveProjects.length === 0 && lowStockItems.length === 0 && (
+              {(() => {
+                const today = new Date().toISOString().split('T')[0];
+                const overdueTasks = tasks.filter(t => t.dueDate && t.status !== 'done' && t.status !== 'cancelled' && t.dueDate < today);
+                if (overdueTasks.length === 0) return null;
+                return (
+                  <div className="p-4 bg-red-50 dark:bg-red-500/10 rounded-xl border border-red-100 dark:border-red-500/20">
+                    <p className="text-sm font-bold text-red-700 dark:text-red-400 mb-2">Tareas Vencidas ({overdueTasks.length})</p>
+                    <div className="space-y-1">
+                      {overdueTasks.slice(0, 3).map(t => (
+                        <p key={t.id} className="text-xs text-red-600 dark:text-red-500 truncate cursor-pointer hover:underline" onClick={() => navigate('/tasks')}>• {t.title}</p>
+                      ))}
+                      {overdueTasks.length > 3 && <p className="text-[10px] text-red-400 font-bold">+{overdueTasks.length - 3} más</p>}
+                    </div>
+                  </div>
+                );
+              })()}
+              {inactiveProjects.length === 0 && lowStockItems.length === 0 && tasks.filter(t => { const today = new Date().toISOString().split('T')[0]; return t.dueDate && t.status !== 'done' && t.status !== 'cancelled' && t.dueDate < today; }).length === 0 && (
                 <p className="text-sm text-slate-400 dark:text-slate-500 italic">No hay alertas críticas en este momento.</p>
               )}
             </div>
@@ -2453,10 +2479,11 @@ export default function Dashboard() {
                         )}
                       </div>
                       <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                        task.priority === 'high' ? 'bg-rose-100 text-rose-600' :
-                        task.priority === 'medium' ? 'bg-amber-100 text-amber-600' :
-                        'bg-slate-100 text-slate-500'
-                      }`}>{task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}</span>
+                        (task.priority as string) === 'critical' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
+                        task.priority === 'high' ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300' :
+                        task.priority === 'medium' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300' :
+                        'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                      }`}>{(task.priority as string) === 'critical' ? '🔴 Crítica' : task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}</span>
                     </div>
                   );
                 })}
@@ -2576,10 +2603,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-6 mt-3">
             {[['#10b981','Alineado (≤5%)'],['#f59e0b','Atención (5-15%)'],['#ef4444','Riesgo (>15%)']].map(([color, label]) => (
               <div key={label} className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full scatter-legend-dot"
-                  style={{ ['--dot-color' as string]: color } as React.CSSProperties}
-                />
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
                 <span className="text-[10px] font-bold text-slate-500 uppercase">{label}</span>
               </div>
             ))}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, Trash2, CheckCircle2, Circle, Clock, AlertCircle, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Circle, Clock, AlertCircle, Search, Filter } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
@@ -25,6 +25,7 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
   low: 'Baja',
   medium: 'Media',
   high: 'Alta',
+  critical: 'Crítica',
 };
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
@@ -38,6 +39,22 @@ const PRIORITY_COLORS: Record<TaskPriority, string> = {
   low: 'text-slate-400',
   medium: 'text-amber-500',
   high: 'text-rose-500',
+  critical: 'text-red-600',
+};
+
+const PRIORITY_BADGE: Record<TaskPriority, string> = {
+  low: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+  medium: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300',
+  high: 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300',
+  critical: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+};
+
+// Ciclo de estados al hacer click en el ícono
+const STATUS_CYCLE: Record<TaskStatus, TaskStatus> = {
+  pending: 'in_progress',
+  in_progress: 'done',
+  done: 'pending',
+  cancelled: 'pending',
 };
 
 const EMPTY_FORM = {
@@ -55,7 +72,9 @@ export default function Tasks() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<TaskStatus | ''>('');
+  const [filterPriority, setFilterPriority] = useState<TaskPriority | ''>('');
   const [filterProjectId, setFilterProjectId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -67,6 +86,7 @@ export default function Tasks() {
       const [tasksRes, projectsRes] = await Promise.all([
         fetchTasks({
           status: filterStatus || undefined,
+          priority: filterPriority || undefined,
           projectId: filterProjectId || undefined,
         }),
         listProjects(),
@@ -78,7 +98,7 @@ export default function Tasks() {
     } finally {
       setLoading(false);
     }
-  }, [filterStatus, filterProjectId]);
+  }, [filterStatus, filterPriority, filterProjectId]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -115,8 +135,8 @@ export default function Tasks() {
     }
   };
 
-  const handleToggleStatus = async (task: Task) => {
-    const next: TaskStatus = task.status === 'done' ? 'pending' : 'done';
+  const handleCycleStatus = async (task: Task) => {
+    const next = STATUS_CYCLE[task.status];
     try {
       const updated = await updateTask(task.id, { status: next });
       setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
@@ -149,10 +169,21 @@ export default function Tasks() {
     setShowForm(true);
   };
 
+  const today = new Date().toISOString().split('T')[0];
+
+  const visibleTasks = searchTerm.trim()
+    ? tasks.filter((t) =>
+        t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.assigneeName || '').toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : tasks;
+
   const counts = {
     pending: tasks.filter((t) => t.status === 'pending').length,
     in_progress: tasks.filter((t) => t.status === 'in_progress').length,
     done: tasks.filter((t) => t.status === 'done').length,
+    overdue: tasks.filter((t) => t.dueDate && t.status !== 'done' && t.status !== 'cancelled' && t.dueDate < today).length,
   };
 
   return (
@@ -163,9 +194,18 @@ export default function Tasks() {
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
             Gestión de Tareas
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {tasks.length} tarea{tasks.length !== 1 ? 's' : ''} · {counts.pending} pendiente{counts.pending !== 1 ? 's' : ''} · {counts.in_progress} en progreso · {counts.done} completada{counts.done !== 1 ? 's' : ''}
-          </p>
+          <div className="flex flex-wrap gap-3 mt-1">
+            {[
+              { label: 'Pendientes', count: counts.pending, color: 'text-slate-500' },
+              { label: 'En Progreso', count: counts.in_progress, color: 'text-blue-500' },
+              { label: 'Completadas', count: counts.done, color: 'text-emerald-500' },
+              ...(counts.overdue > 0 ? [{ label: 'Vencidas', count: counts.overdue, color: 'text-red-500' }] : []),
+            ].map(({ label, count, color }) => (
+              <span key={label} className={cn('text-xs font-bold', color)}>
+                {count} {label}
+              </span>
+            ))}
+          </div>
         </div>
         <button
           onClick={() => { setForm(EMPTY_FORM); setEditingId(null); setShowForm(true); }}
@@ -176,7 +216,18 @@ export default function Tasks() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Buscar tareas..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/30 w-44"
+          />
+        </div>
+        <Filter size={14} className="text-slate-400 shrink-0" />
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value as TaskStatus | '')}
@@ -185,6 +236,16 @@ export default function Tasks() {
           <option value="">Todos los estados</option>
           {(Object.keys(STATUS_LABELS) as TaskStatus[]).map((s) => (
             <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+          ))}
+        </select>
+        <select
+          value={filterPriority}
+          onChange={(e) => setFilterPriority(e.target.value as TaskPriority | '')}
+          className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          <option value="">Todas las prioridades</option>
+          {(Object.keys(PRIORITY_LABELS) as TaskPriority[]).map((p) => (
+            <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
           ))}
         </select>
         <select
@@ -197,6 +258,14 @@ export default function Tasks() {
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
+        {(filterStatus || filterPriority || filterProjectId || searchTerm) && (
+          <button
+            onClick={() => { setFilterStatus(''); setFilterPriority(''); setFilterProjectId(''); setSearchTerm(''); }}
+            className="text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-rose-500 transition-colors"
+          >
+            Limpiar filtros
+          </button>
+        )}
       </div>
 
       {/* Form Modal */}
@@ -315,18 +384,23 @@ export default function Tasks() {
         <div className="flex items-center justify-center py-16">
           <div className="h-8 w-8 rounded-full border-2 border-primary/25 border-t-primary animate-spin" />
         </div>
-      ) : tasks.length === 0 ? (
+      ) : visibleTasks.length === 0 ? (
         <div className="text-center py-16 text-slate-400 dark:text-slate-500">
           <CheckCircle2 size={40} className="mx-auto mb-3 opacity-30" />
           <p className="text-sm font-semibold">No hay tareas</p>
-          <p className="text-xs mt-1">Crea la primera tarea con el botón de arriba</p>
+          <p className="text-xs mt-1">
+            {searchTerm || filterStatus || filterPriority || filterProjectId
+              ? 'Prueba ajustando los filtros'
+              : 'Crea la primera tarea con el botón de arriba'}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
           <AnimatePresence initial={false}>
-            {tasks.map((task) => {
+            {visibleTasks.map((task) => {
               const project = projects.find((p) => p.id === task.projectId);
-              const isOverdue = task.dueDate && task.status !== 'done' && task.status !== 'cancelled' && new Date(task.dueDate) < new Date();
+              const isOverdue = task.dueDate && task.status !== 'done' && task.status !== 'cancelled' && task.dueDate < today;
+              const isCritical = task.priority === 'critical';
               return (
                 <motion.div
                   key={task.id}
@@ -334,20 +408,25 @@ export default function Tasks() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   className={cn(
-                    'flex items-start gap-3 p-4 rounded-2xl border bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-primary/30 transition-all group',
-                    task.status === 'done' && 'opacity-60'
+                    'flex items-start gap-3 p-4 rounded-2xl border bg-white dark:bg-slate-900 transition-all group',
+                    task.status === 'done' && 'opacity-60',
+                    isCritical && task.status !== 'done' ? 'border-red-200 dark:border-red-900/50' : 'border-slate-100 dark:border-slate-800 hover:border-primary/30',
+                    isOverdue && 'border-rose-200 dark:border-rose-900/40'
                   )}
                 >
+                  {/* Status cycle button */}
                   <button
-                    onClick={() => handleToggleStatus(task)}
-                    className="mt-0.5 shrink-0 text-slate-300 hover:text-primary dark:text-slate-600 dark:hover:text-primary transition-colors"
-                    title="Cambiar estado"
+                    onClick={() => handleCycleStatus(task)}
+                    className="mt-0.5 shrink-0 transition-colors"
+                    title={`Estado: ${STATUS_LABELS[task.status]} → click para avanzar`}
                   >
                     {task.status === 'done'
                       ? <CheckCircle2 size={20} className="text-emerald-500" />
                       : task.status === 'in_progress'
                         ? <Clock size={20} className="text-blue-500" />
-                        : <Circle size={20} />
+                        : task.status === 'cancelled'
+                          ? <Circle size={20} className="text-slate-300" />
+                          : <Circle size={20} className="text-slate-300 hover:text-primary dark:text-slate-600 dark:hover:text-primary" />
                     }
                   </button>
 
@@ -359,7 +438,10 @@ export default function Tasks() {
                       <span className={cn('text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full', STATUS_COLORS[task.status])}>
                         {STATUS_LABELS[task.status]}
                       </span>
-                      <AlertCircle size={13} className={cn('shrink-0', PRIORITY_COLORS[task.priority])} aria-label={`Prioridad ${PRIORITY_LABELS[task.priority]}`} />
+                      <span className={cn('text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1', PRIORITY_BADGE[task.priority])}>
+                        <AlertCircle size={10} className={PRIORITY_COLORS[task.priority]} />
+                        {PRIORITY_LABELS[task.priority]}
+                      </span>
                     </div>
                     {task.description && (
                       <p className="text-xs text-slate-500 dark:text-slate-400 truncate mb-1">{task.description}</p>
