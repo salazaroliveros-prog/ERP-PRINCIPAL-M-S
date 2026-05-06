@@ -88,6 +88,46 @@ import type { Task } from '../lib/tasksApi';
 import { useTheme } from '../contexts/ThemeContext';
 import { ParallaxCard } from './ParallaxCard';
 
+/**
+ * Componente Counter animado para KPIs
+ */
+const Counter = ({ value, prefix = '', suffix = '', decimals = 0 }: { value: number; prefix?: string; suffix?: string; decimals?: number }) => {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    let start = displayValue;
+    const end = value;
+    const duration = 1500;
+    const startTime = performance.now();
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+      
+      const current = start + (end - start) * easeOutQuart;
+      setDisplayValue(current);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [value]);
+
+  return (
+    <span>
+      {prefix}
+      {displayValue.toLocaleString('es-GT', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      })}
+      {suffix}
+    </span>
+  );
+};
+
 const COLORS = [
   '#3b82f6', // Blue
   '#10b981', // Emerald
@@ -1240,9 +1280,9 @@ export default function Dashboard() {
   ].filter((item) => item.value > 0 || item.count > 0);
 
   const widgetSurfaceClass = cn(
-    'relative h-full overflow-hidden rounded-[28px] border px-5 py-5 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] transition-all duration-300',
+    'relative h-full overflow-hidden rounded-[28px] border px-5 py-5 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] transition-all duration-300 rim-light',
     cardStyle === 'glassmorphism'
-      ? 'bg-white/60 dark:bg-slate-900/45 border-white/40 dark:border-slate-700/40 backdrop-blur-2xl'
+      ? 'bg-white/60 dark:bg-slate-900/45 border-white/40 dark:border-slate-700/40 backdrop-blur-2xl glass-card'
       : 'bg-white dark:bg-slate-900 border-slate-200/70 dark:border-slate-800'
   );
 
@@ -1254,7 +1294,10 @@ export default function Dashboard() {
 
   const renderMetricWidget = ({
     headline,
-    valueLabel,
+    value,
+    valuePrefix = '',
+    valueSuffix = '',
+    decimals = 0,
     accentClass,
     accentColor,
     helper,
@@ -1263,7 +1306,10 @@ export default function Dashboard() {
     icon: Icon,
   }: {
     headline: string;
-    valueLabel: string;
+    value: number;
+    valuePrefix?: string;
+    valueSuffix?: string;
+    decimals?: number;
     accentClass: string;
     accentColor: string;
     helper: string;
@@ -1275,13 +1321,13 @@ export default function Dashboard() {
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/80 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
-            <Sparkles size={11} />
-            Solo ejecución
+            <Sparkles size={11} className="animate-pulse" />
+            Live Intelligence
           </div>
           <p className="text-[11px] font-black uppercase tracking-[0.32em] text-slate-400">{headline}</p>
           <p className="max-w-[18rem] text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">{helper}</p>
         </div>
-        <div className={cn('rounded-2xl p-3 text-white shadow-lg', accentClass)}>
+        <div className={cn('rounded-2xl p-3 text-white shadow-lg shadow-primary/20 transition-transform hover:scale-110', accentClass)}>
           <Icon size={18} />
         </div>
       </div>
@@ -1291,15 +1337,16 @@ export default function Dashboard() {
           <RadialMetric
             value={gaugeValue}
             accent={accentColor}
-            valueLabel={valueLabel}
+            valueLabel={`${gaugeValue.toFixed(decimals)}${valueSuffix}`}
             helperLabel="avance"
           />
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-4xl font-black tracking-tight text-slate-950 dark:text-white">{valueLabel}</p>
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-slate-500 shadow-sm dark:border-slate-700/80 dark:bg-slate-800/70 dark:text-slate-300">
-            <Sparkles size={12} />
+          <p className="text-4xl font-black tracking-tight text-slate-950 dark:text-white">
+            <Counter value={value} prefix={valuePrefix} suffix={valueSuffix} decimals={decimals} />
+          </p>
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-slate-500 shadow-xs dark:border-slate-700/80 dark:bg-slate-800/70 dark:text-slate-300">
             {helper}
           </div>
         </div>
@@ -1312,7 +1359,8 @@ export default function Dashboard() {
       case 'executionRevenue':
         return renderMetricWidget({
           headline: 'Ingresos en ejecución',
-          valueLabel: formatCurrency(executionIncome),
+          value: executionIncome,
+          valuePrefix: 'Q',
           accentClass: 'bg-linear-to-br from-emerald-500 via-emerald-500 to-teal-500',
           accentColor: '#10b981',
           helper: `${activeProjects} obra(s) activas con cobertura ${activeExecutionCoverage.toFixed(0)}% del presupuesto`,
@@ -1323,7 +1371,8 @@ export default function Dashboard() {
       case 'executionExpense':
         return renderMetricWidget({
           headline: 'Gasto operativo activo',
-          valueLabel: formatCurrency(executionSpent),
+          value: executionSpent,
+          valuePrefix: 'Q',
           accentClass: 'bg-linear-to-br from-rose-500 via-rose-500 to-orange-500',
           accentColor: '#ef4444',
           helper: `${formatCurrency(executionBudget)} presupuestados para las obras en marcha`,
@@ -1334,7 +1383,8 @@ export default function Dashboard() {
       case 'executionProfit':
         return renderMetricWidget({
           headline: 'Ganancia neta activa',
-          valueLabel: formatCurrency(executionProfit),
+          value: executionProfit,
+          valuePrefix: 'Q',
           accentClass: executionProfit >= 0
             ? 'bg-linear-to-br from-sky-500 via-cyan-500 to-blue-600'
             : 'bg-linear-to-br from-rose-600 via-rose-500 to-red-600',
@@ -1347,7 +1397,7 @@ export default function Dashboard() {
       case 'activeProjects':
         return renderMetricWidget({
           headline: 'Capacidad operativa',
-          valueLabel: `${activeProjects} activas`,
+          value: activeProjects,
           accentClass: 'bg-linear-to-br from-indigo-500 via-violet-500 to-fuchsia-500',
           accentColor: '#6366f1',
           helper: `Avance físico promedio ${averageExecutionProgress.toFixed(1)}%`,
@@ -1441,56 +1491,32 @@ export default function Dashboard() {
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-violet-100 bg-violet-50/80 px-4 py-3 dark:border-violet-500/20 dark:bg-violet-500/10">
                 <p className="text-[10px] font-black uppercase tracking-[0.24em] text-violet-500">Cotizaciones</p>
-                <p className="mt-2 text-lg font-black text-violet-700 dark:text-violet-300">{quotationQuotes.length}</p>
+                <p className="mt-1 text-lg font-black text-violet-700 dark:text-violet-300">{quotationQuotes.length}</p>
                 <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{formatCurrency(quotationValue)}</p>
               </div>
               <div className="rounded-2xl border border-fuchsia-100 bg-fuchsia-50/80 px-4 py-3 dark:border-fuchsia-500/20 dark:bg-fuchsia-500/10">
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-fuchsia-500">Evaluación</p>
-                <p className="mt-2 text-lg font-black text-fuchsia-700 dark:text-fuchsia-300">{evaluationProjects.length}</p>
-                <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{formatCurrency(evaluationBudget)}</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-fuchsia-500">Factor APU</p>
+                <p className="mt-1 text-lg font-black text-fuchsia-700 dark:text-fuchsia-300">{advancedMetrics.efficiencyFactor}x</p>
               </div>
               <div className="rounded-2xl border border-sky-100 bg-sky-50/80 px-4 py-3 dark:border-sky-500/20 dark:bg-sky-500/10">
                 <p className="text-[10px] font-black uppercase tracking-[0.24em] text-sky-500">Ejecución</p>
-                <p className="mt-2 text-lg font-black text-sky-700 dark:text-sky-300">{executionProjects.length}</p>
+                <p className="mt-1 text-lg font-black text-sky-700 dark:text-sky-300">{executionProjects.length}</p>
                 <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">{formatCurrency(executionBudget)}</p>
               </div>
             </div>
-            <div className="min-h-55 flex-1">
+            <div className="min-h-0 flex-1">
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-                {widget.chartType === 'donut' ? (
-                  <PieChart>
-                    <Pie data={pipelineData} dataKey="value" nameKey="name" innerRadius={65} outerRadius={92} paddingAngle={4}>
-                      {pipelineData.map((entry) => (
-                        <Cell key={entry.name} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value: any, _name: any, item: any) => [formatCurrency(value), item?.payload?.name || 'Valor']} />
-                    <Legend />
-                  </PieChart>
-                ) : (
-                  <BarChart data={pipelineData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `Q${value >= 1000 ? `${Math.round(value / 1000)}k` : value}`} />
-                    <Tooltip formatter={(value: any) => [formatCurrency(value), 'Monto']} />
-                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                      {pipelineData.map((entry) => (
-                        <Cell key={entry.name} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                )}
+                <BarChart data={pipelineData}>
+                  <XAxis dataKey="name" hide />
+                  <YAxis hide />
+                  <Tooltip cursor={{ fill: 'transparent' }} />
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                    {pipelineData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Gasto de evaluación</p>
-                <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{formatCurrency(evaluationSpent)}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/70">
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Cobertura activa</p>
-                <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{activeExecutionCoverage.toFixed(1)}%</p>
-              </div>
             </div>
           </div>
         );
@@ -1500,8 +1526,8 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-4 min-w-0 overflow-x-hidden p-4">
-      <header className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-3">
+    <div className="mesh-gradient-bg min-h-screen p-2 sm:p-4 md:p-6 space-y-4 overflow-x-hidden no-scrollbar">
+      <header className="flex items-center justify-between pb-4 border-b border-slate-200/50 dark:border-slate-800/50 flex-wrap gap-4 px-2">
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-white">Tablero de Control</h1>
           {lastLoadedAt && (
@@ -1617,7 +1643,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-12 xl:auto-rows-[minmax(260px,auto)]">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-12 xl:auto-rows-[minmax(260px,auto)] no-scroll-dashboard dashboard-grid-compact">
           {dashboardWidgets.map((widget, index) => {
             const content = (
               <div className={widgetSurfaceClass}>
@@ -1855,7 +1881,7 @@ export default function Dashboard() {
                   ) : chartPreferences.projectStatus === 'radar' ? (
                     <RadarChart data={statusRadarData} outerRadius={90}>
                       <PolarGrid stroke="#334155" strokeOpacity={0.3} />
-                      <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                      <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
                       <PolarRadiusAxis tick={{ fill: '#94a3b8', fontSize: 9 }} allowDecimals={false} />
                       <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} />
                       <Radar name="Estados" dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
@@ -2000,6 +2026,12 @@ export default function Dashboard() {
                   </LineChart>
                 ) : chartPreferences.progressComparison === 'area' ? (
                   <AreaChart data={progressComparisonChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                    <defs>
+                      <linearGradient id="progressComparisonFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} angle={-45} textAnchor="end" interval={0} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} tickFormatter={(value) => `${value.toFixed(1)}%`} domain={[0, 100]} />
@@ -2102,23 +2134,119 @@ export default function Dashboard() {
                   </LineChart>
                 ) : chartPreferences.scheduleProgress === 'area' ? (
                   <AreaChart data={scheduleTrendData} margin={{ top: 10, right: 24, left: 12, bottom: 42 }}>
+                    <defs>
+                      <linearGradient id="ganttPhysicalGradient" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#0ea5e9" />
+                        <stop offset="100%" stopColor="#6366f1" />
+                      </linearGradient>
+                      <linearGradient id="ganttFinancialGradient" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#f43f5e" />
+                        <stop offset="100%" stopColor="#f59e0b" />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} angle={-25} textAnchor="end" height={56} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
-                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} formatter={(value: any) => [`${value.toFixed(1)}%`, '']} />
-                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
-                    <Area type="monotone" dataKey="physical" stroke="#0ea5e9" fill="#7dd3fc" fillOpacity={0.3} name="Físico" />
-                    <Area type="monotone" dataKey="financial" stroke="#f43f5e" fill="#fda4af" fillOpacity={0.22} name="Financiero" />
-                  </AreaChart>
-                ) : chartPreferences.scheduleProgress === 'horizontal-bars' ? (
-                  <BarChart data={scheduleTrendData} layout="vertical" margin={{ top: 10, right: 24, left: 12, bottom: 12 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                    <XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${value}%`} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
-                    <YAxis dataKey="name" type="category" width={140} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 9, fontWeight: 800 }} />
-                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', backdropFilter: 'blur(8px)' }} itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 700 }} formatter={(value: any) => [`${value.toFixed(1)}%`, '']} />
-                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', paddingBottom: '20px' }} />
-                    <Bar dataKey="physical" fill="#0ea5e9" radius={[0, 6, 6, 0]} name="Físico" barSize={10} />
-                    <Bar dataKey="financial" fill="#f43f5e" radius={[0, 6, 6, 0]} name="Financiero" barSize={10} />
+                    <XAxis
+                      type="number"
+                      domain={[0, totalDays]}
+                      tickFormatter={formatXAxis}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                      minTickGap={30}
+                    />
+                    <YAxis
+                      dataKey="shortName"
+                      type="category"
+                      width={140}
+                      tick={({ x, y, payload }) => (
+                        <g transform={`translate(${x},${y})`}>
+                          <text
+                            x={-10}
+                            y={0}
+                            dy={4}
+                            textAnchor="end"
+                            fill="#64748b"
+                            fontSize={9}
+                            fontWeight={800}
+                            className="dark:fill-slate-400"
+                          >
+                            {payload.value}
+                          </text>
+                        </g>
+                      )}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(241, 245, 249, 0.5)' }}
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-slate-900/95 backdrop-blur-md p-4 rounded-2xl border border-slate-800 shadow-2xl">
+                              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{label}</p>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-8">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-linear-to-r from-sky-500 to-indigo-500 rounded-full" />
+                                    <span className="text-xs font-bold text-white">Avance Físico</span>
+                                  </div>
+                                  <span className="text-xs font-black text-blue-300">{data.physical.toFixed(1)}%</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-8">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-linear-to-r from-rose-500 to-amber-500 rounded-full" />
+                                    <span className="text-xs font-bold text-white">Avance Financiero</span>
+                                  </div>
+                                  <span className="text-xs font-black text-rose-300">{data.financial.toFixed(1)}%</span>
+                                </div>
+                                <div className="pt-2 mt-2 border-t border-slate-800 flex flex-col gap-1">
+                                  <p className="text-[9px] text-emerald-300 font-bold uppercase">Físico guardado: {data.physical.toFixed(1)}%</p>
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase">Inicio: {data.startDate || 'N/A'}</p>
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase">Fin: {data.endDate || 'N/A'}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <ReferenceLine
+                      x={todayOffset}
+                      stroke="#10b981"
+                      strokeDasharray="3 3"
+                      label={{
+                        position: 'top',
+                        value: 'Hoy',
+                        fill: '#10b981',
+                        fontSize: 10,
+                        fontWeight: 800,
+                        offset: 10,
+                      }}
+                    />
+                    <Bar dataKey="startOffset" stackId="bg" fill="transparent" />
+                    <Bar dataKey="duration" stackId="bg" fill="#e2e8f0" className="dark:fill-slate-800/50" radius={[0, 6, 6, 0]} barSize={14} />
+                    <Bar dataKey="startOffset" stackId="phys" fill="transparent" />
+                    <Bar
+                      dataKey="physicalDuration"
+                      stackId="phys"
+                      fill="url(#ganttPhysicalGradient)"
+                      radius={[0, 6, 6, 0]}
+                      barSize={8}
+                      onClick={(data) => navigate(`/projects/${data.id}`)}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                    />
+                    <Bar dataKey="startOffset" stackId="fin" fill="transparent" />
+                    <Bar
+                      dataKey="financialDuration"
+                      stackId="fin"
+                      fill="url(#ganttFinancialGradient)"
+                      radius={[0, 6, 6, 0]}
+                      barSize={4}
+                      onClick={(data) => navigate(`/projects/${data.id}`)}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                    />
                   </BarChart>
                 ) : (
                   <BarChart
@@ -2347,7 +2475,7 @@ export default function Dashboard() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{task.title}</p>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-tighter">Solicitado por {task.requestedBy}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-tighter">{task.requestedBy}</p>
                   </div>
                   <ArrowRight size={14} className="text-slate-300" />
                 </div>
@@ -2657,7 +2785,7 @@ export default function Dashboard() {
                   <Pie data={salaryByDeptData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={4}>
                     {salaryByDeptData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
-                  <Tooltip {...TOOLTIP_STYLE} formatter={(v: any) => [formatCurrency(v), 'Salario']} />
+                  <Tooltip {...TOOLTIP_STYLE} />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -2708,7 +2836,7 @@ export default function Dashboard() {
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} allowDecimals={false} />
                   <Tooltip {...TOOLTIP_STYLE} />
                   <Bar dataKey="value" name="Incidentes" radius={[6,6,0,0]}>
-                    {incidentsBySeverityData.map((_, i) => <Cell key={i} fill={['#10b981','#f59e0b','#ef4444','#7c3aed'][i % 4]} />)}
+                    {incidentsBySeverityData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -2928,7 +3056,7 @@ export default function Dashboard() {
                             <div key={item.id} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-3">
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1">
-                                  <p className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight leading-tight">{item.description}</p>
+                                  <p className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight">{item.description}</p>
                                   <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">{item.category} • {item.quantity} {item.unit}</p>
                                 </div>
                                 <div className="w-24">

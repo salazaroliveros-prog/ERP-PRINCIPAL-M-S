@@ -24,6 +24,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@_davideast/stitch-mcp": "github:davideast/stitch-mcp",
     "@github/copilot-sdk": "^0.3.0",
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
@@ -35,6 +36,7 @@
     "cli": "^1.0.1",
     "clsx": "^2.1.1",
     "cors": "^2.8.5",
+    "curl": "^0.1.4",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",

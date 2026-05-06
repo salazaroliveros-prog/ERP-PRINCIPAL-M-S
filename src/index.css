@@ -1085,4 +1085,87 @@
     font-size: 11px;
     line-height: 1.35;
   }
+
+  /* Modern Effects */
+  .mesh-gradient {
+    background-color: #f8fafc;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.1) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.1) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.1) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgba(139, 92, 246, 0.1) 0px, transparent 50%);
+  }
+
+  .dark .mesh-gradient {
+    background-color: #020617;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.15) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.1) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.1) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
+  }
+
+  .rim-light {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .rim-light::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 40%, transparent 60%, rgba(255,255,255,0.1) 100%);
+    z-index: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    padding: 1px;
+  }
+
+  .dark .rim-light::before {
+    background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 40%, transparent 60%, rgba(255,255,255,0.05) 100%);
+  }
+
+  .glass-card {
+    backdrop-filter: blur(12px);
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .dark .glass-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* Optimized for single screen (no scroll) */
+  .no-scroll-dashboard {
+    height: calc(100vh - 4rem);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dashboard-grid-compact {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-rows: repeat(6, minmax(0, 1fr));
+    gap: 1rem;
+    flex: 1;
+    min-height: 0;
+  }
+
+  @media (max-width: 1024px) {
+    .no-scroll-dashboard {
+      height: auto;
+      overflow: visible;
+    }
+  }
+
+  /* Text balance for KPIs */
+  .text-kpi-value {
+    font-size: clamp(1.25rem, 2vw, 2.5rem);
+    line-height: 1;
+    font-weight: 900;
+  }
 }

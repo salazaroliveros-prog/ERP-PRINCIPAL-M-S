@@ -1,0 +1,11 @@
+{
+  "eslint.workingDirectories": [
+    {
+      "directory": "./analizador-image",
+      "changeProcessCWD": true
+    }
+  ],
+  "eslint.validate": [
+    "typescript"
+  ]
+}
