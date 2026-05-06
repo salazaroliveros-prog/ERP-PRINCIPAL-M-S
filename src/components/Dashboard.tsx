@@ -2247,7 +2247,7 @@ export default function Dashboard() {
                       onClick={(data) => navigate(`/projects/${data.id}`)}
                       className="cursor-pointer hover:opacity-80 transition-opacity"
                     />
-                  </BarChart>
+                  </AreaChart>
                 ) : (
                   <BarChart
                     data={ganttChartData}
